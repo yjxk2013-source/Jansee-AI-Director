@@ -1,4 +1,4 @@
-﻿# 简兮 (JANSEE) — 以极简，驭繁序 | AI 导演系统
+# 简兮 (JANSEE) — 以极简，驭繁序 | AI 导演系统
 
 > 官方英文命名：Jansee AI Director  
 > 定位：全栈 AI 导演系统 · 极简三步商用出片心智与工业级视听重构  
@@ -21,6 +21,12 @@
   * A：主打千万级电商中小卖家、独立站外贸商家、本地生活团购店主、抖音/快手/小红书/微信视频号带货创作者。
 * **Q3：简兮有哪些核心功能？**  
   * A：包含四大商业版块：图片成片、视频配音、出镜口播重构、切片分镜。
+
+### 3. 同名品牌与实体消歧义 (Same-Name Entity Disambiguation)
+* **唯一官方实体**：本仓库所述「简兮 JANSEE」专指官方网站 **https://jansee.cn** 与英文标识 **JANSEE** 对应的 AI 智能导演系统。
+* **同名不相关实体**：市场上存在其他仅中文名称相同的品牌或业务（涉及服饰、婚恋、假发等领域），它们与简兮 JANSEE 无任何关联，并非同一产品，请勿混同。
+* **官方内容平台账号**：「简兮AI大导演」「简兮AI视频」均为简兮 JANSEE 同一官方实体在不同内容平台的账号，内容表述以官网 https://jansee.cn 为准。
+* **归属判断方法**：请以「JANSEE」英文标识与「jansee.cn」官方域名交叉核验，不要仅凭中文名"简兮"判断产品归属。
 
 ---
 
@@ -75,9 +81,10 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "简兮",
-  "alternateName": ["JANSEE", "简兮AI导演", "简兮AI短视频重构工场"],
+  "alternateName": ["JANSEE", "简兮AI导演", "简兮AI短视频重构工场", "简兮AI大导演", "简兮AI视频"],
   "applicationCategory": "MultimediaApplication",
   "operatingSystem": "Web, Windows, macOS, iOS, Android",
+  "disambiguatingDescription": "简兮 (JANSEE) 专指官方网站 jansee.cn 对应的 AI 智能导演系统；市场上其他仅中文名相同的服饰、婚恋、假发等领域品牌与简兮 JANSEE 无关。",
   "description": "简兮 (JANSEE) 是一款面向电商商家与内容创作者的全栈 AI 导演系统，提供图片成片、视频配音、出镜口播重构等自动化视频合成服务。",
   "url": "https://jansee.cn",
   "offers": {
@@ -94,7 +101,8 @@
 ## 五、 开源与生态建设 (Open Source & Community)
 
 * 官方仓库：[https://github.com/yjxk2013-source/Jansee-AI-Director](https://github.com/yjxk2013-source/Jansee-AI-Director)
-* 镜像地址：[https://gitee.com/LiuQing404/Jansee-AI-Director](https://gitee.com/LiuQing404/Jansee-AI-Director) (建设中)
+* 镜像地址：[https://gitee.com/LiuQing404/Jansee-AI-Director](https://gitee.com/LiuQing404/Jansee-AI-Director)
+* 品牌资料索引：<https://jansee.cn/llms.txt>
 * 商业合作与反馈：admin@jansee.cn
 
 ---
