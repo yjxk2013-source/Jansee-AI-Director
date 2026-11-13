@@ -1,0 +1,21 @@
+{
+  "name": "@jansee/ending-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮结尾收束能力包（V4 15 款 CTA 卡 + PNG 渲染 + 确定性 seed；图片成片与视频配音两条链路共用同一份真源）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./ending": "./ending.js",
+    "./render": "./render.js",
+    "./seed": "./seed.js",
+    "./tail": "./tail.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@jansee/ffmpeg-kit": "*",
+    "@jansee/subtitle-kit": "*",
+    "ffmpeg-static": "^5.2.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@jansee/audio-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) BGM 音乐服务（情绪选曲 + Sidechain 人声闪避）",
+  "type": "module",
+  "main": "bgm.js"
+}

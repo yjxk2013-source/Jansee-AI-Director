@@ -1,0 +1,37 @@
+# ==============================================================================
+# 简兮 (JANSEE) 行尾规约
+# 背景：core.autocrlf=true 曾把 158 个文件的工作区副本转成 CRLF，仓库内容虽仍为
+# LF，但一旦做字节级比对（如提示词零回归）就会假失败。本文件强制：
+#   仓库存储一律 LF；检出到工作区一律 LF；二进制资产显式禁转换。
+# ==============================================================================
+
+# 文本源码：仓库 LF、检出 LF（eol=lf 优先级高于 core.autocrlf）
+* text=lf eol=lf
+
+# 二进制资产：显式禁转换，防止 git 内容探测误判损坏
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.webp -text
+*.gif -text
+*.ico -text
+*.ttf -text
+*.otf -text
+*.woff -text
+*.woff2 -text
+*.eot -text
+*.ttc -text
+*.mp4 -text
+*.mov -text
+*.mp3 -text
+*.wav -text
+*.m4a -text
+*.aac -text
+*.ogg -text
+*.pdf -text
+*.zip -text
+*.gz -text
+
+# 逐字节比对的提示词基线：原样存储，禁任何行尾转换（放最后，覆盖上面的 * 规则）
+apps/web/server/tests/video-dub/baseline/*.txt -text
+*.apk -text !eol

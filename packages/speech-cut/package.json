@@ -1,0 +1,21 @@
+{
+  "name": "@jansee/speech-cut",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 口播精剪模块（上传视频保留原声 → 本地 ASR 词级时间戳 → 冗余/长停顿标记 → 用户确认 → 音画同步剪切 + 字幕 + BGM，对外 API：startSpeechAnalyze / startSpeechProduce 两段式）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "@jansee/video-creator": "*",
+    "@jansee/audio-kit": "*",
+    "@jansee/ending-kit": "*",
+    "@jansee/intro-kit": "*",
+    "@jansee/ffmpeg-kit": "*",
+    "@jansee/subtitle-kit": "*",
+    "@jansee/shared": "*",
+    "ffmpeg-static": "^5.2.0"
+  }
+}

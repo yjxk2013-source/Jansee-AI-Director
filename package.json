@@ -1,0 +1,36 @@
+{
+  "name": "jansee-v2",
+  "version": "3.5.0",
+  "private": true,
+  "description": "简兮 (JANSEE) — AI 短视频重构工场 (企业级全栈 Monorepo 架构)",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "modules/*"
+  ],
+  "scripts": {
+    "dev:web": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-server.ps1",
+    "dev:gateway": "node apps/web/server/index.mjs",
+    "dev:admin": "npm --workspace=@jansee/admin run dev",
+    "check:health": "powershell -ExecutionPolicy Bypass -File ./scripts/check-health.ps1",
+    "test:mocker": "node scripts/run-mocker-test.mjs",
+    "build:web": "node scripts/build-web.mjs",
+    "check:material": "node scripts/check-material.mjs"
+  },
+  "keywords": [
+    "jansee",
+    "ai-video",
+    "monorepo",
+    "ecommerce",
+    "cinematic"
+  ],
+  "author": "JANSEE Architecture Team",
+  "license": "Private",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "fontkit": "^2.0.4",
+    "ip2region": "^4.0.1",
+    "opcpay": "0.3.4",
+    "phone2region": "^0.0.3"
+  }
+}

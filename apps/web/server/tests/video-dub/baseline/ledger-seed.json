@@ -1,0 +1,26 @@
+[
+  {
+    "ts": "2026-01-01T00:00:00.000Z",
+    "variant_type": "A-测试变体甲",
+    "opening": "test_open_a",
+    "ending": "test_end_a",
+    "bgm_emotion": "warm",
+    "visual_design": { "layout": "center", "font": "sans", "graphic": "thin_line", "color": "obsidian" }
+  },
+  {
+    "ts": "2026-01-01T00:00:01.000Z",
+    "variant_type": "B-测试变体乙",
+    "opening": "test_open_b",
+    "ending": "test_end_b",
+    "bgm_emotion": "fresh",
+    "visual_design": { "layout": "left", "font": "serif", "graphic": "none", "color": "ink_white" }
+  },
+  {
+    "ts": "2026-01-01T00:00:02.000Z",
+    "variant_type": "C-测试变体丙",
+    "opening": "test_open_c",
+    "ending": "test_end_c",
+    "bgm_emotion": "calm_narrative",
+    "visual_design": { "layout": "split", "font": "round", "graphic": "frame", "color": "warm_sand" }
+  }
+]

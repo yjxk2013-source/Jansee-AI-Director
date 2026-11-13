@@ -1,0 +1,11 @@
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#000000</item>
+    </style>
+
+    <!-- 启动屏主题：黑底，避免启动瞬间白屏闪烁 -->
+    <style name="SplashTheme" parent="AppTheme">
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+</resources>

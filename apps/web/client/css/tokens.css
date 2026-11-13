@@ -1,0 +1,33 @@
+/**
+ * 简兮 (JANSEE) — 纯粹黑白灰极致设计系统令牌 (MONOCHROME OBSIDIAN SYSTEM)
+ * 版本: v3.0 Enterprise Tokens
+ * 约束: 0 Emoji、纯粹黑白灰无杂色、2px锐利微倒角、发丝幽灵线框
+ */
+
+:root {
+  /* 黑曜石灰阶令牌 */
+  --jansee-stage: #050505;
+  --jansee-surface-lowest: #000000;
+  --jansee-surface-low: #0a0a0d;
+  --jansee-surface: #111115;
+  --jansee-surface-high: #19191f;
+  --jansee-surface-highest: #24242c;
+
+  /* 文字灰阶 */
+  --jansee-ink: #fafafa;
+  --jansee-ink-bright: #ffffff;
+  --jansee-muted: #a1a1aa;
+  --jansee-dim: #71717a;
+
+  /* 结构发丝线与微光 */
+  --jansee-border: rgba(255, 255, 255, 0.18);
+  --jansee-border-subtle: rgba(255, 255, 255, 0.08);
+  --jansee-border-focus: rgba(255, 255, 255, 0.75);
+  --jansee-glow: rgba(255, 255, 255, 0.12);
+
+  /* 倒角硬律 */
+  --jansee-radius: 2px;
+
+  /* 缓动动效 */
+  --jansee-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}

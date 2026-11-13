@@ -1,0 +1,21 @@
+{
+  "name": "@jansee/video-dub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 视频配音模块（导演剧本 + 视频 → TTS 逐段实测 → BGM 人声闪避 → 音画对齐成片，对外唯一 API：produceVideoDub）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "@jansee/tts-kit": "*",
+    "@jansee/audio-kit": "*",
+    "@jansee/ffmpeg-kit": "*",
+    "@jansee/subtitle-kit": "*",
+    "@jansee/ending-kit": "*",
+    "@jansee/intro-kit": "*",
+    "@jansee/shared": "*",
+    "ffmpeg-static": "^5.2.0"
+  }
+}

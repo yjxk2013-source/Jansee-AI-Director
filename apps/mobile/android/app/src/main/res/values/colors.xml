@@ -1,0 +1,7 @@
+<resources>
+    <color name="splash_background">#000000</color>
+    <!-- 奈飞红：用于图标/强调 -->
+    <color name="accent_red">#E50914</color>
+    <!-- 自适应图标背景：黑底（与 iOS 图标一致，安卓 8+ 不再套白圆底） -->
+    <color name="ic_launcher_background">#000000</color>
+</resources>

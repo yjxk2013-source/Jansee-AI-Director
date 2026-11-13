@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:clipToPadding="false"
+    android:paddingBottom="56dp"
+    android:paddingTop="40dp">
+
+    <!-- 中央图形 logo：透明底金属 JX（与 PC 首屏左上角徽标同源同款） -->
+    <ImageView
+        android:id="@+id/splash_logo"
+        android:layout_width="120dp"
+        android:layout_height="92dp"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:importantForAccessibility="no"
+        android:contentDescription="@null"
+        android:src="@drawable/splash_logo" />
+
+    <!-- 品牌字：与 PC 首屏左上角 .brand-text 同款连排（简兮·JANSEE，细体，字距 0.04） -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="32dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/notosanssc_light"
+            android:includeFontPadding="false"
+            android:letterSpacing="0.04"
+            android:text="@string/app_name_zh"
+            android:textColor="#FFFFFF"
+            android:textSize="21sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/manrope_light"
+            android:includeFontPadding="false"
+            android:letterSpacing="0.04"
+            android:text="@string/app_name_en_upper"
+            android:textColor="#FFFFFF"
+            android:textSize="21sp" />
+    </LinearLayout>
+
+    <!-- 品牌广告语 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="28dp"
+        android:fontFamily="@font/zcool_xiaowei"
+        android:includeFontPadding="false"
+        android:letterSpacing="0.22"
+        android:text="@string/app_slogan"
+        android:textColor="#A1A1AA"
+        android:textSize="12sp" />
+</LinearLayout>

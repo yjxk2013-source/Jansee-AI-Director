@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">简兮</string>
+    <string name="app_name_cn">简·兮</string>
+    <string name="app_name_en">Jansee</string>
+    <string name="app_name_zh">简兮·</string>
+    <string name="app_name_en_upper">JANSEE</string>
+    <string name="app_slogan">简于形 · 胜于效</string>
+</resources>

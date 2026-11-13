@@ -1,0 +1,12 @@
+{
+  "name": "@jansee/video-creator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 视频成片模块（未来预留）：视频片段分析、镜头排序、剪辑逻辑种子资产（当前不接线）",
+  "type": "module",
+  "main": "video/index.js",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "opencc-js": "^1.0.5"
+  }
+}

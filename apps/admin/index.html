@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JANSEE // CEO COMMAND CENTER</title>
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body>
+  <div id="admin-root">
+    <!-- 背景流光 -->
+    <div class="ambient-glow glow-top"></div>
+    <div class="ambient-glow glow-bottom"></div>
+
+    <!-- 左侧黑曜石精简侧边栏 -->
+    <aside class="admin-sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        </div>
+        <div class="brand-meta">
+          <span class="brand-title">JANSEE // COMMAND</span>
+          <span class="brand-subtitle">CEO OPERATIONS SYSTEM</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <div class="menu-group-label">COMMAND CENTER</div>
+        <div class="menu-item active" data-module="overview">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+          <span>经营总览</span>
+        </div>
+        <div class="menu-item" data-module="siteAnalytics">
+          <svg viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m7 14 4-4 3 3 6-7"></path></svg>
+          <span>流量分析</span>
+        </div>
+        <div class="menu-item" data-module="merchants">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>商户与订单</span>
+        </div>
+
+        <div class="menu-group-label">BUSINESS CONTROL</div>
+        <div class="menu-item" data-module="siteConfig">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          <span>前台动态配置</span>
+        </div>
+        <div class="menu-item" data-module="pricingAndWithdraw">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          <span>套餐与分销提现</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-status-box">
+          <span class="status-indicator-dot"></span>
+          <span class="status-indicator-text">指挥台已就绪</span>
+        </div>
+        <span class="version-tag">OPC EDITION</span>
+      </div>
+    </aside>
+
+    <!-- 右侧主视窗 -->
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <div class="topbar-breadcrumb">
+          <span class="breadcrumb-root">JANSEE COMMAND</span>
+          <span class="breadcrumb-separator">/</span>
+          <span class="breadcrumb-current" id="breadcrumb-current">经营总览</span>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="ghost-btn" id="btn-broadcast-msg" title="查阅商户真实反馈或下发全员公告">
+            <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            <span>站内信与反馈</span>
+          </button>
+          <button class="ghost-btn refresh-btn" id="btn-refresh" title="刷新实时数据">
+            <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>刷新数据</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- 动态渲染视窗 -->
+      <section class="admin-content-viewport" id="viewport-container">
+        <!-- 动态模块注入点 -->
+      </section>
+    </main>
+  </div>
+
+  <!-- 全局轻量幽灵模态框 -->
+  <div class="admin-modal-backdrop" id="modal-backdrop">
+    <div class="admin-modal-dialog" id="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">操作提示</h3>
+        <button class="modal-close-btn" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- 管理员登录闸门：未登录或凭证失效时覆盖全屏，验证通过前不加载任何业务数据 -->
+  <div class="admin-login-gate" id="admin-login-gate">
+    <div class="admin-login-card">
+      <div class="admin-login-brand">
+        <span class="brand-title">JANSEE // COMMAND</span>
+        <span class="brand-subtitle">仅限授权管理员访问</span>
+      </div>
+      <label class="admin-login-field">
+        <span>管理员账号</span>
+        <input type="text" id="admin-login-username" autocomplete="username" placeholder="请输入账号">
+      </label>
+      <label class="admin-login-field">
+        <span>登录密码</span>
+        <input type="password" id="admin-login-password" autocomplete="current-password" placeholder="请输入密码">
+      </label>
+      <p class="admin-login-tip" id="admin-login-tip"></p>
+      <button class="ghost-btn admin-login-submit" id="admin-login-submit">验证并进入</button>
+    </div>
+  </div>
+
+  <!-- 轻量吐司通知 -->
+  <div class="admin-toast-container" id="toast-container"></div>
+
+  <script src="./js/app.js"></script>
+</body>
+</html>

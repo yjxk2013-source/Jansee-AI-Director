@@ -1,0 +1,11 @@
+{
+  "name": "@jansee/subtitle-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 字幕服务（SRT 生成 + drawtext 发丝字幕渲染 + AI 溯源角标）",
+  "type": "module",
+  "main": "subtitle.js",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

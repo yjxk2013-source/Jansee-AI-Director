@@ -1,0 +1,12 @@
+{
+  "name": "@jansee/mobile",
+  "version": "2.0.1",
+  "private": true,
+  "description": "简兮 (JANSEE) 移动端跨端容器与客户端工程",
+  "scripts": {
+    "dev": "echo Starting mobile dev server...",
+    "build:android": "echo Building Android APK...",
+    "build:ios": "echo Building iOS bundle..."
+  },
+  "dependencies": {}
+}

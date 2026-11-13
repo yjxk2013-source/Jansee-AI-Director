@@ -1,0 +1,19 @@
+{
+  "name": "@jansee/intro-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮开场微光中台（电影级开场花字包装 + 黑曜石羽化暗晕，全平台跨视频链路共用）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./intro": "./intro.js",
+    "./render": "./render.js",
+    "./cover": "./cover.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "sharp": "^0.35.5",
+    "ffmpeg-static": "^5.2.0"
+  }
+}

@@ -1,0 +1,254 @@
+// 简兮 · 实测视频解说合成脚本（国内电商带货出片演示 48s - 零重叠大厂定稿版）
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import ffmpegStatic from 'ffmpeg-static';
+import { synthViaNode, audioDurationSec } from '../packages/tts-kit/tts.js';
+import { selectBgmByEmotion } from '../packages/audio-kit/bgm.js';
+import { resolveObsidianFont } from '../packages/subtitle-kit/subtitle.js';
+
+// 载入环境变量
+const envText = await fs.readFile('f:/janseeV2/.env', 'utf-8');
+for (const line of envText.split('\n')) {
+  const m = line.match(/^([^=]+)=(.*)$/);
+  if (m) process.env[m[1].trim()] = m[2].trim().replace(/^['"]|['"]$/g, '');
+}
+
+const CLIPS = [
+  'F:/janseeV2/COO/素材/切片/录屏-20261112-182943-0m04s-0m11s.mp4', // 7s (0~7s) 首页/线上商家
+  'F:/janseeV2/COO/素材/切片/录屏-20261112-182943-0m14s-0m17s.mp4', // 3s (7~10s) 点击图片成片
+  'F:/janseeV2/COO/素材/切片/录屏-20261112-182943-0m25s-0m38s.mp4', // 13s (10~23s) 放入8张睡衣照片
+  'F:/janseeV2/COO/素材/切片/录屏-20261112-182943-4m45s-4m50s.mp4', // 5s (23~28s) 输入：我家的睡衣今天9.9元
+  'F:/janseeV2/COO/素材/切片/录屏-20261112-182943-6m12s-6m32s.mp4', // 20s (28~48s) 出片大卡，交付大卡
+];
+
+const WORK_DIR = 'F:/janseeV2/storage/tmp/domestic_demo_work';
+const OUT_VIDEO = 'F:/janseeV2/COO/素材/成片/简兮实测_线上商家电商带货全流程演示.mp4';
+const VOICE_KEY = 'm-calm'; // 腾讯云大模型磁性成熟男声 (401002)
+
+await fs.mkdir(WORK_DIR, { recursive: true });
+await fs.mkdir(path.dirname(OUT_VIDEO), { recursive: true });
+
+// 解说台词规划（精确对齐 0~48s 画面动作，严防叠音与抢话）
+// 阶段1：0~7s (7s) 首页 -> 0.5s ~ 5.5s
+// 阶段2：7~10s (3s) 点击图片成片 -> 7.3s ~ 9.1s
+// 阶段3：10~23s (13s) 上传8张实拍睡衣照片 -> 10.5s ~ 17.3s
+// 阶段4：23~28s (5s) 输入卖点：我家的睡衣今天9.9元 -> 23.3s ~ 26.9s
+// 阶段5：28~48s (20s) 出片交付大卡 -> 28.8s ~ 34.3s, 35.2s ~ 41.4s, 42.2s ~ 47.2s
+const SCRIPT_SEGMENTS = [
+  {
+    id: 's01',
+    startSec: 0.5,
+    text: '实测电商带货商家，如何一键生成高质量短视频。首页直接选择线上商家。',
+  },
+  {
+    id: 's02',
+    startSec: 7.3,
+    text: '接着点击进入图片成片。',
+  },
+  {
+    id: 's03',
+    startSec: 10.5,
+    text: '这里最多支持九张图。直接放入拍好的八张居家睡衣照片，系统能智能解析构图。',
+  },
+  {
+    id: 's04',
+    startSec: 23.3,
+    text: '在卖点框输入：我家睡衣今天九块九，点击立即出片。',
+  },
+  {
+    id: 's05',
+    startSec: 28.5,
+    text: '极速出片！进入商业交付大卡。右侧可以实时预览高清带货成片，还配套了纯净封面。',
+  },
+  {
+    id: 's06',
+    startSec: 35.8,
+    text: '自动精修微距发丝字幕，并写入国标合规隐式元数据。',
+  },
+  {
+    id: 's07',
+    startSec: 41.5,
+    text: '左侧一键配套带货文案、吸睛标题与置顶评论，全套宣发直接发布。',
+  },
+];
+
+console.log('=== 第一步：生成大模型 TTS 配音 ===');
+const audioSegments = [];
+let hasOverlap = false;
+
+for (let i = 0; i < SCRIPT_SEGMENTS.length; i++) {
+  const seg = SCRIPT_SEGMENTS[i];
+  const audioFile = path.join(WORK_DIR, `${seg.id}.mp3`);
+  console.log(`正在合成 [${seg.id}] (${seg.startSec}s 开始): ${seg.text}`);
+  const ok = await synthViaNode(seg.text, '', VOICE_KEY, audioFile, 1.08); // 1.08x 干练语速
+  if (!ok) throw new Error(`TTS 合成失败: ${seg.id}`);
+  const dur = audioDurationSec(audioFile);
+  const actualEnd = seg.startSec + dur;
+  console.log(`[${seg.id}] 时长: ${dur.toFixed(2)}s | 规划起止: ${seg.startSec}s -> ${actualEnd.toFixed(2)}s`);
+  if (i > 0) {
+    const prev = audioSegments[i - 1];
+    const gap = seg.startSec - prev.endSec;
+    if (gap < 0) {
+      console.warn(`[严重警告] ${seg.id} 与 ${prev.id} 发生重叠！重叠时长: ${(-gap).toFixed(2)}s`);
+      hasOverlap = true;
+    } else {
+      console.log(`  └ 与上一句间隔气口: ${gap.toFixed(2)}s (正常)`);
+    }
+  }
+  audioSegments.push({
+    ...seg,
+    audioFile,
+    dur,
+    endSec: actualEnd,
+  });
+}
+
+if (hasOverlap) {
+  console.warn('❌ 仍有重叠，请立即修正时间戳！');
+} else {
+  console.log('\n🎉 所有台词起止完美避开重叠，呼吸气口极度舒适！');
+}
+
+// 格式化为 ASS/SRT 时间格式: 0:00:00.00
+function formatAssTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const cs = Math.floor((seconds % 1) * 100);
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+console.log('\n=== 第二步：生成微距发丝字幕 ASS ===');
+const fontPath = resolveObsidianFont('materials/fonts/noto-sans-sc/NotoSansSC_400Regular.ttf').replace(/\\:/g, ':');
+console.log('字幕字体:', fontPath);
+
+// 构造 1920x1080 横屏大厂级发丝字幕 ASS
+const assLines = [
+  '[Script Info]',
+  'ScriptType: v4.00+',
+  'PlayResX: 1920',
+  'PlayResY: 1080',
+  'WrapStyle: 0',
+  'ScaledBorderAndShadow: yes',
+  '',
+  '[V4+ Styles]',
+  'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+  // 黑曜石微距字幕：钛白纯净高光 &H00F8FAFC，1px 幽灵细描边 &H800A0A0E，半透明黑曜石底板 &H90050508，居中底部 MarginV=48
+  'Style: ObsidianSub,Noto Sans SC,38,&H00F8FAFC,&H000000FF,&H800A0A0E,&H90050508,0,0,0,0,100,100,1,0,3,1.5,0,2,80,80,48,1',
+  '',
+  '[Events]',
+  'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+];
+
+for (const seg of audioSegments) {
+  const start = formatAssTime(seg.startSec);
+  const end = formatAssTime(seg.endSec + 0.2); // 微延 0.2s 避免眨眼
+  // 去除行尾标点
+  const cleanText = seg.text.replace(/[。！!，,]$/, '');
+  assLines.push(`Dialogue: 0,${start},${end},ObsidianSub,,0,0,0,,${cleanText}`);
+}
+
+const assFile = path.join(WORK_DIR, 'subtitles.ass');
+await fs.writeFile(assFile, assLines.join('\n'), 'utf-8');
+console.log('字幕文件已生成:', assFile);
+
+console.log('\n=== 第三步：选配轻快科技环境 BGM ===');
+const bgmInfo = await selectBgmByEmotion('fresh');
+const bgmPath = bgmInfo?.bgmPath || '';
+console.log('选用 BGM:', bgmPath ? `${bgmInfo.folder}/${bgmInfo.track}` : '无BGM');
+
+console.log('\n=== 第四步：拼接视频并混音终审 ===');
+const runFfmpeg = (args) =>
+  new Promise((resolve, reject) => {
+    execFile(ffmpegStatic, args, { maxBuffer: 200 * 1024 * 1024 }, (err, _o, stderr) => {
+      if (err) reject(new Error(String(stderr || '').split('\n').slice(-10).join('\n')));
+      else resolve();
+    });
+  });
+
+// 1. 生成 5 个视频的 concat 清单
+const concatListPath = path.join(WORK_DIR, 'concat_list.txt');
+const concatContent = CLIPS.map(c => `file '${c.replace(/\\/g, '/')}'`).join('\n');
+await fs.writeFile(concatListPath, concatContent, 'utf-8');
+
+// 2. 无损拼接 5 个录屏切片
+const MERGED_VIDEO = path.join(WORK_DIR, 'merged_raw.mp4');
+console.log('正在拼接 5 段录屏切片...');
+await runFfmpeg([
+  '-nostdin', '-y',
+  '-f', 'concat',
+  '-safe', '0',
+  '-i', concatListPath,
+  '-c', 'copy',
+  MERGED_VIDEO
+]);
+console.log('切片拼接完毕:', MERGED_VIDEO);
+
+// 3. 组装 FFmpeg 复合滤镜：字幕烧录 + 多段 TTS 延时混音 + BGM 避让
+const ffmpegArgs = ['-nostdin', '-y'];
+
+// 输入 0: 拼接好的视频 (48s)
+ffmpegArgs.push('-i', MERGED_VIDEO);
+
+// 输入 1~7: 7段 TTS 音频
+for (const seg of audioSegments) {
+  ffmpegArgs.push('-i', seg.audioFile);
+}
+
+// 输入 8: BGM
+let bgmIndex = -1;
+if (bgmPath && (await fs.stat(bgmPath).catch(() => null))) {
+  ffmpegArgs.push('-stream_loop', '-1', '-i', bgmPath);
+  bgmIndex = 8;
+}
+
+const filterComplex = [];
+
+// 视频滤镜：字幕烧录
+const escapedAss = assFile.replace(/\\/g, '/').replace(/:/g, '\\:');
+filterComplex.push(`[0:v]ass='${escapedAss}'[outv]`);
+
+// 音频滤镜：adelay 对位与混音
+const delayedLabels = [];
+for (let i = 0; i < audioSegments.length; i++) {
+  const seg = audioSegments[i];
+  const delayMs = Math.round(seg.startSec * 1000);
+  const inputIdx = i + 1;
+  filterComplex.push(`[${inputIdx}:a]adelay=${delayMs}|${delayMs},volume=1.25[a${i}]`);
+  delayedLabels.push(`[a${i}]`);
+}
+
+// 混合所有人声
+filterComplex.push(`${delayedLabels.join('')}amix=inputs=${delayedLabels.length}:dropout_transition=0:normalize=0[voice_all]`);
+
+if (bgmIndex !== -1) {
+  // BGM 降至 48s，音量 0.14，首尾淡入淡出
+  filterComplex.push(`[${bgmIndex}:a]atrim=0:48,volume=0.14,afade=t=in:ss=0:d=1,afade=t=out:st=46:d=2[bgm_clean]`);
+  filterComplex.push(`[voice_all][bgm_clean]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[outa]`);
+} else {
+  filterComplex.push(`[voice_all]anull[outa]`);
+}
+
+ffmpegArgs.push(
+  '-filter_complex', filterComplex.join(';'),
+  '-map', '[outv]',
+  '-map', '[outa]',
+  '-c:v', 'libx264',
+  '-preset', 'fast',
+  '-crf', '19',
+  '-pix_fmt', 'yuv420p',
+  '-c:a', 'aac',
+  '-b:a', '192k',
+  '-t', '48',
+  OUT_VIDEO
+);
+
+console.log('执行最终视频渲染 (字幕 + 人声 + BGM)...');
+await runFfmpeg(ffmpegArgs);
+
+const outStat = await fs.stat(OUT_VIDEO);
+console.log(`\n🎉 国内电商带货实测演示视频渲染成功！`);
+console.log(`成片输出路径: ${OUT_VIDEO}`);
+console.log(`成片视频大小: ${(outStat.size / (1024 * 1024)).toFixed(2)} MB`);
+

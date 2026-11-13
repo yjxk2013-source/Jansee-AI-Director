@@ -1,0 +1,78 @@
+# ==============================================================================
+# 简兮 (JANSEE) 纯净代码仓库 .gitignore (纯代码，不存素材、文档、大二进制)
+# ==============================================================================
+
+# 依赖与临时编译
+node_modules/
+.pnpm-store/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# 环境变量与敏感配置
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+.alipay-*.json
+
+# 运行时存储与输出隔离
+storage/
+temp/
+tmp/
+scratch/
+*.log
+*.bundle
+
+# 素材与多媒体文件（禁止进代码库，走服务器挂载/CDN）
+materials/
+packages/cover-kit/assets/
+whisper.cpp/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.flac
+*.aac
+*.m4a
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.zip
+*.tar.gz
+*.7z
+
+# 文档与策划性内容（本地保留，不进核心代码仓库）
+docs/
+COO/
+marketing/
+
+# 编辑器与系统临时文件
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.bak
+*.swp
+*~
+.workbuddy/
+_backup/
+*.idx
+*.pack
+*.rev
+test_pack*
+
+# 移动端编译产物
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/android/build/
+apps/mobile/android/local.properties
+*.keystore

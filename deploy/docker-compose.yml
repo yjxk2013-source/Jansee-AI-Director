@@ -1,0 +1,30 @@
+# ==============================================================================
+# 简兮 (JANSEE) — 生产环境单机/集群编排配置 (docker-compose.yml)
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  jansee-core:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: jansee-production-server
+    restart: always
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=production
+      - PORT=5173
+    env_file:
+      - ../.env
+    volumes:
+      # 持久化存储隔离 (防数据丢失)
+      - ../storage/uploads:/app/storage/uploads
+      - ../storage/outputs:/app/storage/outputs
+      - ../materials:/app/materials:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
