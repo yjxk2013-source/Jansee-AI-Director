@@ -45,34 +45,8 @@ import { interpOps } from './siteConfig.mjs'; // 静态页 {{ops.*}} 服务端�
 import { recordSiteAnalytics, getSiteAnalytics, recordAdminIp, resetSiteAnalytics, parseIpRegion, parseChannelSource } from './siteAnalytics.mjs';
 import {
   recordAdminError,
-  getAdminErrorStats,
-  getAdminOverview,
-  getAdminAnalysis,
-  getAdminUsers,
-  toggleAdminUserStatus,
-  getAdminCreditRecords,
-  adjustUserCredits,
-  getAdminOrders,
   refundAdminOrder,
-  getAdminWithdraws,
-  reviewAdminWithdraw,
-  getAdminPartners,
-  getAdminMessages,
-  sendAdminMessage,
   getAdminPricing,
-  saveAdminPricing,
-  getAdminSiteConfig,
-  saveAdminSiteConfig,
-  getAdminMonitor,
-  getAdminInsights,
-  getAdminTasks,
-  getAdminAttribution,
-  getAdminRenderQueue,
-  getAdminModerationLogs,
-  getAdminBusinessOverview,
-  getAdminFeedbacks,
-  deleteAdminFeedback,
-  deleteAdminMessage,
 } from './admin.mjs';
 import { addFeedback, messagesFor } from './messageStore.mjs';
 import {
@@ -85,6 +59,8 @@ import {
 } from './partnerStore.mjs';
 import { createOrder, getOrder, ordersOf } from './payStore.mjs';
 import { createAlipayRouteHandler, alipayReturnUrl } from './alipayRoutes.mjs';
+import { createAdminRouteHandler } from './adminRoutes.mjs';
+import { metrics } from './metrics.mjs';
 import { initAlipay } from './alipayProvider.mjs';
 import { fulfillPaidOrder } from './payFulfillment.mjs';
 import { updateUser } from './userStore.mjs';
@@ -355,6 +331,7 @@ const MIME_MAP = {
 
 // 统一响应辅助函数
 function sendJson(res, statusCode, code, msg, data = {}) {
+  metrics.recordRequest(res?.req?.method || 'HTTP', '', statusCode);
   if (statusCode >= 400) {
     recordAdminError(statusCode, code, msg);
   }
@@ -408,6 +385,9 @@ const handleAlipayRoutes = createAlipayRouteHandler({
   },
   rejectNoUid: (res) => sendJson(res, 401, 40101, '未登录或登录已失效，请重新登录'),
 });
+
+// —— S9 管理后台运营控制中心路由 ——
+const handleAdminRoutes = createAdminRouteHandler({ sendJson, safeReadJson });
 
 /**
  * 全局安全 JSON 请求体读取器（全站通用防 OOM DoS 门禁）
@@ -676,7 +656,14 @@ const server = http.createServer((req, res) => {
 
   // 1. 健康探针接口
   if (pathname === '/api/v1/health' || pathname === '/api/health' || pathname === '/health') {
-    sendJson(res, 200, 0, '系统健康运行中', { status: 'healthy', uptime: process.uptime() });
+    const snap = metrics.getSnapshot();
+    sendJson(res, 200, 0, '系统健康运行中', { status: 'healthy', uptime: process.uptime(), metrics: snap });
+    return;
+  }
+
+  // 1.0 生产级可观测性度量指标快照
+  if (pathname === '/api/v1/metrics' && req.method === 'GET') {
+    sendJson(res, 200, 0, '度量指标采集成功', metrics.getSnapshot());
     return;
   }
 
@@ -1837,221 +1824,7 @@ const server = http.createServer((req, res) => {
   // ==========================================
   // S9 管理后台运营控制中心 API (/api/v1/admin/*)
   // ==========================================
-
-  // 管理员鉴权辅助函数
-  // 安全红线：只认登录后签发的 adminToken。此前存在 x-admin-key === 'jansee-admin'
-  // 的源码硬编码后门，任何人知道该字符串即可获得 super_admin 全权限（改用户/调积分/
-  // 退款/审批提现/改价），2026-10-28 已彻底移除，不接受任何形式的共享密钥旁路。
-  function requireAdminAuth() {
-    const token = extractAdminToken(req);
-    if (!token) {
-      sendJson(res, 401, 40101, '管理员未登录或缺少管理凭证');
-      return null;
-    }
-    const session = verifyAdminToken(token);
-    if (!session) {
-      sendJson(res, 403, 40301, '管理凭证无效或已过期，拒绝访问');
-      return null;
-    }
-    const adminIp = req.headers['x-real-ip'] || req.socket?.remoteAddress;
-    if (adminIp) recordAdminIp(adminIp);
-    return session;
-  }
-
-  // 官网流量分析：仅允许已登录管理员读取聚合数据。
-  if (pathname === '/api/v1/admin/site-analytics' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const days = Number(urlObj.searchParams.get('days') || 7);
-    sendJson(res, 200, 0, '查询成功', getSiteAnalytics(days));
-    return;
-  }
-
-  // 官网流量分析：一键清零重置
-  if (pathname === '/api/v1/admin/site-analytics/reset' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const db = resetSiteAnalytics();
-    sendJson(res, 200, 0, '访问统计已重置清零', db);
-    return;
-  }
-
-  // 1. 管理员登录：POST /api/v1/admin/login
-  if (pathname === '/api/v1/admin/login' && req.method === 'POST') {
-    safeReadJson(req, res).then((payload) => {
-      try {
-        const result = verifyAdmin(payload.username, payload.password);
-        const adminIp = req.headers['x-real-ip'] || req.socket?.remoteAddress;
-        if (adminIp) recordAdminIp(adminIp);
-        sendJson(res, 200, 0, '管理员登录成功', result);
-      } catch (e) {
-        sendJson(res, e.statusCode || 401, e.code || 40101, e.message || '登录失败');
-      }
-    }).catch(() => { });
-    return;
-  }
-
-  // 2. 用户管理列表：GET /api/v1/admin/users
-  if (pathname === '/api/v1/admin/users' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-
-    const status = urlObj.searchParams.get('status') || undefined;
-    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
-    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
-
-    const usersData = getAdminUsers({ status, limit, offset });
-    sendJson(res, 200, 0, '查询成功', usersData);
-    return;
-  }
-
-  // 3. 积分流水查询：GET /api/v1/admin/credits
-  if (pathname === '/api/v1/admin/credits' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-
-    const userId = urlObj.searchParams.get('userId') || undefined;
-    const type = urlObj.searchParams.get('type') || undefined;
-    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
-    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
-
-    const records = getAdminCreditRecords({ userId, type, limit, offset });
-    sendJson(res, 200, 0, '查询成功', records);
-    return;
-  }
-
-  // 4. 管理员手动调整积分：POST /api/v1/admin/credits/adjust
-  if (pathname === '/api/v1/admin/credits/adjust' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-
-    safeReadJson(req, res).then((payload) => {
-      try {
-        const delta = payload.amount !== undefined ? payload.amount : payload.delta;
-        const result = adjustUserCredits({
-          userId: payload.userId,
-          amount: delta,
-          reason: payload.reason || '客服后台手动调账',
-          adminId: admin.username,
-        });
-        sendJson(res, 200, 0, '积分调整成功', result);
-      } catch (e) {
-        sendJson(res, e.statusCode || 400, e.code || 40001, e.message || '积分调整失败');
-      }
-    }).catch(() => { });
-    return;
-  }
-
-  // 5. 任务监控查询：GET /api/v1/admin/tasks
-  if (pathname === '/api/v1/admin/tasks' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-
-    const type = urlObj.searchParams.get('type') || undefined;
-    const status = urlObj.searchParams.get('status') || undefined;
-    const userId = urlObj.searchParams.get('userId') || undefined;
-    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
-    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
-
-    const tasksData = getAdminTasks({ type, status, userId, limit, offset });
-    sendJson(res, 200, 0, '查询成功', tasksData);
-    return;
-  }
-
-  // 6. 错误监控统计：GET /api/v1/admin/errors
-  if (pathname === '/api/v1/admin/errors' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const errorStats = getAdminErrorStats();
-    sendJson(res, 200, 0, '查询成功', errorStats);
-    return;
-  }
-
-  // 7. 仪表盘真实大盘数据：GET /api/v1/admin/overview
-  if (pathname === '/api/v1/admin/overview' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminOverview();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 8. 分析页真实业务指标：GET /api/v1/admin/analysis
-  if (pathname === '/api/v1/admin/analysis' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminAnalysis();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 9. 用户状态切换（冻结/解冻）：POST /api/v1/admin/users/status
-  if (pathname === '/api/v1/admin/users/status' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      try {
-        const targetStatus = payload.isFrozen !== undefined ? payload.isFrozen : payload.status;
-        const result = toggleAdminUserStatus(payload.userId, targetStatus);
-        sendJson(res, 200, 0, '用户状态更新成功', result);
-      } catch (e) {
-        sendJson(res, e.statusCode || 400, e.code || 40001, e.message || '操作失败');
-      }
-    }).catch(() => { });
-    return;
-  }
-
-  // 10. 订单管理列表：GET /api/v1/admin/orders
-  if (pathname === '/api/v1/admin/orders' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const status = urlObj.searchParams.get('status') || undefined;
-    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
-    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
-    const data = getAdminOrders({ status, limit, offset });
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 11. 订单退款操作：POST /api/v1/admin/orders/refund
-  if (pathname === '/api/v1/admin/orders/refund' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then(async (payload) => {
-      const resData = await refundAdminOrder(payload.orderId, payload.reason);
-      if (resData.ok) {
-        sendJson(res, 200, 0, '退款处理成功', resData);
-      } else {
-        sendJson(res, 400, 40001, resData.message || '退款失败');
-      }
-    }).catch(() => { });
-    return;
-  }
-
-  // 12. 提现审核列表：GET /api/v1/admin/withdraws
-  if (pathname === '/api/v1/admin/withdraws' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminWithdraws();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 13. 提现审核处理：POST /api/v1/admin/withdraws/review
-  if (pathname === '/api/v1/admin/withdraws/review' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      const id = payload.withdrawId || payload.id;
-      const action = payload.status || payload.action || 'approved';
-      const note = payload.note || '';
-      const result = reviewAdminWithdraw(id, action, note);
-      if (result && !result.error) {
-        sendJson(res, 200, 0, '提现审核已更新', result);
-      } else {
-        sendJson(res, 400, 40001, result?.error || '审核失败');
-      }
-    }).catch(() => { });
+  if (handleAdminRoutes(req, res, pathname, urlObj)) {
     return;
   }
 
@@ -2121,52 +1894,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 14. 城市合伙人列表：GET /api/v1/admin/partners
-  if (pathname === '/api/v1/admin/partners' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminPartners();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 15. 站内信历史：GET /api/v1/admin/messages
-  if (pathname === '/api/v1/admin/messages' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminMessages();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
   // 15.1 前台商户读取站内信列表：GET /api/v1/user/messages
   if (pathname === '/api/v1/user/messages' && req.method === 'GET') {
     // 身份仅取登录会话：未登录（空 uid）只看全站广播信，绝不接受 ?userId= / x-user-id 指定身份
     const uid = sessionUidOf(req);
     const list = messagesFor(uid);
     sendJson(res, 200, 0, '查询成功', { list, count: list.length });
-    return;
-  }
-
-  // 16. 发送站内信：POST /api/v1/admin/messages/send
-  if (pathname === '/api/v1/admin/messages/send' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      const msg = sendAdminMessage(payload);
-      sendJson(res, 200, 0, '站内信已成功下发', msg);
-    }).catch(() => { });
-    return;
-  }
-
-  // 16.0 撤回/删除站内信：POST /api/v1/admin/messages/delete
-  if (pathname === '/api/v1/admin/messages/delete' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      const ok = deleteAdminMessage(payload.id);
-      sendJson(res, 200, 0, ok ? '站内信已成功撤回' : '未找到指定站内信', { ok });
-    }).catch(() => { });
     return;
   }
 
@@ -2184,46 +1917,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 16.2 后台查询商户反馈列表：GET /api/v1/admin/feedbacks
-  if (pathname === '/api/v1/admin/feedbacks' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminFeedbacks();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 16.3 后台处理/删除商户反馈：POST /api/v1/admin/feedbacks/delete
-  if (pathname === '/api/v1/admin/feedbacks/delete' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      deleteAdminFeedback(payload.id);
-      sendJson(res, 200, 0, '反馈记录已删除');
-    }).catch(() => { });
-    return;
-  }
-
-  // 17. 会员与加油包定价列表 (前台商户与管理后台打通共享)：GET /api/v1/pricing 或 /api/v1/admin/pricing
-  if ((pathname === '/api/v1/pricing' || pathname === '/api/v1/admin/pricing') && req.method === 'GET') {
+  // 17. 会员与加油包定价列表 (前台商户读取官方套餐)：GET /api/v1/pricing
+  if (pathname === '/api/v1/pricing' && req.method === 'GET') {
     const data = getAdminPricing();
     sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 18. 更新会员与加油包定价配置：POST /api/v1/admin/pricing/update
-  if (pathname === '/api/v1/admin/pricing/update' && req.method === 'POST') {
-    // 改价接口必须管理员登录：此前无门禁，任何人都能把 199 改成 0.01
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      try {
-        const saved = saveAdminPricing(payload);
-        sendJson(res, 200, 0, '定价策略已原子落盘并热生效', saved);
-      } catch (e) {
-        sendJson(res, 400, 40001, e.message || '定价更新失败');
-      }
-    }).catch(() => { });
     return;
   }
 
@@ -2459,85 +2156,6 @@ const server = http.createServer((req, res) => {
       };
     });
     sendJson(res, 200, 0, '查询成功', { list });
-    return;
-  }
-
-  // 19. 站点设置（FAQ/广告占位/法律条文/案例）：GET /api/v1/admin/site-config
-  if (pathname === '/api/v1/admin/site-config' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminSiteConfig();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 20. 更新站点设置：POST /api/v1/admin/site-config/update
-  if (pathname === '/api/v1/admin/site-config/update' && req.method === 'POST') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    safeReadJson(req, res).then((payload) => {
-      const patchData = (payload && typeof payload === 'object' && payload.siteConfig) ? payload.siteConfig : payload;
-      const result = saveAdminSiteConfig(patchData);
-      if (result.ok) {
-        sendJson(res, 200, 0, '站点设置保存成功', result.config);
-      } else {
-        sendJson(res, 400, 40001, result.errors ? result.errors.join('；') : '保存失败');
-      }
-    }).catch(() => { });
-    return;
-  }
-
-  // 21. 系统监控：GET /api/v1/admin/monitor
-  if (pathname === '/api/v1/admin/monitor' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminMonitor();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 22. 数据洞察：GET /api/v1/admin/insights
-  if (pathname === '/api/v1/admin/insights' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminInsights();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 23. 渠道获客归因：GET /api/v1/admin/attribution
-  if (pathname === '/api/v1/admin/attribution' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminAttribution();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 24. 成片队列与健康度：GET /api/v1/admin/render-queue
-  if (pathname === '/api/v1/admin/render-queue' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminRenderQueue();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 25. 内容风控拦截日志：GET /api/v1/admin/moderation-logs
-  if (pathname === '/api/v1/admin/moderation-logs' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminModerationLogs();
-    sendJson(res, 200, 0, '查询成功', data);
-    return;
-  }
-
-  // 26. 商业经营大盘（合并分析与洞察）：GET /api/v1/admin/business-overview
-  if (pathname === '/api/v1/admin/business-overview' && req.method === 'GET') {
-    const admin = requireAdminAuth();
-    if (!admin) return;
-    const data = getAdminBusinessOverview();
-    sendJson(res, 200, 0, '查询成功', data);
     return;
   }
 
