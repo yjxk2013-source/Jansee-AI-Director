@@ -1,0 +1,41 @@
+{
+  "note": "AI 照妖镜对比片台词。段1=其它AI塑料感对比图(8s)，段2=简兮效果(8s)。开场卡1.5s，结尾卡2.2s，叠化0.6s。",
+  "voice": "m-calm",
+  "bgm": "F:/janseeV2/materials/audio/energetic/energetic_01.mp3",
+  "bgmVolume": 0.14,
+  "clips": [
+    {
+      "file": "F:/Jansee-COO/Split-screen_comparison_of_fake_…_c5f33e9b_1080p.mp4",
+      "start": 0,
+      "duration": 7.85
+    },
+    {
+      "file": "F:/Jansee-COO/Display_screen_showing_portrait_…_eeecbf01_1080p.mp4",
+      "start": 0,
+      "duration": 7.85
+    }
+  ],
+  "intro": {
+    "duration": 1.5,
+    "text": "AI 照妖镜"
+  },
+  "outro": {
+    "duration": 2.2,
+    "text": "真正的视觉降维打击\n工具搜：简兮 JANSEE"
+  },
+  "xfade": 0.6,
+  "segments": [
+    {
+      "id": "c01",
+      "start": 1.5,
+      "end": 8.3,
+      "text": "市面上那一堆塑料感AI工具，把好好的照片折腾得像个假人，花钱买罪受。"
+    },
+    {
+      "id": "c02",
+      "start": 9,
+      "end": 15.7,
+      "text": "今天直接上AI照妖镜，看看什么叫真正的视觉降维打击。"
+    }
+  ]
+}
