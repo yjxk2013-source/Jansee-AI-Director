@@ -38,6 +38,15 @@ export function aiBadgeFontFile() {
   const materials = process.env.JX_MATERIALS_ROOT || path.resolve(REPO_ROOT, 'materials');
   const p = path.join(materials, 'fonts', 'noto-sans-sc', 'NotoSansSC_400Regular.ttf');
   if (!fs.existsSync(p)) {
+    // 跨平台与 CI 容器环境兼容：若本地未挂载 materials 资源库，自动探测系统已装载的 NotoSans CJK 字体
+    const sysFallbacks = [
+      '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+      '/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf',
+      '/usr/share/fonts/opentype/noto/NotoSansSC-Regular.otf',
+    ];
+    for (const f of sysFallbacks) {
+      if (fs.existsSync(f)) return f;
+    }
     throw new Error(`aiBadge: 字体真源缺失 ${p}（materials/fonts 必须随仓库走）`);
   }
   return p;

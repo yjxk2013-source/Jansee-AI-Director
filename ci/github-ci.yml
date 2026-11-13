@@ -2,7 +2,7 @@ name: Jansee Enterprise CI
 
 on:
   push:
-    branches: [ main, 'feat/**', 'fix/**' ]
+    branches: [ main, 'feat/**', 'fix/**', 'chore/**' ]
   pull_request:
     branches: [ main ]
 
@@ -28,7 +28,7 @@ jobs:
       - name: Install System Dependencies (FFmpeg & Libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
 
       - name: Verify FFmpeg Capabilities
         run: |
@@ -36,7 +36,7 @@ jobs:
 
       - name: Install Monorepo Dependencies
         run: |
-          npm ci --no-audit --no-fund
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
       - name: Gate 1 - Environment & Health Baseline Check
         run: |
@@ -49,4 +49,3 @@ jobs:
       - name: Gate 3 - Full Regression Core Test Suites (19 Suites)
         run: |
           npm test
-

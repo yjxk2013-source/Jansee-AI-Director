@@ -398,3 +398,7 @@ export function buildAiBadgeOverlay(fontfile, videoDuration, shortEdge = 1080, o
 
   return segs;
 }
+
+// 统一导出国标 AI 显式角标与隐式 udta/MP4 元数据注入方法
+export { buildAiMetaTags, aiMetaArgs, AI_BADGE, aiBadgeFontFile } from './aiBadge.js';
+
