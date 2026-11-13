@@ -1,0 +1,18 @@
+{
+  "sessions": [
+    {
+      "sessionToken": "sess_1793252798880_f7890f59c1340107e0b5800157e449ccd3245ae440d7e7ea",
+      "userId": "usr_1793250890697_s1krg",
+      "createdAt": 1793252798881,
+      "expireAt": 1824812522520,
+      "ttlMs": 31536000000
+    },
+    {
+      "sessionToken": "sess_1793255326403_dc0776e634e386859e1108656aea96462eb5687dad547c5c",
+      "userId": "usr_1793250890697_s1krg",
+      "createdAt": 1793255326403,
+      "expireAt": 1824812522520,
+      "ttlMs": 31536000000
+    }
+  ]
+}

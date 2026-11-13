@@ -1,0 +1,19 @@
+{
+  "users": [
+    {
+      "userId": "usr_1793250890697_s1krg",
+      "phone": "15208316776",
+      "nickname": "21",
+      "status": "active",
+      "tier": "free",
+      "inviterPhone": "",
+      "registerRegion": "中国 / 四川省 / 成都市",
+      "channel": "直接访问",
+      "createdAt": 1793250890697,
+      "updatedAt": 1793257533155,
+      "passwordHash": "s2$16384$07b89690e160f81aadec93800487ff2a$66d62c06d12a749a5556e1812251f5efbe75b6cb3cdd02f64acafba76eb7f577",
+      "passwordUpdatedAt": 1793250902125,
+      "lastCheckin": "2026-10-29"
+    }
+  ]
+}

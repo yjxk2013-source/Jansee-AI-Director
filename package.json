@@ -15,7 +15,8 @@
     "check:health": "powershell -ExecutionPolicy Bypass -File ./scripts/check-health.ps1",
     "test:mocker": "node scripts/run-mocker-test.mjs",
     "build:web": "node scripts/build-web.mjs",
-    "check:material": "node scripts/check-material.mjs"
+    "check:material": "node scripts/check-material.mjs",
+    "sync:materials": "node scripts/sync-materials.mjs"
   },
   "keywords": [
     "jansee",

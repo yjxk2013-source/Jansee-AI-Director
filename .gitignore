@@ -1,16 +1,26 @@
 # ==============================================================================
-# 简兮 (JANSEE) 纯净代码仓库 .gitignore (纯代码，不存素材、文档、大二进制)
+# 简兮 (JANSEE) V3 企业级全量私有仓库 .gitignore
+# 架构规范：大厂级全量灾备（纯代码 + 字体 + 模板 + 文档 + 运营工具归入 Git）
+# 官方 1.3GB 音频曲库由 `npm run sync:materials` 自动从云端一键极速补全
 # ==============================================================================
 
 # 依赖与临时编译
 node_modules/
+**/node_modules/
 .pnpm-store/
 dist/
 build/
 .cache/
 *.tsbuildinfo
+*.bak
+*.tmp
 
-# 环境变量与敏感配置
+# 移动端编译与本地 SDK 路径
+.gradle/
+**/android/.gradle/
+**/android/local.properties
+
+# 环境变量与敏感密钥保护（避免泄漏真实私钥，请从 .env.example 复制配置）
 .env
 .env.local
 .env.*.local
@@ -19,39 +29,27 @@ build/
 **/.env.*.local
 .alipay-*.json
 
-# 运行时存储与输出隔离
-storage/
+# 运行时临时存储与历史备份隔离
+storage/outputs/*
+!storage/outputs/.gitkeep
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/temp/*
+storage/_backup*
+storage/backups/
+_backup/
 temp/
 tmp/
 scratch/
 *.log
 *.bundle
 
-# 素材与多媒体文件（禁止进代码库，走服务器挂载/CDN）
-materials/
-packages/cover-kit/assets/
+# 大型音视频二进制（由云端灾备一键同步）
+materials/audio/
 whisper.cpp/
-*.mp4
-*.mov
-*.avi
-*.mkv
-*.wav
-*.mp3
-*.flac
-*.aac
-*.m4a
-*.ttf
-*.otf
-*.woff
-*.woff2
-*.zip
-*.tar.gz
-*.7z
-
-# 文档与策划性内容（本地保留，不进核心代码仓库）
-docs/
-COO/
-marketing/
+COO/素材/录屏/
+COO/素材/切片/
+COO/工具/tmp_subs/
 
 # 编辑器与系统临时文件
 .idea/
@@ -60,23 +58,4 @@ marketing/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
-*.bak
-*.swp
-*~
-.workbuddy/
-_backup/
-*.idx
-*.pack
-*.rev
-test_pack*
-
-apps/web/client/assets/poster-*.jpg
-apps/web/client/assets/jansee_producthunt_launch_poster.png
-apps/web/client/assets/app/
-apps/web/client/assets/icons/
-apps/web/server/data/
-apps/mobile/android/.gradle/
-apps/mobile/android/app/build/
-apps/mobile/android/build/
-apps/mobile/android/local.properties
-*.keystore
+Desktop.ini

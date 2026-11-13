@@ -1,0 +1,41 @@
+{
+  "accounts": {
+    "usr_1793250890697_s1krg": {
+      "paid": 0,
+      "free": 500
+    }
+  },
+  "transactions": [
+    {
+      "transactionId": "tx_1793250890851_e9949",
+      "seq": 1,
+      "userId": "usr_1793250890697_s1krg",
+      "type": "grant_free",
+      "amount": 600,
+      "reason": "新用户注册赠送积分",
+      "taskId": null,
+      "createdAt": 1793250890851
+    },
+    {
+      "transactionId": "tx_1793253452803_v98t1",
+      "seq": 2,
+      "userId": "usr_1793250890697_s1krg",
+      "type": "grant_free",
+      "amount": 100,
+      "reason": "商户每日签到入账 (运营补贴/不可退款)",
+      "taskId": null,
+      "createdAt": 1793253452803
+    },
+    {
+      "transactionId": "tx_crt_1793257843858_l1rkc",
+      "seq": 3,
+      "userId": "usr_1793250890697_s1krg",
+      "type": "consume",
+      "amount": 200,
+      "reason": "image_creator 创作任务出片消费 (扣除赠送:200, 扣除充值:0)",
+      "taskId": "crt_1793257843858_l1rkc",
+      "createdAt": 1793257843880
+    }
+  ],
+  "seq": 3
+}

@@ -1,0 +1,44 @@
+{
+  "note": "简兮JANSEE推广宣传片。段1=手机实拍图拖入极简界面(7.85s)，段2=手机大屏播放高级成片(7.85s)。开场卡1.5s，结尾卡2.2s，叠化0.6s。",
+  "voice": "m-calm",
+  "bgm": "F:/janseeV2/materials/audio/tech_future/tech_future_01.mp3",
+  "bgmVolume": 0.14,
+  "clips": [
+    {
+      "file": "F:/Jansee-COO/Dragging_photos_into_web_dashboard_2cadca7e_1080p.mp4",
+      "start": 0,
+      "duration": 7.85
+    },
+    {
+      "file": "F:/Jansee-COO/Smartphone_floating_against_dark…_624405da_1080p.mp4",
+      "start": 0,
+      "duration": 7.85
+    }
+  ],
+  "intro": {
+    "duration": 1.5,
+    "text": "实拍图秒出大片"
+  },
+  "outro": {
+    "duration": 2.2,
+    "text": "实拍图秒变带货大片\n工具搜：简兮 JANSEE"
+  },
+  "xfade": 0.6,
+  "segments": [
+    {
+      "id": "c01",
+      "start": 1.5,
+      "end": 7.8,
+      "speed": 1.15,
+      "text": "做生意的店主别死磕剪辑了！手机拍的实拍图，丢进简兮点一下。"
+    },
+    {
+      "id": "c02",
+      "start": 8.9,
+      "end": 14.8,
+      "speed": 1.15,
+      "text": "没有土味特效，高级排版加发丝字幕直接拉满，新手闭眼出大片。"
+    }
+  ]
+}
+
