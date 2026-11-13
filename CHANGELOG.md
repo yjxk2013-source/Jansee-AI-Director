@@ -4,6 +4,37 @@
 
 ---
 
+## [3.6.0] - 2026-11-14
+
+### 重大里程碑：企业级高可用架构、生产安全治理与大厂反形式化协同规范 (Enterprise SRE & Governance Milestone)
+
+- **Auto-QC BLOCKER 质检硬门禁闭环**：
+  - 音画漂移门禁：音画时长偏差超出 350ms 时强制标记为 `[Auto-QC BLOCKER]` 并判定 `grade: 'REJECT'`，彻底阻断残品交付；
+  - 国标合规门禁：强制开启 AIGC 元数据配置下，若缺失 MP4 udta 标识直接驳回交付；
+  - 闭环修正回路：质检失败输出结构化重试与补齐建议（`PAD_AUDIO_TAIL` / `TRIM_VIDEO_TAIL` / `INJECT_UDTA`）。
+- **TaskQueue 排队竞态彻底解除与进程树物理强杀**：
+  - 剥离排队超时与执行超时：仅在成功获得 `acquireComposeSlot` 并发槽位进入 `RUNNING` 态后才启动 120s 看门狗，根除高并发排队引发的“未执行先超时”假故障；
+  - 任务取消下发：为每个任务绑定独立 `AbortController`，超时或主动取消时广播中断信号；
+  - 跨平台进程树物理级回收：超时放弃等待时，Windows 下执行 `taskkill /pid ${pid} /T /F`，Linux/Unix 下向负 PID 发送信号，彻底杜绝孤儿 FFmpeg 进程后台空转吃满 CPU 与显存。
+- **BFF 统一网关正式挂载与自适应降级自愈**：
+  - `apps/web/server/index.mjs` 统一接入 `createAdminRouteHandler`，集成防暴力破解、会话防护与审计流；
+  - 网关挂载 `/api/v1/metrics` 原生可观测性探针，采用不超过 2MB 的定长环形队列原位测算 P50/P90/P99 延迟；
+  - 当触发 `P99 > 30s` 或失败率告警时，自动触发 `setDegradedConcurrency(1, true)` 动态限流自愈，防止低配服务器雪崩。
+- **全域工程卫生与安全硬度整肃**：
+  - HEAD 层敏感凭证物理清零：彻底移除 `jansee-release.keystore` 以及 `apps/web/server/data/` 目录下的 7 个敏感业务 JSON，仅保留受控模板；
+  - 确立移动端证书安全管理手册 `apps/mobile/android/CREDENTIAL_POLICY.md`，离线受控管理与密钥轮换机制落地。
+- **大厂反形式化协同红线与真实双人复核机制入宪**：
+  - 更新 `AGENTS.md` 与 `docs/CODE_REVIEW_GUIDELINES.md`，严禁“秒建秒批秒合”，严禁制度确立后单人裸推 main；
+  - 真实双人协同：由协作者（`yjxk2021`）发起特性分支与 Pull Request，由架构主管（`yjxk2013-source`）审查 Approve 并合并，连续落地 PR #1、PR #2、PR #3；
+  - 激活真实 CI 流水线：对齐 `.github/workflows/ci.yml`，包含环境探活、0 Emoji 静态扫描与 19 组回归测试三大门禁。
+- **自主版本号与发版门禁纪律确立**：
+  - 确立“智能体主动自发升级 SemVer 版本号并打出 Release Tag，严禁等待产品负责人提醒”铁律；
+  - 本次正式发布并打出不可变 Release Tag：`v3.6.0`。
+- **自动化测试 100% 通过**：
+  - 全工程 19 组核心测试套件 100% 顺利回归通过，平均耗时仅 28s。
+
+---
+
 ## [3.5.0] - 2026-11-13
 
 ### 新增与优化 (Added & Enhanced)
