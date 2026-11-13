@@ -46,7 +46,7 @@ jobs:
         run: |
           npm run build:web
 
-      - name: Gate 3 - Full Regression Core Test Suites (18 Suites)
+      - name: Gate 3 - Full Regression Core Test Suites (19 Suites)
         run: |
           npm test
 
