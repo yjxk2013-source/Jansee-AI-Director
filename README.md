@@ -87,17 +87,21 @@ jansee-v2/
 - Node.js >= 18.0.0
 - FFmpeg >= 5.1.0（建议带有 libx264, aac, filter-complex 支持）
 
-### 依赖安装与工程构建
+### 依赖安装与全量环境一键恢复
 ```bash
-# 1. 克隆代码仓库
-git clone https://github.com/yjxk2013-source/Jansee-AI-Director.git
-cd Jansee-AI-Director
+# 1. 克隆私有全量仓库（任选 GitHub 或 Gitee）
+git clone https://github.com/yjxk2013-source/jansee-v3.git
+# 或国内镜像：git clone https://gitee.com/LiuQing404/jansee-v3.git
+cd jansee-v3
 
 # 2. 安装 Monorepo 依赖
 npm install
 
-# 3. 启动前台 Web 极简工作台开发服务器 (端口 5173 / 3000)
-npm run dev
+# 3. 换新电脑一键同步 1.3GB 官方授权音轨曲库（从云端千兆带宽极速下载解压至 materials/audio）
+npm run sync:materials
+
+# 4. 启动前台 Web 极简工作台开发服务器 (端口 5173 / 3000)
+npm run dev:web
 ```
 
 ---
