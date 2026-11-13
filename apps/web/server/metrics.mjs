@@ -138,14 +138,17 @@ class MetricsRegistry {
     let status = 'HEALTHY';
     if (alerts.some(a => a.level === 'CRITICAL')) {
       status = 'CRITICAL';
-      // 触发自动控制回路：严重告警时自动降级熔断，将并发名额强制收紧为 1
+    } else if (alerts.length > 0) {
+      status = 'DEGRADED';
+    }
+
+    // 触发自愈控制回路：在 DEGRADED (如 P99>30s) 或 CRITICAL 时，自动收紧并发名额至 1
+    if (status === 'CRITICAL' || status === 'DEGRADED') {
       try {
         setDegradedConcurrency(1, true);
       } catch {}
-    } else if (alerts.length > 0) {
-      status = 'DEGRADED';
     } else {
-      // 恢复正常运行水位
+      // 连续健康状态下恢复默认并发配额
       try {
         resetConcurrency();
       } catch {}
