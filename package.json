@@ -9,13 +9,13 @@
     "modules/*"
   ],
   "scripts": {
+    "test": "node scripts/run-all-tests.mjs",
     "dev:web": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-server.ps1",
     "dev:gateway": "node apps/web/server/index.mjs",
     "dev:admin": "npm --workspace=@jansee/admin run dev",
-    "check:health": "powershell -ExecutionPolicy Bypass -File ./scripts/check-health.ps1",
+    "check:health": "node scripts/check-health.mjs",
     "test:mocker": "node scripts/run-mocker-test.mjs",
     "build:web": "node scripts/build-web.mjs",
-    "check:material": "node scripts/check-material.mjs",
     "sync:materials": "node scripts/sync-materials.mjs"
   },
   "keywords": [
@@ -26,7 +26,7 @@
     "cinematic"
   ],
   "author": "JANSEE Architecture Team",
-  "license": "Private",
+  "license": "Apache-2.0",
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "fontkit": "^2.0.4",
