@@ -50,7 +50,8 @@ async function runTests() {
   // -----------------------------------------------------------------
   {
     // 1.1 默认管理员登录
-    const loginRes = verifyAdmin('admin', 'admin123');
+    const defaultPassword = process.env.JANSEE_ADMIN_PASSWORD?.trim() || 'admin123';
+    const loginRes = verifyAdmin('admin', defaultPassword);
     assert(loginRes.adminToken && loginRes.adminToken.startsWith('adm_tok_'), '必须返回有效 adm_tok_ 格式 token');
     assert.equal(loginRes.admin.username, 'admin');
     assert.equal(loginRes.admin.role, 'super_admin');
@@ -83,7 +84,8 @@ async function runTests() {
   // 2. 权限拒绝与 Token 校验 (Auth Guard)
   // -----------------------------------------------------------------
   {
-    const opsLogin = verifyAdmin('admin', 'admin123');
+    const defaultPassword = process.env.JANSEE_ADMIN_PASSWORD?.trim() || 'admin123';
+    const opsLogin = verifyAdmin('admin', defaultPassword);
     const validSession = verifyAdminToken(opsLogin.adminToken);
     assert.equal(validSession.username, 'admin');
 
@@ -327,7 +329,7 @@ async function runTests() {
         req.on('data', (c) => { body += c; });
         req.on('end', () => {
           let p = {};
-          try { p = JSON.parse(body || '{}'); } catch (_) {}
+          try { p = JSON.parse(body || '{}'); } catch (_) { }
           try {
             const r = verifyAdmin(p.username, p.password);
             sendJson(0, '登录成功', r, 200);
@@ -359,7 +361,7 @@ async function runTests() {
         req.on('data', (c) => { body += c; });
         req.on('end', () => {
           let p = {};
-          try { p = JSON.parse(body || '{}'); } catch (_) {}
+          try { p = JSON.parse(body || '{}'); } catch (_) { }
           try {
             const r = adjustUserCredits({
               userId: p.userId,
@@ -445,10 +447,11 @@ async function runTests() {
       assert.equal(forbiddenRes.body.code, 40301);
 
       // 8.3 管理员登录 HTTP 端点
+      const defaultPassword = process.env.JANSEE_ADMIN_PASSWORD?.trim() || 'admin123';
       const loginRes = await makeRequest({
         method: 'POST',
         path: '/api/v1/admin/login',
-        body: { username: 'admin', password: 'admin123' },
+        body: { username: 'admin', password: defaultPassword },
       });
       assert.equal(loginRes.statusCode, 200);
       assert(loginRes.body.data.adminToken);
