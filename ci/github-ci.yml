@@ -1,0 +1,52 @@
+name: Jansee Enterprise CI
+
+on:
+  push:
+    branches: [ main, 'feat/**', 'fix/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  audit-and-test:
+    name: Core Test Suites & Pre-flight Audit
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install System Dependencies (FFmpeg & Libs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Verify FFmpeg Capabilities
+        run: |
+          ffmpeg -version
+
+      - name: Install Monorepo Dependencies
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Gate 1 - Environment & Health Baseline Check
+        run: |
+          npm run check:health
+
+      - name: Gate 2 - Pre-flight Asset & 0 Emoji Redline Audit
+        run: |
+          npm run build:web
+
+      - name: Gate 3 - Full Regression Core Test Suites (18 Suites)
+        run: |
+          npm test
+
