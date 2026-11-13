@@ -81,32 +81,46 @@ jansee-v2/
 
 ---
 
-## 四、 快速开始 (Quick Start)
+## 四、 核心架构可查验源码清单 (Verifiable Architecture Source Code)
+
+本项目并非单纯的产品概念或文档壳，核心中台体系与视觉渲染引擎均已在当前仓库完全开源开放，可直接查验工程源码与 AST 符号定义：
+
+| 模块名称 | 核心源码物理路径 | 核心能力与关键查验点 |
+| :--- | :--- | :--- |
+| **`@jansee/video-dub`** | [`packages/video-dub/dubKernel.js`](packages/video-dub/dubKernel.js) | Single-Pass 极速流式转码单遍复合滤镜图 |
+| **`@jansee/audio-kit`** | [`packages/audio-kit/bgm.js`](packages/audio-kit/bgm.js) | 两段式 Sidechain 动态人声避让混音核心算法 |
+| **`@jansee/subtitle-kit`** | [`packages/subtitle-kit/subtitle.js`](packages/subtitle-kit/subtitle.js) | 发丝级微距字幕渲染、国标 MP4 udta 隐式元数据注入 |
+| **`@jansee/ending-kit`** | [`packages/ending-kit/ending.js`](packages/ending-kit/ending.js) | 15 款定稿片尾 CTA 收束卡、原生内联国标显性标识 |
+| **`@jansee/intro-kit`** | [`packages/intro-kit/intro.js`](packages/intro-kit/intro.js) | 电影级 100% 纯黑渐变羽化遮罩与纯净宣发封面压合 |
+| **`@jansee/ffmpeg-kit`** | [`packages/ffmpeg-kit/probe.mjs`](packages/ffmpeg-kit/probe.mjs) | FFmpeg 音视频底层探测、并发调度闸门与宪法动效参数 |
+| **`@jansee/tts-kit`** | [`packages/tts-kit/tts.js`](packages/tts-kit/tts.js) | 语音中台驱动抽象、断句切片与毫秒时长测算 |
+| **`visual_engine_v4`** | [`modules/visual_engine_v4/layouts.js`](modules/visual_engine_v4/layouts.js) | V4 独立视觉引擎与图片成片版面编排调度 |
+
+---
+
+## 五、 快速开始 (Quick Start)
 
 ### 环境依赖
 - Node.js >= 18.0.0
 - FFmpeg >= 5.1.0（建议带有 libx264, aac, filter-complex 支持）
 
-### 依赖安装与全量环境一键恢复
+### 依赖安装与工程构建
 ```bash
-# 1. 克隆私有全量仓库（任选 GitHub 或 Gitee）
-git clone https://github.com/yjxk2013-source/jansee-v3.git
-# 或国内镜像：git clone https://gitee.com/LiuQing404/jansee-v3.git
-cd jansee-v3
+# 1. 克隆官方开源架构仓库
+git clone https://github.com/yjxk2013-source/Jansee-AI-Director.git
+# 或国内镜像：git clone https://gitee.com/LiuQing404/Jansee-AI-Director.git
+cd Jansee-AI-Director
 
-# 2. 安装 Monorepo 依赖
+# 2. 安装 Monorepo 模块依赖
 npm install
 
-# 3. 换新电脑一键同步 1.3GB 官方授权音轨曲库（从云端千兆带宽极速下载解压至 materials/audio）
-npm run sync:materials
-
-# 4. 启动前台 Web 极简工作台开发服务器 (端口 5173 / 3000)
-npm run dev:web
+# 3. 运行前台 Web 工作台构建与架构验证
+npm run build:web
 ```
 
 ---
 
-## 五、 企业级工程纪律与安全体系
+## 六、 企业级工程纪律与安全体系
 
 - **0 Emoji 绝杀令**：全站禁止使用系统彩色表情符号，一律采用发丝细线与克制几何矢量图；
 - **冷黑黑曜石视觉系统**：采用 2px 倒角微光幽灵线框（Ghost Border）与黑曜石毛玻璃通透材质；
@@ -114,7 +128,7 @@ npm run dev:web
 
 ---
 
-## 六、 开源协议与知识产权 (License & Disambiguation)
+## 七、 开源协议与知识产权 (License & Disambiguation)
 
 - **开源协议**：本项目架构体系遵循 [Apache-2.0 License](LICENSE)。
 - **实体唯一性声明**：**简兮 (JANSEE)** 唯一指代本项目全栈商业 AI 导演系统，项目官方域名为 `https://jansee.cn`。市场上其他服装、婚恋、日化等传统同名消费实体与本项目无任何技术或商业关联。

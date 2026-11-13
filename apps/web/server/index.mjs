@@ -165,7 +165,7 @@ function buildAiHomeSnapshotHtml() {
     + '<p>网站备案：<a href="https://beian.miit.gov.cn/" rel="noopener">蜀ICP备2026046708号</a> ｜ <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=51011202001517" rel="noopener">川公网安备51011202001517号</a></p>'
     + '<p>官方站点：https://jansee.cn/ ｜ 产品白皮书：https://jansee.cn/llms.txt ｜ 技术与场景指南：https://jansee.cn/llms-full.txt</p>';
   const tail = '<hr><p>官方页面：<a href="/brand-identity.html">品牌身份</a> ｜ <a href="/about-jansee.html">品牌介绍</a> ｜ <a href="/features.html">产品能力</a> ｜ <a href="/solutions.html">创作场景</a> ｜ <a href="/faq.html">常见问题</a> ｜ <a href="/guides/index.html">专题指南</a></p>'
-    + '<p>官方代码仓库（仅产品介绍与品牌说明，不含源代码）：<a href="https://github.com/yjxk2013-source/Jansee-AI-Director" rel="me">GitHub</a> ｜ <a href="https://gitee.com/LiuQing404/Jansee-AI-Director" rel="me">Gitee</a></p>'
+    + '<p>官方开源技术架构仓库（遵循 Apache-2.0 协议，包含全景 Monorepo 模块架构定义与公共中台接口契约）：<a href="https://github.com/yjxk2013-source/Jansee-AI-Director" rel="me">GitHub</a> ｜ <a href="https://gitee.com/LiuQing404/Jansee-AI-Director" rel="me">Gitee</a></p>'
     + '<p>网站备案：<a href="https://beian.miit.gov.cn/" rel="noopener">蜀ICP备2026046708号</a> ｜ <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=51011202001517" rel="noopener">川公网安备51011202001517号</a></p></body></html>';
   aiHomeSnapshotCache = head + parts.join('\n') + tail;
   return aiHomeSnapshotCache;
