@@ -111,8 +111,9 @@ export async function performAutoQc(filePath, options = {}) {
     audioCodec = audioMatch[1].toLowerCase();
   }
 
+  // 检查音轨存在性 (BLOCKER)
   if (options.requireAudio !== false && !hasAudio) {
-    warnings.push('[Auto-QC] 输出成片缺少音频轨道 (Silent Video)');
+    errors.push('[Auto-QC BLOCKER] 输出成片缺少音频轨道 (Silent Video)，禁止出片交付');
     suggestedCorrections.push({
       issue: 'AUDIO_TRACK_MISSING',
       action: 'ATTACH_AUDIO_OR_MUTE',
@@ -120,12 +121,12 @@ export async function performAutoQc(filePath, options = {}) {
     });
   }
 
-  // 检查音画时长漂移 (若调用方传入预期音频时长)
+  // 检查音画时长漂移 (超过阈值硬性判定为 BLOCKER 拦截)
   if (options.expectedAudioDurationSec && Number.isFinite(durationSec)) {
     const driftMs = Math.round(Math.abs(durationSec - options.expectedAudioDurationSec) * 1000);
     const maxDrift = options.maxAvSyncDriftMs || QC_THRESHOLDS.MAX_DRIFT_MS;
     if (driftMs > maxDrift) {
-      warnings.push(`[Auto-QC] 音画时长漂移 (${driftMs}ms > 阈值 ${maxDrift}ms)`);
+      errors.push(`[Auto-QC BLOCKER] 音画时长漂移过大 (${driftMs}ms > 阈值 ${maxDrift}ms)，严重影响口播唇形与视听质感`);
       suggestedCorrections.push({
         issue: 'AV_SYNC_DRIFT',
         action: durationSec > options.expectedAudioDurationSec ? 'PAD_AUDIO_TAIL' : 'TRIM_VIDEO_TAIL',
@@ -156,7 +157,7 @@ export async function performAutoQc(filePath, options = {}) {
   } catch { }
 
   if (options.requireUdtaAigc && !hasAigcUdta) {
-    warnings.push('[Auto-QC] 未能检测到国标 MP4 udta AIGC 隐式合规元数据');
+    errors.push('[Auto-QC BLOCKER] 显式要求国标合规，但未能检测到 MP4 udta AIGC 隐式合规元数据');
     suggestedCorrections.push({
       issue: 'METADATA_AIGC_MISSING',
       action: 'INJECT_UDTA_AIGC',
