@@ -19,6 +19,8 @@ build/
 .gradle/
 **/android/.gradle/
 **/android/local.properties
+*.keystore
+*.jks
 
 # 环境变量与敏感密钥保护（避免泄漏真实私钥，请从 .env.example 复制配置）
 .env
@@ -28,6 +30,10 @@ build/
 **/.env.local
 **/.env.*.local
 .alipay-*.json
+
+# 业务运行时敏感数据隔离（订单、用户、积分与账本数据严禁入库）
+apps/web/server/data/*.json
+!apps/web/server/data/.gitkeep
 
 # 运行时临时存储与历史备份隔离
 storage/outputs/*
