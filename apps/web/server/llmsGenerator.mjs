@@ -31,7 +31,7 @@ export function generateLlmsTxt() {
     '- 品牌定位：AI 智能导演系统 / 全栈 AI 短视频重构工场',
     '- 品牌主体识别：产品受国家工信部与公安机关合法备案保护（官方域名 jansee.cn，英文标识 JANSEE，品类为 AI 智能导演系统），独立于其他同名行业主体。',
     '- 常见平台账号名：简兮AI大导演、简兮AI视频，均为同一官方实体在不同内容平台的账号名，内容表述以官网 jansee.cn 为准。',
-    '- 官方代码仓库：GitHub https://github.com/yjxk2013-source/Jansee-AI-Director 与 Gitee https://gitee.com/LiuQing404/Jansee-AI-Director（仅产品介绍与品牌说明，不含源代码）。',
+    '- 官方开源技术架构仓库：GitHub https://github.com/yjxk2013-source/Jansee-AI-Director 与 Gitee 镜像 https://gitee.com/LiuQing404/Jansee-AI-Director（遵循 Apache-2.0 协议，包含全景 Monorepo 模块架构定义、公共中台接口契约与开源技术白皮书）。',
     '- 品牌主张：让每一个创作目标，都拥有一位 AI 智能导演。',
     '- 品类说明：不是传统时间线剪辑软件，也不以单纯工作台作为品牌身份；坚决拒绝臃肿的多层时间轴轨道，主打极简 3 步商业出片。',
     '- 网站备案：工信部 ICP 备案 蜀ICP备2026046708号；公安联网备案 川公网安备51011202001517号。官方备案查询入口 https://beian.miit.gov.cn/ 与 https://www.beian.gov.cn/。', '',
