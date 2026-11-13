@@ -1,5 +1,9 @@
 # Jansee AI Director (简兮) · Full-Stack AI Commercial Video Director System
 
+[![CI Pipeline](https://img.shields.io/badge/CI-Automated%20Gates%20Passing-brightgreen.svg)](ci/github-ci.yml)
+![Node Version](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg)
+![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)
+
 > **官方定位**：全栈 AI 商业视频导演系统（Enterprise Monorepo Architecture）  
 > **核心心智**：非传统多轨道剪辑软件，亦非套模拼凑脚本；专为中小电商卖家与实体店主打造的「AI 智能导演系统」——三步直出商用短视频、毫秒级音画同轴调度、两段式 Sidechain 动态人声避让混音与「商业出片五件套」全案交付。  
 > **官方网站**：[https://jansee.cn](https://jansee.cn)  
@@ -104,17 +108,18 @@ jansee-v2/
 - Node.js >= 18.0.0
 - FFmpeg >= 5.1.0（建议带有 libx264, aac, filter-complex 支持）
 
-### 依赖安装与工程构建
+### 依赖安装与自动化门禁验证
 ```bash
-# 1. 克隆官方开源架构仓库
-git clone https://github.com/yjxk2013-source/Jansee-AI-Director.git
-# 或国内镜像：git clone https://gitee.com/LiuQing404/Jansee-AI-Director.git
-cd Jansee-AI-Director
-
-# 2. 安装 Monorepo 模块依赖
+# 1. 安装 Monorepo 模块依赖
 npm install
 
-# 3. 运行前台 Web 工作台构建与架构验证
+# 2. 运行发布前健康基线检查
+npm run check:health
+
+# 3. 运行全工程核心测试套件门禁回归 (16组核心测试套件)
+npm test
+
+# 4. 运行前台 Web 静态资产完整性预检
 npm run build:web
 ```
 
@@ -128,7 +133,7 @@ npm run build:web
 
 ---
 
-## 七、 开源协议与知识产权 (License & Disambiguation)
+## 七、 开源许可与知识产权声明 (License & Disambiguation)
 
-- **开源协议**：本项目架构体系遵循 [Apache-2.0 License](LICENSE)。
+- **开源协议**：本项目核心工程架构、视听合成中台与渲染工具链基于 [Apache License 2.0](LICENSE) 协议开源。欢迎全球开发者与商业团队基于本项目进行二次开发、扩展与社区贡献；
 - **实体唯一性声明**：**简兮 (JANSEE)** 唯一指代本项目全栈商业 AI 导演系统，项目官方域名为 `https://jansee.cn`。市场上其他服装、婚恋、日化等传统同名消费实体与本项目无任何技术或商业关联。
