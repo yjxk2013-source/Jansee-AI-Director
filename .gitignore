@@ -73,6 +73,7 @@ test_pack*
 apps/web/client/assets/poster-*.jpg
 apps/web/client/assets/jansee_producthunt_launch_poster.png
 apps/web/client/assets/app/
+apps/web/client/assets/icons/
 apps/web/server/data/
 apps/mobile/android/.gradle/
 apps/mobile/android/app/build/
