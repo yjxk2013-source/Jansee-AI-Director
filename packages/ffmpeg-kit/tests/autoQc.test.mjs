@@ -54,17 +54,19 @@ test('Auto-QC 3: 真实样片成片质检与结构化指标提取', async () => 
   assert.ok(Array.isArray(res.suggestedCorrections), '必须包含结构化重试修正建议列表');
 });
 
-test('Auto-QC 4: 产生定向修正建议闭环 (非标准分辨率与音画漂移建议)', async () => {
+test('Auto-QC 4: 产生定向修正建议闭环 (音画严重漂移 BLOCKER 熔断与建议输出)', async () => {
   const sampleVideo = path.join(root, 'apps/web/client/assets/gemini_generated_video_daa127b4.mp4');
   if (!fs.existsSync(sampleVideo)) return;
 
   const res = await performAutoQc(sampleVideo, {
     requireAudio: false,
     requireStandardVertical: true,
-    expectedAudioDurationSec: 99.0, // 故意设置大幅漂移触发建议
+    expectedAudioDurationSec: 99.0, // 故意设置大幅漂移触发 BLOCKER
     maxAvSyncDriftMs: 100
   });
 
+  assert.equal(res.passed, false, '音画严重漂移必须作为 BLOCKER 熔断，绝不放过残次品');
+  assert.equal(res.grade, 'REJECT');
   assert.ok(Array.isArray(res.suggestedCorrections), '必须返回结构化建议');
   assert.ok(res.suggestedCorrections.some(c => c.issue === 'AV_SYNC_DRIFT'), '必须输出音画漂移定向建议');
 });
