@@ -13,6 +13,7 @@ import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { acquireComposeSlot, getComposeGateSnapshot } from './composeGate.mjs';
 
 /**
@@ -94,6 +95,7 @@ export class TaskQueueEngine extends EventEmitter {
     }
 
     const taskId = options.taskId || `task_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const abortController = new AbortController();
     const task = {
       taskId,
       type: taskType,
@@ -110,6 +112,8 @@ export class TaskQueueEngine extends EventEmitter {
       error: null,
       childProcesses: [], // 绑定的子进程列表，用于孤儿清理
       appliedCorrections: null, // 上一轮 QC 质检教练输出的结构化修正建议
+      abortController,
+      signal: abortController.signal,
       registerChildProcess(child) {
         if (child && typeof child.kill === 'function') {
           this.childProcesses.push(child);
@@ -139,22 +143,43 @@ export class TaskQueueEngine extends EventEmitter {
   }
 
   /**
-   * 清理任务关联的所有子进程（杜绝孤儿 FFmpeg 进程霸占显存与 CPU）
+   * 清理任务关联的所有子进程树（彻底解决 GPT 指出的孤儿进程树泄漏隐患）
    */
   _cleanupOrphanProcesses(task) {
-    if (!task || !Array.isArray(task.childProcesses)) return;
+    if (!task) return;
+    // 广播取消信号
+    if (task.abortController && !task.abortController.signal.aborted) {
+      try { task.abortController.abort(); } catch { }
+    }
+    if (!Array.isArray(task.childProcesses)) return;
     for (const proc of task.childProcesses) {
       try {
-        if (proc && !proc.killed && typeof proc.kill === 'function') {
+        const pid = proc?.pid;
+        if (pid) {
+          if (process.platform === 'win32') {
+            // Windows 下强制连根拔起整棵进程树
+            try {
+              execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore', timeout: 2000 });
+            } catch { }
+          } else {
+            // Linux/macOS 下通过负 pid 信号杀死整个进程组
+            try {
+              process.kill(-pid, 'SIGKILL');
+            } catch {
+              try { proc.kill('SIGKILL'); } catch { }
+            }
+          }
+        } else if (proc && !proc.killed && typeof proc.kill === 'function') {
           proc.kill('SIGKILL');
         }
-      } catch {}
+      } catch { }
     }
     task.childProcesses = [];
   }
 
   /**
    * 调度核心：拉取就绪任务并在并发限额内执行
+   * 彻底解决 GPT 指出的竞态：排队等待不计入执行超时，成功获得槽位后才启动看门狗！
    */
   async _processNext() {
     if (this.activeTasks.size >= this.concurrency) {
@@ -166,27 +191,29 @@ export class TaskQueueEngine extends EventEmitter {
 
     const task = this.queue.shift();
     task.status = TASK_STATUS.RUNNING;
-    task.startedAt = Date.now();
     this.activeTasks.set(task.taskId, task);
-    this._persistState();
-    this.emit('started', task);
 
-    // 设置超时看门狗保护
-    let timer = null;
-    const timeoutPromise = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        // 看门狗强杀：立即清理绑定的孤儿渲染进程
-        this._cleanupOrphanProcesses(task);
-        const err = new Error(`[TaskQueue TIMEOUT] 任务执行超过 ${task.timeoutMs}ms 阈值`);
-        err.code = 'TASK_TIMEOUT';
-        reject(err);
-      }, task.timeoutMs);
-    });
-
-    // 获取底层并发槽位保护
     let releaseGate = null;
+    let timer = null;
+
     try {
+      // 1. 获取底层并发槽位保护 (排队阶段不占用执行超时看门狗配额)
       releaseGate = await acquireComposeSlot(task.type);
+
+      // 2. 成功获得执行名额后，正式标记 startedAt 并启动超时看门狗！
+      task.startedAt = Date.now();
+      this._persistState();
+      this.emit('started', task);
+
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          // 看门狗强杀：立即物理清理绑定的整棵孤儿渲染进程树
+          this._cleanupOrphanProcesses(task);
+          const err = new Error(`[TaskQueue TIMEOUT] 任务执行超过 ${task.timeoutMs}ms 阈值`);
+          err.code = 'TASK_TIMEOUT';
+          reject(err);
+        }, task.timeoutMs);
+      });
 
       const handler = this.handlers.get(task.type);
       const updateProgress = (pct) => {
@@ -201,7 +228,7 @@ export class TaskQueueEngine extends EventEmitter {
 
       clearTimeout(timer);
 
-      // DeepSeek 提出的质检闭环：检查是否产出了未通过的 QC 报告且有修正建议
+      // DeepSeek & GPT 提出的质检闭环：检查是否产出了未通过的 QC 报告且有修正建议
       if (result && result.qcResult && result.qcResult.passed === false && task.retriesLeft > 0) {
         if (Array.isArray(result.qcResult.suggestedCorrections) && result.qcResult.suggestedCorrections.length > 0) {
           // 质检教练介入：将修正建议注入下一次重试
@@ -223,7 +250,7 @@ export class TaskQueueEngine extends EventEmitter {
       task.result = result;
       this.emit('completed', task);
     } catch (err) {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       this._cleanupOrphanProcesses(task);
       task.error = err.message;
 
@@ -286,7 +313,7 @@ export class TaskQueueEngine extends EventEmitter {
       };
       fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true });
       fs.writeFileSync(this.stateFilePath, JSON.stringify(snapshot, null, 2), 'utf8');
-    } catch {}
+    } catch { }
   }
 
   /**
