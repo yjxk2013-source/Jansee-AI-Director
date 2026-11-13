@@ -1,6 +1,6 @@
 {
   "name": "jansee-v2",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "private": true,
   "description": "简兮 (JANSEE) — AI 短视频重构工场 (企业级全栈 Monorepo 架构)",
   "workspaces": [
