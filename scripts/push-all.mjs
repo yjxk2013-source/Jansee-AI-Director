@@ -150,6 +150,18 @@ async function main() {
   }
 
   console.log('✅ [四仓物理对齐成功] 所有 4 个仓库的主干代码与本地 HEAD 100% 绝对一致，绝无漏推！\n');
+
+  console.log('--- 第三阶段：四仓不可变 Release Tags 同步 ---');
+  for (const target of TARGET_REMOTES) {
+    const proxyFlag = target.needsProxy ? '-c http.proxy=http://127.0.0.1:10808 -c http.sslBackend=openssl' : '';
+    try {
+      runCmd(`git ${proxyFlag} push ${target.name} --tags`.replace(/\s+/g, ' ').trim());
+      console.log(`✓ [Tags 对齐成功] ${target.label} (${target.name})`);
+    } catch (err) {
+      console.warn(`[Tags 同步警告] ${target.label} tags 同步异常: ${err.message.split('\n')[0]}`);
+    }
+  }
+  console.log('');
 }
 
 main().catch(err => {
