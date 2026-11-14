@@ -1,324 +1,645 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=430, height=932, initial-scale=1.0, user-scalable=no">
-<title>简兮 JANSEE · 手机专版工作台 (画面 1)</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
-  body {
-    width: 430px; height: 932px; overflow: hidden;
-    background-color: #050505; color: #e4e4e7;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-    position: relative; user-select: none;
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=430, height=932, initial-scale=1.0, user-scalable=no">
+  <title>简兮 JANSEE · 手机专版工作台 (画面 1)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
 
-  .bg-glow {
-    position: absolute; inset: 0; pointer-events: none; z-index: 0;
-    background:
-      radial-gradient(40% 30% at 50% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 80%),
-      radial-gradient(50% 40% at 50% 100%, rgba(20, 20, 30, 0.4) 0%, transparent 80%);
-  }
+    body {
+      width: 430px;
+      height: 932px;
+      overflow: hidden;
+      background-color: #050505;
+      color: #e4e4e7;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      position: relative;
+      user-select: none;
+    }
 
-  /* 状态栏 */
-  .status-bar {
-    height: 48px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
-    font-size: 14px; font-weight: 600; color: #ffffff; letter-spacing: -0.2px;
-    position: relative; z-index: 10;
-  }
-  .dynamic-island {
-    position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
-    width: 120px; height: 32px; background: #000000; border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .status-icons { display: flex; align-items: center; gap: 6px; }
+    .bg-glow {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(40% 30% at 50% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 80%),
+        radial-gradient(50% 40% at 50% 100%, rgba(20, 20, 30, 0.4) 0%, transparent 80%);
+    }
 
-  /* 顶栏 */
-  .top-bar {
-    height: 50px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between;
-    position: relative; z-index: 10;
-  }
-  .brand-group { display: flex; align-items: baseline; gap: 8px; }
-  .brand-title { font-size: 18px; font-weight: 600; color: #ffffff; letter-spacing: 0.04em; }
-  .brand-badge {
-    font-size: 10px; color: #a1a1aa; padding: 1px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px;
-    letter-spacing: 0.05em; text-transform: uppercase;
-  }
-  .top-actions { display: flex; align-items: center; gap: 8px; }
-  .credits-pill {
-    height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 6px;
-    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 2px; font-size: 11px; color: #d4d4d8; font-weight: 500;
-  }
-  .credits-dot { width: 5px; height: 5px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 6px #ffffff; }
+    /* 状态栏 */
+    .status-bar {
+      height: 48px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+      letter-spacing: -0.2px;
+      position: relative;
+      z-index: 10;
+    }
 
-  /* 轨 A: 三大商业场景分段器 (业务大脑 32px) */
-  .scene-nav {
-    padding: 4px 20px 8px; display: flex; position: relative; z-index: 10;
-  }
-  .scene-segment {
-    width: 100%; display: flex; background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 2px; padding: 2px;
-  }
-  .scene-pill {
-    flex: 1; height: 30px; display: flex; align-items: center; justify-content: center;
-    font-size: 12px; color: #a1a1aa; letter-spacing: 0.02em; border-radius: 2px;
-    cursor: pointer; transition: all 0.2s ease;
-  }
-  .scene-pill.active {
-    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #ffffff; font-weight: 500; box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
-  }
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 32px;
+      background: #000000;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
 
-  /* 轨 B: 四大工作台版块导轨 (生产形态 36px) */
-  .mode-nav {
-    padding: 0 20px 10px; display: flex; gap: 8px; overflow-x: auto; position: relative; z-index: 10;
-  }
-  .mode-pill {
-    flex: 1; height: 32px; display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 2px; font-size: 12px; color: #a1a1aa; white-space: nowrap;
-  }
-  .mode-pill.active {
-    background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.4);
-    color: #ffffff; font-weight: 500;
-  }
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-  /* 主工作区卡片容器 */
-  .workbench-container {
-    padding: 0 20px; display: flex; flex-direction: column; gap: 12px;
-    height: calc(932px - 48px - 50px - 42px - 42px - 84px); overflow-y: auto; position: relative; z-index: 10;
-  }
+    /* 顶栏 */
+    .top-bar {
+      height: 50px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      z-index: 10;
+    }
 
-  /* 通用黑曜石毛玻璃卡片 */
-  .card-section {
-    background: rgba(18, 18, 22, 0.65); backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px; padding: 14px;
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .card-header {
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .card-title { font-size: 13px; font-weight: 500; color: #ffffff; display: flex; align-items: center; gap: 6px; }
-  .card-tag { font-size: 11px; color: #a1a1aa; }
+    .brand-group {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
 
-  /* 九宫格 (发朋友圈式) */
-  .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .photo-item {
-    aspect-ratio: 1; border-radius: 2px; position: relative; overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.15); background: #111;
-  }
-  .photo-img { width: 100%; height: 100%; object-fit: cover; }
-  .photo-seq {
-    position: absolute; top: 4px; left: 4px; padding: 1px 4px;
-    background: rgba(0, 0, 0, 0.75); font-size: 9px; color: #ffffff;
-    font-weight: 600; border-radius: 1px; letter-spacing: 0.05em;
-  }
-  .photo-add {
-    aspect-ratio: 1; border: 1px dashed rgba(255, 255, 255, 0.25); border-radius: 2px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 4px; background: rgba(255, 255, 255, 0.015);
-  }
-  .photo-add svg { width: 16px; height: 16px; stroke: #d4d4d8; }
-  .photo-add-text { font-size: 10px; color: #a1a1aa; }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #ffffff;
+      letter-spacing: 0.04em;
+    }
 
-  /* 核心卖点输入 */
-  .input-area {
-    width: 100%; height: 68px; background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px;
-    padding: 10px; font-size: 12px; color: #ffffff; line-height: 1.5;
-    resize: none; outline: none; font-family: inherit;
-  }
-  .chips-row { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; }
-  .chip {
-    padding: 4px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 2px; font-size: 11px; color: #d4d4d8;
-  }
-  .chip.active { border-color: rgba(255, 255, 255, 0.35); color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+    .brand-badge {
+      font-size: 10px;
+      color: #a1a1aa;
+      padding: 1px 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
 
-  /* 核心杀手锏: 矩阵赛马 (一次出几条) */
-  .race-card {
-    background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 2px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
-  }
-  .race-head { display: flex; justify-content: space-between; align-items: center; }
-  .race-title { font-size: 13px; font-weight: 500; color: #ffffff; }
-  .race-tag {
-    font-size: 11px; color: #ffffff; font-family: "JetBrains Mono", monospace;
-    padding: 2px 6px; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 2px;
-  }
-  .race-pills { display: flex; gap: 6px; }
-  .race-btn {
-    flex: 1; height: 30px; display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 2px; font-size: 11px; color: #a1a1aa;
-  }
-  .race-btn.active {
-    background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.45);
-    color: #ffffff; font-weight: 600;
-  }
-  .race-slider {
-    width: 100%; -webkit-appearance: none; height: 3px; background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px; outline: none; margin: 4px 0;
-  }
-  .race-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
-    background: #ffffff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
-  }
-  .race-hint { font-size: 11px; color: #a1a1aa; line-height: 1.4; }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-  /* 底部吸底操作区 (2px 倒角微光幽灵边框) */
-  .bottom-dock {
-    position: absolute; bottom: 0; left: 0; right: 0; height: 84px;
-    padding: 10px 20px 24px; background: linear-gradient(to top, #050505 85%, transparent);
-    display: flex; flex-direction: column; justify-content: center; gap: 6px; z-index: 20;
-  }
-  .dock-meta { display: flex; justify-content: space-between; font-size: 11px; color: #a1a1aa; }
-  .btn-produce {
-    width: 100%; height: 46px; display: flex; align-items: center; justify-content: center; gap: 8px;
-    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.4);
-    border-radius: 2px; color: #ffffff; font-size: 14px; font-weight: 600; letter-spacing: 0.04em;
-    box-shadow: 0 0 16px rgba(255, 255, 255, 0.12);
-  }
-  .btn-produce svg { width: 12px; height: 12px; fill: #ffffff; }
+    .credits-pill {
+      height: 28px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      font-size: 11px;
+      color: #d4d4d8;
+      font-weight: 500;
+    }
 
-  /* 底部指示条 */
-  .home-indicator {
-    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-    width: 134px; height: 4px; background: rgba(255, 255, 255, 0.3); border-radius: 2px;
-  }
-</style>
+    .credits-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 6px #ffffff;
+    }
+
+    /* 轨 A: 三大商业场景分段器 (业务大脑 32px) */
+    .scene-nav {
+      padding: 4px 20px 8px;
+      display: flex;
+      position: relative;
+      z-index: 10;
+    }
+
+    .scene-segment {
+      width: 100%;
+      display: flex;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      padding: 2px;
+    }
+
+    .scene-pill {
+      flex: 1;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #a1a1aa;
+      letter-spacing: 0.02em;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .scene-pill.active {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: #ffffff;
+      font-weight: 500;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+    }
+
+    /* 轨 B: 四大工作台版块导轨 (生产形态 36px) */
+    .mode-nav {
+      padding: 0 20px 10px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      position: relative;
+      z-index: 10;
+    }
+
+    .mode-pill {
+      flex: 1;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      font-size: 12px;
+      color: #a1a1aa;
+      white-space: nowrap;
+    }
+
+    .mode-pill.active {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.4);
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    /* 主工作区卡片容器 */
+    .workbench-container {
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: calc(932px - 48px - 50px - 42px - 42px - 84px);
+      overflow-y: auto;
+      position: relative;
+      z-index: 10;
+    }
+
+    /* 通用黑曜石毛玻璃卡片 */
+    .card-section {
+      background: rgba(18, 18, 22, 0.65);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-tag {
+      font-size: 11px;
+      color: #a1a1aa;
+    }
+
+    /* 九宫格 (发朋友圈式) */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .photo-item {
+      aspect-ratio: 1;
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #111;
+    }
+
+    .photo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .photo-seq {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      padding: 1px 4px;
+      background: rgba(0, 0, 0, 0.75);
+      font-size: 9px;
+      color: #ffffff;
+      font-weight: 600;
+      border-radius: 1px;
+      letter-spacing: 0.05em;
+    }
+
+    .photo-add {
+      aspect-ratio: 1;
+      border: 1px dashed rgba(255, 255, 255, 0.25);
+      border-radius: 2px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .photo-add svg {
+      width: 16px;
+      height: 16px;
+      stroke: #d4d4d8;
+    }
+
+    .photo-add-text {
+      font-size: 10px;
+      color: #a1a1aa;
+    }
+
+    /* 核心卖点输入 */
+    .input-area {
+      width: 100%;
+      height: 68px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      padding: 10px;
+      font-size: 12px;
+      color: #ffffff;
+      line-height: 1.5;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .chips-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .chip {
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      font-size: 11px;
+      color: #d4d4d8;
+    }
+
+    .chip.active {
+      border-color: rgba(255, 255, 255, 0.35);
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* 核心杀手锏: 矩阵赛马 (一次出几条) */
+    .race-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .race-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .race-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #ffffff;
+    }
+
+    .race-tag {
+      font-size: 11px;
+      color: #ffffff;
+      font-family: "JetBrains Mono", monospace;
+      padding: 2px 6px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 2px;
+    }
+
+    .race-pills {
+      display: flex;
+      gap: 6px;
+    }
+
+    .race-btn {
+      flex: 1;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      font-size: 11px;
+      color: #a1a1aa;
+    }
+
+    .race-btn.active {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.45);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .race-slider {
+      width: 100%;
+      -webkit-appearance: none;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      margin: 4px 0;
+    }
+
+    .race-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+    }
+
+    .race-hint {
+      font-size: 11px;
+      color: #a1a1aa;
+      line-height: 1.4;
+    }
+
+    /* 底部吸底操作区 (2px 倒角微光幽灵边框) */
+    .bottom-dock {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 84px;
+      padding: 10px 20px 24px;
+      background: linear-gradient(to top, #050505 85%, transparent);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+      z-index: 20;
+    }
+
+    .dock-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #a1a1aa;
+    }
+
+    .btn-produce {
+      width: 100%;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 2px;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      box-shadow: 0 0 16px rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-produce svg {
+      width: 12px;
+      height: 12px;
+      fill: #ffffff;
+    }
+
+    /* 底部指示条 */
+    .home-indicator {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 134px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+    }
+  </style>
 </head>
+
 <body>
-<div class="bg-glow"></div>
+  <div class="bg-glow"></div>
 
-<!-- 状态栏 -->
-<div class="status-bar">
-  <span>09:41</span>
-  <div class="dynamic-island"></div>
-  <div class="status-icons">
-    <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><path d="M1 8.5C3.5 5 11.5 5 14 8.5M3 10C5 8 10 8 12 10" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>
-    <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="19" height="10" rx="2.5" stroke="#fff"/><rect x="2" y="2" width="14" height="7" rx="1.5" fill="#fff"/><path d="M21 4V7" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg>
-  </div>
-</div>
-
-<!-- 顶栏 -->
-<div class="top-bar">
-  <div class="brand-group">
-    <div class="brand-title">简兮 JANSEE</div>
-    <div class="brand-badge">Mobile Studio</div>
-  </div>
-  <div class="top-actions">
-    <div class="credits-pill">
-      <div class="credits-dot"></div>
-      <span>2,850 算力</span>
+  <!-- 状态栏 -->
+  <div class="status-bar">
+    <span>09:41</span>
+    <div class="dynamic-island"></div>
+    <div class="status-icons">
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none">
+        <path d="M1 8.5C3.5 5 11.5 5 14 8.5M3 10C5 8 10 8 12 10" stroke="#fff" stroke-width="1.3"
+          stroke-linecap="round" />
+      </svg>
+      <svg width="22" height="11" viewBox="0 0 22 11" fill="none">
+        <rect x="0.5" y="0.5" width="19" height="10" rx="2.5" stroke="#fff" />
+        <rect x="2" y="2" width="14" height="7" rx="1.5" fill="#fff" />
+        <path d="M21 4V7" stroke="#fff" stroke-width="1.2" stroke-linecap="round" />
+      </svg>
     </div>
   </div>
-</div>
 
-<!-- 轨 A: 三大商业场景分段器 (业务大脑) -->
-<div class="scene-nav">
-  <div class="scene-segment">
-    <div class="scene-pill active">电商带货</div>
-    <div class="scene-pill">同城门店</div>
-    <div class="scene-pill">个人生活</div>
-  </div>
-</div>
-
-<!-- 轨 B: 四大工作台版块导轨 (生产形态) -->
-<div class="mode-nav">
-  <div class="mode-pill active">图片成片</div>
-  <div class="mode-pill">视频配音</div>
-  <div class="mode-pill">出镜口播</div>
-  <div class="mode-pill">切片分镜</div>
-</div>
-
-<!-- 工作区卡片容器 -->
-<div class="workbench-container">
-  <!-- 卡片 1: 实拍素材组织 (九宫格) -->
-  <div class="card-section">
-    <div class="card-header">
-      <div class="card-title">第 1 步 · 实拍素材组织</div>
-      <div class="card-tag">已选 3 / 9 张</div>
+  <!-- 顶栏 -->
+  <div class="top-bar">
+    <div class="brand-group">
+      <div class="brand-title">简兮 JANSEE</div>
+      <div class="brand-badge">Mobile Studio</div>
     </div>
-    <div class="photo-grid">
-      <div class="photo-item">
-        <svg class="photo-img" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2a2826"/><stop offset="100%" stop-color="#141210"/></linearGradient></defs>
-          <rect width="100" height="100" fill="url(#g1)"/>
-          <path d="M30 40 L50 20 L70 40 L65 80 L35 80 Z" fill="#4a3e36" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-        </svg>
-        <span class="photo-seq">01</span>
-      </div>
-      <div class="photo-item">
-        <svg class="photo-img" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <defs><linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1f2228"/><stop offset="100%" stop-color="#101318"/></linearGradient></defs>
-          <rect width="100" height="100" fill="url(#g2)"/>
-          <circle cx="50" cy="50" r="28" fill="#2d3340" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-          <path d="M40 50 L60 50" stroke="#fff" stroke-width="2"/>
-        </svg>
-        <span class="photo-seq">02</span>
-      </div>
-      <div class="photo-item">
-        <svg class="photo-img" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <defs><linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#252422"/><stop offset="100%" stop-color="#121110"/></linearGradient></defs>
-          <rect width="100" height="100" fill="url(#g3)"/>
-          <rect x="25" y="25" width="50" height="50" rx="3" fill="#3b3732" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-        </svg>
-        <span class="photo-seq">03</span>
-      </div>
-      <div class="photo-add">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <div class="photo-add-text">添加实拍</div>
+    <div class="top-actions">
+      <div class="credits-pill">
+        <div class="credits-dot"></div>
+        <span>2,850 算力</span>
       </div>
     </div>
   </div>
 
-  <!-- 卡片 2: 一句话核心卖点输入 -->
-  <div class="card-section">
-    <div class="card-header">
-      <div class="card-title">第 2 步 · 核心诉求与卖点</div>
-      <div class="card-tag">留空将由 AI 看图智能提炼</div>
-    </div>
-    <textarea class="input-area" placeholder="秋冬重磅双面羊绒大衣，版型挺括垂顺，显瘦百搭，实穿保暖..."></textarea>
-    <div class="chips-row">
-      <div class="chip active">垂感抗皱</div>
-      <div class="chip active">纯手工双面呢</div>
-      <div class="chip">显瘦遮肉</div>
-      <div class="chip">限时特惠</div>
+  <!-- 轨 A: 三大商业场景分段器 (业务大脑) -->
+  <div class="scene-nav">
+    <div class="scene-segment">
+      <div class="scene-pill active">电商带货</div>
+      <div class="scene-pill">同城门店</div>
+      <div class="scene-pill">个人生活</div>
     </div>
   </div>
 
-  <!-- 卡片 3: 核心杀手锏 · 矩阵赛马 (一次出几条) -->
-  <div class="race-card">
-    <div class="race-head">
-      <span class="race-title">矩阵赛马 · 一次出几条</span>
-      <span class="race-tag">3 条 · 600 算力</span>
-    </div>
-    <div class="race-pills">
-      <div class="race-btn">1 条</div>
-      <div class="race-btn active">3 条 (推荐)</div>
-      <div class="race-btn">5 条</div>
-      <div class="race-btn">10 条</div>
-    </div>
-    <input type="range" class="race-slider" min="1" max="10" value="3">
-    <div class="race-hint">单次裂变 3 个不同视角爆款版本，专为投流测款与矩阵赛马而生。</div>
+  <!-- 轨 B: 四大工作台版块导轨 (生产形态) -->
+  <div class="mode-nav">
+    <div class="mode-pill active">图片成片</div>
+    <div class="mode-pill">视频配音</div>
+    <div class="mode-pill">出镜口播</div>
+    <div class="mode-pill">切片分镜</div>
   </div>
-</div>
 
-<!-- 底部吸底操作区 -->
-<div class="bottom-dock">
-  <div class="dock-meta">
-    <span>单条消耗 200 算力</span>
-    <span>总计消耗 600 算力</span>
+  <!-- 工作区卡片容器 -->
+  <div class="workbench-container">
+    <!-- 卡片 1: 实拍素材组织 (九宫格) -->
+    <div class="card-section">
+      <div class="card-header">
+        <div class="card-title">第 1 步 · 实拍素材组织</div>
+        <div class="card-tag">已选 3 / 9 张</div>
+      </div>
+      <div class="photo-grid">
+        <div class="photo-item">
+          <svg class="photo-img" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#2a2826" />
+                <stop offset="100%" stop-color="#141210" />
+              </linearGradient>
+            </defs>
+            <rect width="100" height="100" fill="url(#g1)" />
+            <path d="M30 40 L50 20 L70 40 L65 80 L35 80 Z" fill="#4a3e36" stroke="rgba(255,255,255,0.2)"
+              stroke-width="1.5" />
+          </svg>
+          <span class="photo-seq">01</span>
+        </div>
+        <div class="photo-item">
+          <svg class="photo-img" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#1f2228" />
+                <stop offset="100%" stop-color="#101318" />
+              </linearGradient>
+            </defs>
+            <rect width="100" height="100" fill="url(#g2)" />
+            <circle cx="50" cy="50" r="28" fill="#2d3340" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" />
+            <path d="M40 50 L60 50" stroke="#fff" stroke-width="2" />
+          </svg>
+          <span class="photo-seq">02</span>
+        </div>
+        <div class="photo-item">
+          <svg class="photo-img" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#252422" />
+                <stop offset="100%" stop-color="#121110" />
+              </linearGradient>
+            </defs>
+            <rect width="100" height="100" fill="url(#g3)" />
+            <rect x="25" y="25" width="50" height="50" rx="3" fill="#3b3732" stroke="rgba(255,255,255,0.2)"
+              stroke-width="1.5" />
+          </svg>
+          <span class="photo-seq">03</span>
+        </div>
+        <div class="photo-add">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <div class="photo-add-text">添加实拍</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 卡片 2: 一句话核心卖点输入 -->
+    <div class="card-section">
+      <div class="card-header">
+        <div class="card-title">第 2 步 · 核心诉求与卖点</div>
+        <div class="card-tag">留空将由 AI 看图智能提炼</div>
+      </div>
+      <textarea class="input-area" placeholder="秋冬重磅双面羊绒大衣，版型挺括垂顺，显瘦百搭，实穿保暖..."></textarea>
+      <div class="chips-row">
+        <div class="chip active">垂感抗皱</div>
+        <div class="chip active">纯手工双面呢</div>
+        <div class="chip">显瘦遮肉</div>
+        <div class="chip">限时特惠</div>
+      </div>
+    </div>
+
+    <!-- 卡片 3: 核心杀手锏 · 矩阵赛马 (一次出几条) -->
+    <div class="race-card">
+      <div class="race-head">
+        <span class="race-title">矩阵赛马 · 一次出几条</span>
+        <span class="race-tag">3 条 · 600 算力</span>
+      </div>
+      <div class="race-pills">
+        <div class="race-btn">1 条</div>
+        <div class="race-btn active">3 条 (推荐)</div>
+        <div class="race-btn">5 条</div>
+        <div class="race-btn">10 条</div>
+      </div>
+      <input type="range" class="race-slider" min="1" max="10" value="3">
+      <div class="race-hint">单次裂变 3 个不同视角爆款版本，专为投流测款与矩阵赛马而生。</div>
+    </div>
   </div>
-  <button class="btn-produce">
-    <span>第 3 步 · 立即生成 3 条带货短视频 (60秒交付)</span>
-    <svg viewBox="0 0 100 100"><polygon points="20,10 90,50 20,90"/></svg>
-  </button>
-</div>
 
-<div class="home-indicator"></div>
+  <!-- 底部吸底操作区 -->
+  <div class="bottom-dock">
+    <div class="dock-meta">
+      <span>单条消耗 200 算力</span>
+      <span>总计消耗 600 算力</span>
+    </div>
+    <button class="btn-produce">
+      <span>第 3 步 · 立即生成 3 条带货短视频 (60秒交付)</span>
+      <svg viewBox="0 0 100 100">
+        <polygon points="20,10 90,50 20,90" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="home-indicator"></div>
 </body>
+
 </html>
