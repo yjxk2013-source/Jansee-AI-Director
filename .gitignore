@@ -50,12 +50,20 @@ scratch/
 *.log
 *.bundle
 
-# 大型音视频二进制（由云端灾备一键同步）
+# 大型音视频二进制与打包产物（由云端灾备一键同步，严禁入库）
 materials/audio/
 whisper.cpp/
 COO/素材/录屏/
 COO/素材/切片/
 COO/工具/tmp_subs/
+*.apk
+*.aab
+*.mp4
+*.mov
+*.avi
+*.m4v
+apps/web/client/assets/*.mp4
+apps/web/client/assets/app/*.apk
 
 # 编辑器与系统临时文件
 .idea/
