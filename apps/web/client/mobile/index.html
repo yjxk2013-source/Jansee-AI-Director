@@ -894,41 +894,6 @@
   }
   .btn-sub-pay:active { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.7); }
   .btn-sub-pay:disabled { opacity: 0.45; cursor: not-allowed; }
-
-  /* 移动端统一收银台小弹窗 */
-  .sub-cashier-mask {
-    position: fixed; inset: 0; z-index: 1200;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    display: flex; align-items: center; justify-content: center;
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.25s ease;
-    padding: 16px;
-  }
-  .sub-cashier-mask.active { opacity: 1; pointer-events: auto; }
-  .sub-cashier-card {
-    position: relative; width: 100%; max-width: 340px;
-    background: rgba(14, 14, 20, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px; padding: 22px 18px; box-sizing: border-box;
-    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
-  }
-  .sub-cashier-title { font-size: 15px; font-weight: 600; color: #ffffff; }
-  .sub-cashier-amount { font-size: 24px; font-weight: 600; color: #ffffff; font-family: var(--font-mono); }
-  .sub-cashier-qr-wrap {
-    width: 200px; height: 200px; background: #ffffff; padding: 8px;
-    border-radius: 2px; display: flex; align-items: center; justify-content: center;
-  }
-  .sub-cashier-qr-img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .sub-cashier-hint { font-size: 11px; color: var(--text-level4); line-height: 1.4; }
-  .sub-cashier-actions { width: 100%; display: flex; gap: 8px; margin-top: 4px; }
-  .sub-cashier-btn {
-    flex: 1; height: 36px; background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 2px;
-    color: #ffffff; font-size: 12px; cursor: pointer;
-  }
-  .sub-cashier-btn:active { background: rgba(255, 255, 255, 0.12); }
 </style>
 </head>
 <body>
@@ -1498,83 +1463,83 @@
 
     <!-- 滚动区域 -->
     <div class="sub-scroll-body">
-      <!-- 2×2 对称四宫格会员档位 -->
+      <!-- 2×2 对称四宫格会员档位 (后台管理定价实时联动) -->
       <div class="sub-grid-2x2">
         <!-- 1. Lite 体验版 -->
         <div class="sub-plan-card" id="plan-card-lite" onclick="selectSubscribePlan('lite')">
           <div class="sub-plan-head">
-            <span class="sub-plan-name">Lite 体验</span>
+            <span class="sub-plan-name" id="sub-name-lite">Lite 体验</span>
             <div class="sub-plan-price-row">
               <span class="sub-plan-price-cur">¥</span>
-              <span class="sub-plan-price-num">41</span>
-              <span class="sub-plan-price-strike">¥69</span>
+              <span class="sub-plan-price-num" id="sub-price-lite">41</span>
+              <span class="sub-plan-price-strike" id="sub-strike-lite">¥69</span>
               <span class="sub-plan-price-cycle">/月</span>
             </div>
           </div>
           <div class="sub-plan-credits-bar">
-            <span class="sub-plan-credits-num">7,600 积分</span>
-            <span class="sub-plan-clips">约 38 条成片</span>
+            <span class="sub-plan-credits-num" id="sub-credits-lite">7,600 积分</span>
+            <span class="sub-plan-clips" id="sub-clips-lite">约 38 条成片</span>
           </div>
-          <div class="sub-plan-feature">全高清 1080P · 0 额外扣费 · 适合尝鲜与小批量试跑</div>
+          <div class="sub-plan-feature" id="sub-feature-lite">全高清 1080P · 0 额外扣费 · 适合尝鲜与小批量试跑</div>
         </div>
 
         <!-- 2. Plus 日常版 -->
         <div class="sub-plan-card" id="plan-card-plus" onclick="selectSubscribePlan('plus')">
           <div class="sub-plan-head">
-            <span class="sub-plan-name">Plus 日常</span>
+            <span class="sub-plan-name" id="sub-name-plus">Plus 日常</span>
             <div class="sub-plan-price-row">
               <span class="sub-plan-price-cur">¥</span>
-              <span class="sub-plan-price-num">119</span>
-              <span class="sub-plan-price-strike">¥199</span>
+              <span class="sub-plan-price-num" id="sub-price-plus">119</span>
+              <span class="sub-plan-price-strike" id="sub-strike-plus">¥199</span>
               <span class="sub-plan-price-cycle">/月</span>
             </div>
           </div>
           <div class="sub-plan-credits-bar">
-            <span class="sub-plan-credits-num">24,800 积分</span>
-            <span class="sub-plan-clips">约 124 条成片</span>
+            <span class="sub-plan-credits-num" id="sub-credits-plus">24,800 积分</span>
+            <span class="sub-plan-clips" id="sub-clips-plus">约 124 条成片</span>
           </div>
-          <div class="sub-plan-feature">高峰期优先渲染通道 · 适合日常高频出片店铺</div>
+          <div class="sub-plan-feature" id="sub-feature-plus">高峰期优先渲染通道 · 适合日常高频出片店铺</div>
         </div>
 
         <!-- 3. Pro 旗舰版 (主推) -->
         <div class="sub-plan-card active" id="plan-card-pro" onclick="selectSubscribePlan('pro')">
           <div class="sub-plan-badge">推荐 · 爆款</div>
           <div class="sub-plan-head">
-            <span class="sub-plan-name">Pro 旗舰</span>
+            <span class="sub-plan-name" id="sub-name-pro">Pro 旗舰</span>
             <div class="sub-plan-price-row">
               <span class="sub-plan-price-cur">¥</span>
-              <span class="sub-plan-price-num">299</span>
-              <span class="sub-plan-price-strike">¥499</span>
+              <span class="sub-plan-price-num" id="sub-price-pro">299</span>
+              <span class="sub-plan-price-strike" id="sub-strike-pro">¥499</span>
               <span class="sub-plan-price-cycle">/月</span>
             </div>
           </div>
           <div class="sub-plan-credits-bar">
-            <span class="sub-plan-credits-num">66,600 积分</span>
-            <span class="sub-plan-clips">约 333 条成片</span>
+            <span class="sub-plan-credits-num" id="sub-credits-pro">66,600 积分</span>
+            <span class="sub-plan-clips" id="sub-clips-pro">约 333 条成片</span>
           </div>
-          <div class="sub-plan-feature">专属商业运镜库 · 极速优先 · 品牌矩阵带货首选</div>
+          <div class="sub-plan-feature" id="sub-feature-pro">专属商业运镜库 · 极速优先 · 品牌矩阵带货首选</div>
         </div>
 
         <!-- 4. Ultra 团队版 -->
         <div class="sub-plan-card" id="plan-card-ultra" onclick="selectSubscribePlan('ultra')">
           <div class="sub-plan-head">
-            <span class="sub-plan-name">Ultra 团队</span>
+            <span class="sub-plan-name" id="sub-name-ultra">Ultra 团队</span>
             <div class="sub-plan-price-row">
               <span class="sub-plan-price-cur">¥</span>
-              <span class="sub-plan-price-num">599</span>
-              <span class="sub-plan-price-strike">¥999</span>
+              <span class="sub-plan-price-num" id="sub-price-ultra">599</span>
+              <span class="sub-plan-price-strike" id="sub-strike-ultra">¥999</span>
               <span class="sub-plan-price-cycle">/月</span>
             </div>
           </div>
           <div class="sub-plan-credits-bar">
-            <span class="sub-plan-credits-num">153,800 积分</span>
-            <span class="sub-plan-clips">约 769 条成片</span>
+            <span class="sub-plan-credits-num" id="sub-credits-ultra">153,800 积分</span>
+            <span class="sub-plan-clips" id="sub-clips-ultra">约 769 条成片</span>
           </div>
-          <div class="sub-plan-feature">旗舰顶级算力 · 满血并发 · 团队与机构专属通道</div>
+          <div class="sub-plan-feature" id="sub-feature-ultra">旗舰顶级算力 · 满血并发 · 团队与机构专属通道</div>
         </div>
       </div>
 
-      <!-- 1 通栏底座: 积分加油包 (无需订阅 · 永不过期) -->
+      <!-- 1 通栏底座: 积分加油包 (无需订阅 · 永不过期 · 后台定价实时联动) -->
       <div class="sub-boost-card" id="plan-card-boost" onclick="selectSubscribePlan('boost_small')">
         <div class="sub-boost-left">
           <div class="sub-boost-icon">
@@ -1582,15 +1547,15 @@
           </div>
           <div class="sub-boost-info">
             <div class="sub-boost-title-row">
-              <span class="sub-boost-title">1,000 算力加油包</span>
+              <span class="sub-boost-title" id="sub-boost-title">1,000 算力加油包</span>
               <span class="sub-boost-tag">永不过期</span>
             </div>
-            <div class="sub-boost-desc">得 1,000 积分 · 约 5 次成片 · 算力即时到账 · 无需按月订阅</div>
+            <div class="sub-boost-desc" id="sub-boost-desc">得 1,000 积分 · 约 5 次成片 · 算力即时到账 · 无需按月订阅</div>
           </div>
         </div>
         <div class="sub-boost-right">
-          <div class="sub-boost-price">¥9.9</div>
-          <div class="sub-boost-strike">¥19.9</div>
+          <div class="sub-boost-price" id="sub-boost-price">¥9.9</div>
+          <div class="sub-boost-strike" id="sub-boost-strike">¥19.9</div>
         </div>
       </div>
 
@@ -1612,25 +1577,6 @@
           <polygon points="20,10 90,50 20,90"/>
         </svg>
       </button>
-    </div>
-  </div>
-</div>
-
-<!-- 移动端发丝收银台二维码 / 查单弹窗 -->
-<div class="sub-cashier-mask" id="subCashierMask" onclick="event.target===this&&closeSubCashier()">
-  <div class="sub-cashier-card" role="dialog" aria-modal="true">
-    <div class="sub-cashier-title" id="cashier-plan-title">简兮收银台 · 安全支付</div>
-    <div class="sub-cashier-amount" id="cashier-amount-text">¥299.00</div>
-    <div class="sub-cashier-qr-wrap" id="cashier-qr-box">
-      <img id="cashier-qr-img" class="sub-cashier-qr-img" src="" alt="支付二维码">
-    </div>
-    <div class="sub-cashier-hint" id="cashier-status-hint">
-      支持微信 / 支付宝扫码或长按识别<br>
-      支付完成后算力将秒级自动入账
-    </div>
-    <div class="sub-cashier-actions">
-      <button type="button" class="sub-cashier-btn" id="cashier-open-btn" style="display:none;" onclick="jumpToCashierPayUrl()">前往支付页面</button>
-      <button type="button" class="sub-cashier-btn" onclick="closeSubCashier()">取消并关闭</button>
     </div>
   </div>
 </div>
@@ -1722,6 +1668,7 @@ document.addEventListener("DOMContentLoaded", () => {
   syncBatchUI();
   updateHeaderUserDisplay();
   if (userToken) fetchUserProfile();
+  fetchPricingConfig();
 });
 
 // Toast 轻提示
@@ -3915,13 +3862,12 @@ function logout() {
 }
 
 // ==========================================
-// 商业会员订阅与算力中心 (4 档会员 + 1 加油包 + 统一收银台)
+// 商业会员订阅与算力中心 (后台管理定价联动 + 移动端直调支付宝支付)
 // ==========================================
 let selectedSubscribePlanKey = 'pro';
 let pendingPostLoginAction = null;
 let cashierPollingTimer = null;
-let currentCashierOrderId = '';
-let currentCashierPayUrl = '';
+let pendingPayOrderId = '';
 
 const SUBSCRIBE_PLANS = {
   lite: {
@@ -3936,7 +3882,7 @@ const SUBSCRIBE_PLANS = {
     cycleText: "单月",
     points: 7600,
     clipsText: "约 38 条成片",
-    desc: "全高清 1080P · 0 额外扣费 · 尝鲜首选"
+    desc: "全高清 1080P · 0 额外扣费 · 适合尝鲜与小批量试跑"
   },
   plus: {
     key: "plus",
@@ -3950,7 +3896,7 @@ const SUBSCRIBE_PLANS = {
     cycleText: "单月",
     points: 24800,
     clipsText: "约 124 条成片",
-    desc: "高峰期优先渲染通道 · 日常高频出片"
+    desc: "高峰期优先渲染通道 · 适合日常高频出片店铺"
   },
   pro: {
     key: "pro",
@@ -3964,7 +3910,7 @@ const SUBSCRIBE_PLANS = {
     cycleText: "单月",
     points: 66600,
     clipsText: "约 333 条成片",
-    desc: "专属商业运镜库 · 极速优先 · 爆款主推"
+    desc: "专属商业运镜库 · 极速优先 · 品牌矩阵带货首选"
   },
   ultra: {
     key: "ultra",
@@ -3978,7 +3924,7 @@ const SUBSCRIBE_PLANS = {
     cycleText: "单月",
     points: 153800,
     clipsText: "约 769 条成片",
-    desc: "旗舰顶级算力 · 满血并发 · 团队首选"
+    desc: "旗舰顶级算力 · 满血并发 · 团队与机构专属通道"
   },
   boost_small: {
     key: "boost_small",
@@ -3992,9 +3938,88 @@ const SUBSCRIBE_PLANS = {
     cycleText: "永久",
     points: 1000,
     clipsText: "约 5 次成片",
-    desc: "得 1,000 积分 · 算力即时入账 · 永不过期"
+    desc: "得 1,000 积分 · 约 5 次成片 · 算力即时到账 · 无需按月订阅"
   }
 };
+
+// 从服务端实时读取后台配置的最新价目表 (后台管理修改后实时联动)
+async function fetchPricingConfig() {
+  try {
+    const res = await fetch("/api/v1/pricing");
+    if (!res.ok) return;
+    const json = await res.json().catch(() => ({}));
+    const data = json.data || json;
+    const members = Array.isArray(data.members) ? data.members : [];
+    const boostPacks = Array.isArray(data.boostPacks) ? data.boostPacks : [];
+
+    // 1. 同步四档会员定价
+    members.forEach(m => {
+      const id = String(m.id || '').toLowerCase();
+      if (!SUBSCRIBE_PLANS[id]) return;
+
+      const p = SUBSCRIBE_PLANS[id];
+      if (m.price !== undefined) p.price = Number(m.price);
+      if (m.strike) p.strike = String(m.strike).startsWith('¥') ? m.strike : `¥${m.strike}`;
+      if (m.cycle) p.cycleText = m.cycle.includes('单月') ? '单月' : m.cycle;
+      if (m.watermark) p.desc = m.watermark;
+
+      // 解析积分与折算条数
+      if (m.credits) {
+        const ptsMatch = String(m.credits).match(/([\d,]+)\s*分/);
+        if (ptsMatch) {
+          p.points = Number(ptsMatch[1].replace(/,/g, ''));
+          p.clipsText = `约 ${Math.floor(p.points / 200)} 条成片`;
+        }
+      }
+
+      // 实时更新对应卡片 DOM 节点
+      const priceEl = document.getElementById(`sub-price-${id}`);
+      if (priceEl && m.price !== undefined) priceEl.textContent = m.price;
+
+      const strikeEl = document.getElementById(`sub-strike-${id}`);
+      if (strikeEl && p.strike) strikeEl.textContent = p.strike;
+
+      const creditsEl = document.getElementById(`sub-credits-${id}`);
+      if (creditsEl && p.points) creditsEl.textContent = `${p.points.toLocaleString()} 积分`;
+
+      const clipsEl = document.getElementById(`sub-clips-${id}`);
+      if (clipsEl && p.clipsText) clipsEl.textContent = p.clipsText;
+
+      const featureEl = document.getElementById(`sub-feature-${id}`);
+      if (featureEl && p.desc) featureEl.textContent = p.desc;
+    });
+
+    // 2. 同步加油包定价
+    if (boostPacks.length > 0) {
+      const b = boostPacks[0];
+      const bp = SUBSCRIBE_PLANS.boost_small;
+      if (b.price !== undefined) bp.price = Number(b.price);
+      if (b.strike) bp.strike = String(b.strike).startsWith('¥') ? b.strike : `¥${b.strike}`;
+      if (b.points !== undefined) {
+        bp.points = Number(b.points);
+        bp.clipsText = `约 ${Math.floor(bp.points / 200)} 次成片`;
+      }
+      if (b.desc) bp.desc = b.desc;
+
+      const bTitleEl = document.getElementById("sub-boost-title");
+      if (bTitleEl && b.name) bTitleEl.textContent = b.name;
+
+      const bPriceEl = document.getElementById("sub-boost-price");
+      if (bPriceEl && b.price !== undefined) bPriceEl.textContent = `¥${b.price}`;
+
+      const bStrikeEl = document.getElementById("sub-boost-strike");
+      if (bStrikeEl && bp.strike) bStrikeEl.textContent = bp.strike;
+
+      const bDescEl = document.getElementById("sub-boost-desc");
+      if (bDescEl && bp.desc) bDescEl.textContent = bp.desc;
+    }
+
+    // 刷新吸底栏选中金额与文案
+    selectSubscribePlan(selectedSubscribePlanKey);
+  } catch (e) {
+    console.warn("[PRICING] 联动后台价目表异常:", e);
+  }
+}
 
 // 点击顶栏算力胶囊
 function handleCreditsCapsuleClick() {
@@ -4009,6 +4034,9 @@ function handleCreditsCapsuleClick() {
 
 // 打开会员订阅弹窗
 function openSubscribeModal(targetPlanKey) {
+  // 每次打开弹窗前自动与后台价目表刷新对账
+  fetchPricingConfig();
+
   const pointsEl = document.getElementById("sub-modal-points");
   if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
 
@@ -4055,7 +4083,7 @@ function selectSubscribePlan(key) {
   if (btnText) btnText.textContent = cur.kind === 'points' ? `立即充值 ${cur.shortName}` : `立即开通 ${cur.shortName}`;
 }
 
-// 提交订单并拉起聚合支付
+// 提交订单并直接拉起支付宝支付 (移动端 0 二维码扫码弹窗)
 async function submitCurrentSubscribe() {
   if (!userToken) {
     pendingPostLoginAction = 'openSubscribeModal';
@@ -4071,7 +4099,7 @@ async function submitCurrentSubscribe() {
   if (btnText) btnText.textContent = "正在创建订单...";
 
   try {
-    // 1. 创建订单
+    // 1. 创建订单 (向服务端传递权威套餐标识)
     const orderPayload = plan.kind === 'membership'
       ? { orderType: 'membership', itemKey: plan.tierId, tierId: plan.tierId, billingMode: 'single', title: plan.name }
       : { orderType: 'boost', itemKey: 'boost_small', planId: 'boost_small', title: plan.name };
@@ -4095,9 +4123,9 @@ async function submitCurrentSubscribe() {
     const orderId = order.orderId || order.id;
     if (!orderId) throw new Error("未能获取有效订单号");
 
-    if (btnText) btnText.textContent = "正在发起支付...";
+    if (btnText) btnText.textContent = "正在拉起支付宝...";
 
-    // 2. 发起 JSAPI 聚合收银台支付
+    // 2. 发起 JSAPI 聚合支付
     const checkoutRes = await fetch("/api/v1/order/jsapi/checkout", {
       method: "POST",
       headers: {
@@ -4114,79 +4142,29 @@ async function submitCurrentSubscribe() {
     }
 
     const payInfo = checkoutData.data || {};
-    currentCashierOrderId = orderId;
-    currentCashierPayUrl = payInfo.payUrl || '';
+    const payUrl = payInfo.payUrl || checkoutData.payUrl;
+    if (!payUrl) throw new Error("未能获取到支付宝支付链接");
 
-    // 唤起移动端收银台
-    openSubCashier({
-      title: plan.name,
-      amount: plan.price,
-      orderId: orderId,
-      qrDataUrl: payInfo.qrDataUrl,
-      payUrl: payInfo.payUrl
-    });
+    // 3. 记录在途订单并启动后台轮询查单
+    pendingPayOrderId = orderId;
+    try { localStorage.setItem("jansee.pending_pay_order", orderId); } catch (e) {}
+    startCashierPolling(orderId);
+
+    // 4. 移动端直接拉起支付宝 App 支付 (0 出现二维码扫码)
+    showToast("正在拉起支付宝支付...");
+    setTimeout(() => {
+      window.location.href = payUrl;
+    }, 150);
 
   } catch (err) {
-    showToast("发起支付异常: " + (err.message || "网络不稳定"));
+    showToast("拉起支付异常: " + (err.message || "网络不稳定"));
   } finally {
     if (btn) btn.disabled = false;
     selectSubscribePlan(selectedSubscribePlanKey);
   }
 }
 
-// 打开收银台小弹窗并开始查单轮询
-function openSubCashier({ title, amount, orderId, qrDataUrl, payUrl }) {
-  const mask = document.getElementById("subCashierMask");
-  const titleEl = document.getElementById("cashier-plan-title");
-  const amountEl = document.getElementById("cashier-amount-text");
-  const qrImg = document.getElementById("cashier-qr-img");
-  const openBtn = document.getElementById("cashier-open-btn");
-  const statusHint = document.getElementById("cashier-status-hint");
-
-  if (titleEl) titleEl.textContent = `简兮收银台 · ${title}`;
-  if (amountEl) amountEl.textContent = `¥${Number(amount || 0).toFixed(2)}`;
-  if (qrImg && qrDataUrl) qrImg.src = qrDataUrl;
-
-  if (openBtn) {
-    if (payUrl) {
-      openBtn.style.display = "block";
-    } else {
-      openBtn.style.display = "none";
-    }
-  }
-
-  if (statusHint) {
-    statusHint.innerHTML = "支持微信 / 支付宝扫码或长按识别<br>支付完成后算力将秒级自动入账";
-  }
-
-  if (mask) mask.classList.add("active");
-
-  // 启动 2 秒一次的主动查单轮询
-  startCashierPolling(orderId);
-}
-
-// 跳转外部支付链接
-function jumpToCashierPayUrl() {
-  if (currentCashierPayUrl) {
-    window.location.href = currentCashierPayUrl;
-  } else {
-    showToast("未检测到外部支付跳转链接，请扫描二维码");
-  }
-}
-
-// 关闭收银台弹窗
-function closeSubCashier() {
-  if (cashierPollingTimer) {
-    clearInterval(cashierPollingTimer);
-    cashierPollingTimer = null;
-  }
-  const mask = document.getElementById("subCashierMask");
-  if (mask) mask.classList.remove("active");
-  currentCashierOrderId = '';
-  currentCashierPayUrl = '';
-}
-
-// 轮询支付状态
+// 轮询与查单服务 (支持离开 App 后切回自动对账)
 function startCashierPolling(orderId) {
   if (cashierPollingTimer) clearInterval(cashierPollingTimer);
 
@@ -4198,36 +4176,59 @@ function startCashierPolling(orderId) {
     if (pollCount > maxPolls) {
       clearInterval(cashierPollingTimer);
       cashierPollingTimer = null;
-      const statusHint = document.getElementById("cashier-status-hint");
-      if (statusHint) statusHint.textContent = "支付超时，若已扣款请稍后查看个人中心算力";
       return;
     }
-
-    try {
-      const res = await fetch(`/api/v1/order/jsapi/status?orderId=${encodeURIComponent(orderId)}`, {
-        headers: {
-          "Authorization": `Bearer ${userToken}`,
-          "x-session-token": userToken
-        }
-      });
-      if (!res.ok) return;
-
-      const data = await res.json().catch(() => ({}));
-      if (data && (data.code === 0 || data.code === 200)) {
-        const payload = data.data || {};
-        if (payload.orderStatus === 'paid' || payload.tradeState === 'PAID') {
-          // 支付成功
-          clearInterval(cashierPollingTimer);
-          cashierPollingTimer = null;
-          closeSubCashier();
-          closeSubscribeModal();
-          showToast("支付成功！算力已实时到账，感谢支持简兮！");
-          fetchUserProfile();
-        }
-      }
-    } catch (e) {}
+    await checkSingleOrderPayStatus(orderId);
   }, 2000);
 }
+
+// 单次精确查单
+async function checkSingleOrderPayStatus(orderId) {
+  if (!orderId) return;
+  try {
+    const res = await fetch(`/api/v1/order/jsapi/status?orderId=${encodeURIComponent(orderId)}`, {
+      headers: {
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      }
+    });
+    if (!res.ok) return;
+
+    const data = await res.json().catch(() => ({}));
+    if (data && (data.code === 0 || data.code === 200)) {
+      const payload = data.data || {};
+      if (payload.orderStatus === 'paid' || payload.tradeState === 'PAID') {
+        // 支付成功入账
+        if (cashierPollingTimer) {
+          clearInterval(cashierPollingTimer);
+          cashierPollingTimer = null;
+        }
+        pendingPayOrderId = '';
+        try { localStorage.removeItem("jansee.pending_pay_order"); } catch (e) {}
+        closeSubscribeModal();
+        showToast("支付成功！算力已实时到账，感谢支持简兮！");
+        fetchUserProfile();
+      }
+    }
+  } catch (e) {}
+}
+
+// 监听移动端切回前台事件 (从支付宝 App 支付完切回简兮)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    // 检查是否有在途支付订单
+    let savedOrderId = pendingPayOrderId;
+    if (!savedOrderId) {
+      try { savedOrderId = localStorage.getItem("jansee.pending_pay_order") || ""; } catch (e) {}
+    }
+    if (savedOrderId) {
+      checkSingleOrderPayStatus(savedOrderId);
+    }
+    // 重新拉取最新用户信息与后台最新定价
+    fetchUserProfile();
+    fetchPricingConfig();
+  }
+});
 
 // 保持旧接口兼容调用
 function buyBoost() {
