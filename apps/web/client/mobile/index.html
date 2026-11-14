@@ -912,6 +912,62 @@ function triggerVideoPick(type) {
   else if (type === 'storyboard') document.getElementById("storyboard-file-input").click();
 }
 
+
+// 全浏览器高可靠视频首帧缩略图提取器 (解决移动端上传视频无略缩图/黑屏问题)
+function captureVideoThumbnail(fileOrBlob) {
+  return new Promise((resolve) => {
+    try {
+      const url = typeof fileOrBlob === 'string' ? fileOrBlob : URL.createObjectURL(fileOrBlob);
+      const video = document.createElement('video');
+      video.preload = 'auto';
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
+      video.src = url;
+
+      let resolved = false;
+      const finish = (result) => {
+        if (!resolved) {
+          resolved = true;
+          if (typeof fileOrBlob !== 'string') {
+            try { URL.revokeObjectURL(url); } catch (e) {}
+          }
+          resolve(result || "");
+        }
+      };
+
+      const timer = setTimeout(() => { finish(""); }, 3500);
+
+      video.addEventListener('loadeddata', () => {
+        video.currentTime = Math.min(0.2, (video.duration || 1) * 0.1);
+      });
+
+      video.addEventListener('seeked', () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.min(640, video.videoWidth || 480);
+          canvas.height = Math.min(640, video.videoHeight || 480);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          clearTimeout(timer);
+          finish(dataUrl);
+        } catch (err) {
+          clearTimeout(timer);
+          finish(url);
+        }
+      });
+
+      video.addEventListener('error', () => {
+        clearTimeout(timer);
+        finish("");
+      });
+    } catch (e) {
+      resolve("");
+    }
+  });
+}
+
 function handleVideoUpload(e, type) {
   const files = Array.from(e.target.files || []);
   if (!files.length) return;
@@ -922,13 +978,19 @@ function handleVideoUpload(e, type) {
       const tempV = document.createElement("video");
       tempV.preload = "metadata";
       tempV.src = url;
-      const clipObj = { file: f, url, name: f.name, duration: 3.0 };
+      const clipObj = { file: f, url, name: f.name, duration: 3.0, thumbnailUrl: "" };
       tempV.onloadedmetadata = () => {
         if (tempV.duration && !isNaN(tempV.duration)) {
           clipObj.duration = tempV.duration;
           renderStoryboardClips();
         }
       };
+      captureVideoThumbnail(f).then(thumb => {
+        if (thumb) {
+          clipObj.thumbnailUrl = thumb;
+          renderStoryboardClips();
+        }
+      });
       storyboardClips.push(clipObj);
     });
     renderStoryboardClips();
@@ -944,12 +1006,16 @@ function handleVideoUpload(e, type) {
     document.getElementById("dub-upload-box").style.display = "none";
     const prev = document.getElementById("dub-video-preview");
     prev.style.display = "block";
-    document.getElementById("dub-preview-el").src = url;
+    const dubEl = document.getElementById("dub-preview-el");
+    dubEl.src = url;
+    captureVideoThumbnail(file).then(th => { if (th) dubEl.poster = th; });
   } else if (type === 'speech') {
     document.getElementById("speech-upload-box").style.display = "none";
     const prev = document.getElementById("speech-video-preview");
     prev.style.display = "block";
-    document.getElementById("speech-preview-el").src = url;
+    const speechEl = document.getElementById("speech-preview-el");
+    speechEl.src = url;
+    captureVideoThumbnail(file).then(th => { if (th) speechEl.poster = th; });
   }
   document.getElementById("material-hint").textContent = "视频已就绪";
   e.target.value = "";
@@ -974,7 +1040,11 @@ function renderStoryboardClips() {
   if (!box) return;
   let html = storyboardClips.map((clip, idx) => `
     <div class="photo-slot" data-idx="${idx}" style="cursor:grab; touch-action:none; background:#000;" title="按住可拖动镜头排序">
+      ${clip.thumbnailUrl ? `
+      <img class="photo-img" src="${clip.thumbnailUrl}" style="pointer-events:none; object-fit:cover;">
+    ` : `
       <video class="photo-img" src="${clip.url}" preload="metadata" muted playsinline style="pointer-events:none; object-fit:cover;"></video>
+    `}
       <span class="photo-badge">0${idx + 1}</span>
       <span class="photo-badge" style="left:auto; right:4px; bottom:4px; top:auto; font-size:9.5px; opacity:0.85;">${(clip.duration || 0).toFixed(1)}s</span>
       <div class="photo-del" onclick="removeStoryboardClip(${idx})" title="删除此镜头">×</div>
