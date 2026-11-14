@@ -7,11 +7,32 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>简兮 JANSEE · 手机专版工作台</title>
   <meta name="theme-color" content="#050505">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="简兮">
+  <meta name="application-name" content="简兮">
   <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/png" href="/assets/web-icon.png">
   <link rel="apple-touch-icon" href="/assets/app-icon.png">
+
+  <!-- iOS 原生启动页配置 (Apple Touch Startup Image) -->
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="/assets/ios-startup-iphone-x.png"
+    media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <style>
     * {
       box-sizing: border-box;
@@ -2399,10 +2420,53 @@
       fill: none;
       stroke-width: 1.8;
     }
+
+    /* 启动页 Splash Screen */
+    .ios-startup-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      background-color: #050505;
+      background-image: url('/assets/ios-startup-iphone-x.png');
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-size: cover;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+      pointer-events: auto;
+    }
+    .ios-startup-screen.loaded {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
   </style>
 </head>
 
 <body>
+  <!-- 启动页 Splash Screen (使用 /assets/ios-startup-iphone-x.png) -->
+  <div id="iosAppSplashScreen" class="ios-startup-screen" aria-hidden="true"></div>
+  <script>
+    (function () {
+      function dismissSplash() {
+        var s = document.getElementById('iosAppSplashScreen');
+        if (s && !s.classList.contains('loaded')) {
+          s.classList.add('loaded');
+          setTimeout(function () {
+            if (s && s.parentNode) s.parentNode.removeChild(s);
+          }, 450);
+        }
+      }
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(dismissSplash, 400);
+      } else {
+        window.addEventListener('DOMContentLoaded', function () { setTimeout(dismissSplash, 400); });
+        window.addEventListener('load', function () { setTimeout(dismissSplash, 200); });
+        setTimeout(dismissSplash, 900);
+      }
+    })();
+  </script>
   <div class="bg-glow"></div>
 
   <!-- 顶栏 -->
@@ -2792,7 +2856,7 @@
       </div>
 
       <!-- 视图 A: 已登录 · PC 同款标准个人主页 -->
-      <div id="drawer-profile-view" style="display:none; flex-direction:column; gap:12px;">
+      <div id="drawer-profile-view" style="display:flex; flex-direction:column; gap:12px;">
         <!-- 用户 Hero 卡片 -->
         <div class="user-hero-card">
           <div class="user-hero-top">
@@ -5065,6 +5129,8 @@
     function openProfileDrawer() {
       const drawer = document.getElementById("profile-drawer");
       if (!drawer) return;
+      const view = document.getElementById("drawer-profile-view");
+      if (view) view.style.display = "flex";
       drawer.classList.add("active");
       fetchUserProfile();
     }
@@ -5127,6 +5193,16 @@
           if (u.avatar) {
             const avatarEl = document.getElementById("profile-avatar-img");
             if (avatarEl) avatarEl.src = u.avatar;
+          }
+
+          const checkinTxt = document.getElementById("profile-checkin-text");
+          const checkinBtn = document.getElementById("profile-checkin-btn");
+          if (u.hasCheckedInToday) {
+            if (checkinTxt) checkinTxt.textContent = "今日已签到";
+            if (checkinBtn) checkinBtn.disabled = true;
+          } else {
+            if (checkinTxt) checkinTxt.textContent = "每日签到 · 领100分";
+            if (checkinBtn) checkinBtn.disabled = false;
           }
         }
       } catch (e) { }
@@ -5221,26 +5297,47 @@
         const d = await res.json().catch(() => ({}));
         if (res.ok && (d.code === 0 || d.code === 200)) {
           const reward = d.data?.reward || 100;
-          userCredits += reward;
+          if (d.data && d.data.totalPoints !== undefined) {
+            userCredits = Number(d.data.totalPoints);
+          } else {
+            userCredits += reward;
+          }
           updateHeaderUserDisplay();
           const pointsEl = document.getElementById("profile-points-val");
           if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
+          const clipsEl = document.getElementById("profile-clips-val");
+          if (clipsEl) clipsEl.textContent = String(Math.floor(userCredits / 200));
           if (txt) txt.textContent = "今日已签到";
           if (btn) btn.disabled = true;
+          try {
+            const rawUser = localStorage.getItem("jansee.auth.user");
+            if (rawUser) {
+              const uObj = JSON.parse(rawUser);
+              uObj.points = userCredits;
+              uObj.hasCheckedInToday = true;
+              localStorage.setItem("jansee.auth.user", JSON.stringify(uObj));
+            }
+          } catch (_) {}
           showToast(`签到成功！已入账 ${reward} 算力`);
+        } else if (d.code === 40002 || (d.data && d.data.alreadyCheckin)) {
+          if (d.data && d.data.totalPoints !== undefined) {
+            userCredits = Number(d.data.totalPoints);
+            updateHeaderUserDisplay();
+            const pointsEl = document.getElementById("profile-points-val");
+            if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
+            const clipsEl = document.getElementById("profile-clips-val");
+            if (clipsEl) clipsEl.textContent = String(Math.floor(userCredits / 200));
+          }
+          showToast(d.msg || "今日已完成签到，明天再来");
+          if (txt) txt.textContent = "今日已签到";
+          if (btn) btn.disabled = true;
         } else {
           showToast(d.msg || d.message || "今日已完成签到");
           if (txt) txt.textContent = "今日已签到";
           if (btn) btn.disabled = true;
         }
       } catch (err) {
-        userCredits += 100;
-        updateHeaderUserDisplay();
-        const pointsEl = document.getElementById("profile-points-val");
-        if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
-        if (txt) txt.textContent = "今日已签到";
-        if (btn) btn.disabled = true;
-        showToast("签到成功！已入账 100 算力");
+        showToast("网络请求异常，请稍后重试");
       }
     }
 

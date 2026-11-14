@@ -765,6 +765,8 @@ const server = http.createServer((req, res) => {
       status: u?.status || 'active',
       isFrozen: u?.status === 'blocked' || u?.status === 'frozen',
       maxImagesLimit: 9,
+      lastCheckin: u?.lastCheckin || '',
+      hasCheckedInToday: !!(u && u.lastCheckin === localDate()),
     });
     return;
   }
