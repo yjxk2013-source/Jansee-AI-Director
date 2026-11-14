@@ -1271,10 +1271,7 @@ function switchScene(sceneKey) {
     el.classList.toggle("active", el.dataset.scene === sceneKey);
   });
   updateSceneView();
-  // 若当前处于口播识别中，重新识别一次场景样例文案
-  if (currentMode === 'speech-cut' && uploadedVideo) {
-    triggerAsrAnalysis();
-  }
+  // 场景切换仅联动文案与词库，不干扰已识别好的音视频 ASR 台词
 }
 
 function updateSceneView() {
@@ -2282,9 +2279,15 @@ async function uploadImagesToServer(files) {
   for (const f of files) {
     base64List.push(await fileToBase64(f));
   }
+  const headers = { "Content-Type": "application/json" };
+  if (userToken) {
+    headers["Authorization"] = `Bearer ${userToken}`;
+    headers["x-session-token"] = userToken;
+    headers["x-session-id"] = userToken;
+  }
   const res = await fetch("/api/v1/upload/images", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ images: base64List })
   });
   const data = await res.json();
@@ -2295,20 +2298,31 @@ async function uploadImagesToServer(files) {
 }
 
 // 真实视频流式上传接口 (/api/v1/upload/video)
-async function uploadVideoToServer(file) {
+async function uploadVideoFile(file) {
+  const headers = {
+    "Content-Type": "application/octet-stream",
+    "x-file-name": encodeURIComponent(file.name)
+  };
+  if (userToken) {
+    headers["Authorization"] = `Bearer ${userToken}`;
+    headers["x-session-token"] = userToken;
+    headers["x-session-id"] = userToken;
+  }
   const res = await fetch("/api/v1/upload/video", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/octet-stream",
-      "x-file-name": encodeURIComponent(file.name)
-    },
+    headers,
     body: file
   });
   const data = await res.json();
-  if (!res.ok || data.code !== 0 || !data.data?.materialId) {
+  if (!res.ok || data.code !== 0 || !data.data?.videoPath) {
     throw new Error(data.msg || "视频素材上传失败");
   }
-  return data.data.materialId;
+  return data.data; // { videoPath, uploadDir, durationSec, materialId }
+}
+
+async function uploadVideoToServer(file) {
+  const ret = await uploadVideoFile(file);
+  return ret.materialId;
 }
 
 // 真实出片任务发起与全链路物理轮询 (第 3 步接线)
@@ -2316,7 +2330,7 @@ async function triggerProduce() {
   // 1. 登录与身份前置校验
   if (!userToken) {
     showToast("请先登录账号后再使用商业出片功能");
-    openProfileDrawer('login');
+    openAuthModal('login');
     return;
   }
 
