@@ -371,23 +371,82 @@
   .drawer-head { display: flex; justify-content: space-between; align-items: center; }
   .drawer-title { font-size: 15px; font-weight: 500; color: #fff; }
   .drawer-close { font-size: 13px; color: var(--text-level4); cursor: pointer; padding: 4px 6px; }
-  .login-card {
-    background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-ghost);
-    border-radius: 2px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  /* 复用 PC 端标准登录模态框系统 */
+  .auth-mask {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 16px;
   }
-  .login-input {
-    width: 100%; height: 38px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-ghost);
-    border-radius: 2px; padding: 0 10px; font-size: 13px; color: #fff; outline: none;
+  .auth-mask.active { opacity: 1; pointer-events: auto; }
+  .auth-card {
+    position: relative; width: 100%; max-width: 380px;
+    background: rgba(14, 14, 20, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 4px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+    padding: 24px 20px; box-sizing: border-box;
+    transform: translateY(14px) scale(0.98);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .code-row { display: flex; gap: 8px; }
-  .btn-send-code {
-    width: 100px; height: 38px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-ghost);
-    border-radius: 2px; font-size: 11px; color: var(--text-level3); cursor: pointer; white-space: nowrap;
+  .auth-mask.active .auth-card { transform: translateY(0) scale(1); }
+  .auth-close-btn {
+    position: absolute; top: 14px; right: 14px; width: 28px; height: 28px;
+    background: transparent; border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 2px; color: var(--text-level4);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
   }
-  .btn-login-do {
-    width: 100%; height: 40px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.4);
-    border-radius: 2px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer;
+  .auth-close-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; }
+  .auth-header { text-align: center; margin-bottom: 20px; }
+  .auth-brand-badge {
+    display: inline-flex; align-items: center; font-size: 10px; letter-spacing: 0.15em;
+    color: var(--text-level4); font-family: var(--font-mono); margin-bottom: 6px; text-transform: uppercase;
   }
+  .auth-title { font-size: 18px; font-weight: 500; color: #fff; margin: 0 0 4px 0; }
+  .auth-subtitle { font-size: 11.5px; color: var(--text-level4); margin: 0; line-height: 1.4; }
+  .auth-tabs { display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 18px; gap: 16px; }
+  .auth-tab {
+    background: none; border: none; padding: 6px 0; color: var(--text-level4);
+    font-size: 13px; cursor: pointer; position: relative;
+  }
+  .auth-tab.active { color: #fff; font-weight: 500; }
+  .auth-tab.active::after {
+    content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px;
+    background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  }
+  .auth-form-group { margin-bottom: 14px; }
+  .auth-label { display: block; font-size: 11.5px; color: var(--text-level3); margin-bottom: 5px; }
+  .auth-input-wrap { position: relative; display: flex; align-items: center; }
+  .auth-input {
+    width: 100%; height: 38px; padding: 0 10px; background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 2px; color: #fff;
+    font-family: inherit; font-size: 13px; box-sizing: border-box; outline: none;
+  }
+  .auth-input:focus { border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.05); }
+  .auth-code-btn {
+    position: absolute; right: 5px; height: 28px; padding: 0 10px;
+    background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; color: #fff; font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
+  .auth-code-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .auth-links { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 10px; }
+  .auth-link-btn {
+    background: none; border: none; padding: 0; color: var(--text-level4);
+    font-size: 11px; cursor: pointer; text-decoration: underline;
+  }
+  .auth-agree { display: flex; align-items: flex-start; gap: 6px; margin: 12px 0 16px; font-size: 11px; color: var(--text-level4); }
+  .auth-agree input[type=checkbox] { margin-top: 2px; accent-color: #ffffff; }
+  .auth-submit-btn {
+    width: 100%; height: 42px; background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 2px;
+    color: #fff; font-size: 13.5px; font-weight: 500; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+  .auth-submit-btn:active { background: rgba(255, 255, 255, 0.15); }
+  .auth-error-msg { min-height: 16px; font-size: 11px; color: #f87171; margin-top: 6px; text-align: center; }
 
   /* 个人主页 PC 对齐组件 */
   .user-hero-card {
@@ -566,9 +625,9 @@
     <span class="brand-sub">Mobile Studio</span>
   </div>
   <div class="header-actions">
-    <div class="credit-capsule" onclick="handleUserEntryClick()" title="算力与个人中心">
+    <div class="credit-capsule" onclick="handleUserEntryClick()" title="可用算力">
       <div class="credit-dot"></div>
-      <span id="header-credits-val">登录 / 注册</span>
+      <span id="header-credits-val">2,850 算力</span>
     </div>
     <div class="user-btn" id="header-user-btn" onclick="handleUserEntryClick()" title="个人中心">
       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -934,23 +993,6 @@
       </button>
     </div>
 
-    <!-- 视图 B: 未登录 · 注册 / 登录入口 -->
-    <div id="drawer-login-view" style="display:flex; flex-direction:column; gap:12px;">
-      <div class="login-card">
-        <div style="font-size:13.5px;color:#fff;font-weight:500;">手机快捷登录 / 注册</div>
-        <div style="font-size:11px;color:var(--text-level4);line-height:1.4;">未注册手机号验证通过后将自动创建简兮账号</div>
-        <input type="tel" class="login-input" id="login-phone" maxlength="11" placeholder="输入 11 位手机号码">
-        <div class="code-row">
-          <input type="number" class="login-input" id="login-code" placeholder="短信验证码">
-          <button class="btn-send-code" id="btn-send-code" onclick="sendSmsCode()">获取验证码</button>
-        </div>
-        <button class="btn-login-do" onclick="submitLogin()">立即登录 / 注册</button>
-        <div style="font-size:10.5px;color:var(--text-level4);text-align:center;line-height:1.4;">
-          登录即代表同意简兮《用户服务条款》与《隐私政策》
-        </div>
-      </div>
-    </div>
-
     <div style="font-size:11px;color:var(--text-level4);line-height:1.6;margin-top:auto;padding-top:10px;">
       简兮 JANSEE · 全栈 AI 短视频重构工场<br>
       © 2026 蜀ICP备2026046708号
@@ -958,10 +1000,66 @@
   </div>
 </div>
 
+<!-- 复用 PC 端标准登录 / 注册模态框 (点击头像未登录时自动唤起) -->
+<div class="auth-mask" id="authMask" onclick="event.target===this&&closeAuthModal()">
+  <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <button type="button" class="auth-close-btn" onclick="closeAuthModal()" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none">
+        <line x1="6" y1="6" x2="18" y2="18"/>
+        <line x1="6" y1="18" x2="18" y2="6"/>
+      </svg>
+    </button>
+    <div class="auth-header">
+      <div class="auth-brand-badge">JANSEE · WORKSPACE</div>
+      <h3 class="auth-title" id="authTitle">登录简兮</h3>
+      <p class="auth-subtitle" id="authSubtitle">未注册手机号验证后自动创建账号</p>
+    </div>
+    <div class="auth-tabs" id="authTabsWrap" role="tablist" aria-label="注册或登录">
+      <button type="button" class="auth-tab" id="authTabRegister" role="tab" aria-selected="false" onclick='switchAuthTab("register")'>注册</button>
+      <button type="button" class="auth-tab active" id="authTabLogin" role="tab" aria-selected="true" onclick='switchAuthTab("login")'>登录</button>
+    </div>
+    <form id="authForm" onsubmit="event.preventDefault(); submitAuthForm();">
+      <div class="auth-form-group">
+        <label class="auth-label" for="authPhone" id="labelAuthPhone">手机号</label>
+        <div class="auth-input-wrap">
+          <input type="tel" id="authPhone" class="auth-input" maxlength="11" placeholder="请输入 11 位手机号" autocomplete="tel" required>
+        </div>
+      </div>
+      <div class="auth-form-group" id="groupAuthCode">
+        <label class="auth-label" for="authCode" id="labelAuthCode">短信验证码</label>
+        <div class="auth-input-wrap">
+          <input type="text" id="authCode" class="auth-input" maxlength="6" placeholder="请输入短信验证码" autocomplete="one-time-code">
+          <button type="button" class="auth-code-btn" id="btnSendCode" onclick="sendAuthCode()">获取验证码</button>
+        </div>
+      </div>
+      <div class="auth-form-group" id="groupAuthPwd" style="display:none;">
+        <label class="auth-label" for="authPassword" id="labelAuthPwd">登录密码</label>
+        <div class="auth-input-wrap">
+          <input type="password" id="authPassword" class="auth-input" style="padding-right:60px" maxlength="32" placeholder="请输入密码" autocomplete="current-password">
+          <button type="button" class="auth-code-btn" id="btnTogglePwd" onclick='togglePwdVisible("authPassword",this)'>显示</button>
+        </div>
+      </div>
+      <div class="auth-links" id="authLinksRow">
+        <button type="button" class="auth-link-btn" id="authSwitchModeBtn" onclick="toggleLoginMode()">用密码登录</button>
+      </div>
+      <div class="auth-agree" id="authAgreeWrap">
+        <input type="checkbox" id="authAgree" checked required>
+        <label for="authAgree" id="labelAuthAgree">我已阅读并同意《用户服务协议》与《隐私政策》</label>
+      </div>
+      <button type="submit" class="auth-submit-btn" id="authSubmitBtn">
+        <span id="authSubmitText">立即登录</span>
+        <svg viewBox="0 0 100 100" style="width:8px;height:8px;fill:currentColor">
+          <polygon points="20,10 90,50 20,90"/>
+        </svg>
+      </button>
+      <div class="auth-error-msg" id="authErrorMsg"></div>
+    </form>
+  </div>
+</div>
+
 <div class="toast-bar" id="toast-bar"></div>
 
 <script>
-// ==========================================
 // ==========================================
 // 全局状态模型
 // ==========================================
@@ -1981,35 +2079,22 @@ function fallbackCopy(text) {
   showToast("商业发布五件套文案已全量复制！");
 }
 
-// 个人中心与登录交互系统 (PC 端同款个人主页无缝对齐)
+// 个人中心与登录交互系统 (点击头像自动检测状态 · 复用 PC 端标准登录系统)
 function handleUserEntryClick() {
   if (userToken) {
-    openProfileDrawer('profile');
+    // 已登录：直接拉起个人主页
+    openProfileDrawer();
   } else {
-    openProfileDrawer('login');
+    // 未登录：自动检测状态，复用 PC 端标准登录模态框
+    openAuthModal('login');
   }
 }
 
-function openProfileDrawer(mode) {
+function openProfileDrawer() {
   const drawer = document.getElementById("profile-drawer");
   if (!drawer) return;
   drawer.classList.add("active");
-
-  const targetMode = mode || (userToken ? 'profile' : 'login');
-  const titleEl = document.getElementById("drawer-main-title");
-  const profileView = document.getElementById("drawer-profile-view");
-  const loginView = document.getElementById("drawer-login-view");
-
-  if (targetMode === 'profile') {
-    if (titleEl) titleEl.textContent = "我的主页";
-    if (profileView) profileView.style.display = "flex";
-    if (loginView) loginView.style.display = "none";
-    fetchUserProfile();
-  } else {
-    if (titleEl) titleEl.textContent = "登录 / 注册";
-    if (profileView) profileView.style.display = "none";
-    if (loginView) loginView.style.display = "flex";
-  }
+  fetchUserProfile();
 }
 
 function closeProfileDrawer() {
@@ -2024,11 +2109,7 @@ function onDrawerBackdropClick(e) {
 function updateHeaderUserDisplay() {
   const creditsEl = document.getElementById("header-credits-val");
   if (creditsEl) {
-    if (userToken) {
-      creditsEl.textContent = `${userCredits.toLocaleString()} 算力`;
-    } else {
-      creditsEl.textContent = "登录 / 注册";
-    }
+    creditsEl.textContent = `${userCredits.toLocaleString()} 算力`;
   }
 }
 
@@ -2149,7 +2230,7 @@ function previewUserWork(videoUrl, title) {
 async function doUserCheckin() {
   if (!userToken) {
     showToast("请先登录账号后再签到");
-    openProfileDrawer('login');
+    openAuthModal('login');
     return;
   }
   const btn = document.getElementById("profile-checkin-btn");
@@ -2250,16 +2331,106 @@ function toggleMobileOrders() {
   box.style.display = box.style.display === "none" ? "block" : "none";
 }
 
-let smsCountdown = 0;
-async function sendSmsCode() {
-  if (smsCountdown > 0) return;
-  const phone = (document.getElementById("login-phone").value || "").trim();
+// ==========================================
+// PC 端复用标准登录模态框逻辑
+// ==========================================
+let authStep = "code"; // code | password
+let authMode = "login"; // login | register
+let authCountdown = 0;
+
+function openAuthModal(tab = "login") {
+  const mask = document.getElementById("authMask");
+  if (mask) mask.classList.add("active");
+  switchAuthTab(tab);
+  setAuthError("");
+}
+
+function closeAuthModal() {
+  const mask = document.getElementById("authMask");
+  if (mask) mask.classList.remove("active");
+  setAuthError("");
+}
+
+function switchAuthTab(tab) {
+  authMode = tab === "register" ? "register" : "login";
+  authStep = tab === "register" ? "code" : "password";
+
+  const tabReg = document.getElementById("authTabRegister");
+  const tabLogin = document.getElementById("authTabLogin");
+  const isReg = authMode === "register";
+
+  if (tabReg) {
+    tabReg.classList.toggle("active", isReg);
+    tabReg.setAttribute("aria-selected", isReg ? "true" : "false");
+  }
+  if (tabLogin) {
+    tabLogin.classList.toggle("active", !isReg);
+    tabLogin.setAttribute("aria-selected", !isReg ? "true" : "false");
+  }
+
+  renderAuthView();
+}
+
+function renderAuthView() {
+  const isReg = authMode === "register";
+  const titleEl = document.getElementById("authTitle");
+  const subEl = document.getElementById("authSubtitle");
+  const btnText = document.getElementById("authSubmitText");
+  const groupCode = document.getElementById("groupAuthCode");
+  const groupPwd = document.getElementById("groupAuthPwd");
+  const switchBtn = document.getElementById("authSwitchModeBtn");
+
+  if (authStep === "code") {
+    if (titleEl) titleEl.textContent = isReg ? "注册简兮" : "短信快捷登录";
+    if (subEl) subEl.textContent = isReg ? "新用户注册即赠送出片算力" : "未注册手机号验证后自动创建账号";
+    if (btnText) btnText.textContent = isReg ? "立即注册" : "立即登录";
+    if (groupCode) groupCode.style.display = "block";
+    if (groupPwd) groupPwd.style.display = "none";
+    if (switchBtn) switchBtn.textContent = "用密码登录";
+  } else {
+    if (titleEl) titleEl.textContent = "密码登录";
+    if (subEl) subEl.textContent = "输入手机号与密码快速登录";
+    if (btnText) btnText.textContent = "立即登录";
+    if (groupCode) groupCode.style.display = "none";
+    if (groupPwd) groupPwd.style.display = "block";
+    if (switchBtn) switchBtn.textContent = "用短信验证码登录";
+  }
+
+  setAuthError("");
+}
+
+function toggleLoginMode() {
+  authStep = authStep === "password" ? "code" : "password";
+  renderAuthView();
+}
+
+function togglePwdVisible(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPwd = input.type === "password";
+  input.type = isPwd ? "text" : "password";
+  if (btn) btn.textContent = isPwd ? "隐藏" : "显示";
+}
+
+function setAuthError(msg) {
+  const el = document.getElementById("authErrorMsg");
+  if (el) el.textContent = msg || "";
+}
+
+async function sendAuthCode() {
+  if (authCountdown > 0) return;
+  const phone = (document.getElementById("authPhone")?.value || "").trim();
   if (!/^1\d{10}$/.test(phone)) {
-    showToast("请输入正确的 11 位手机号码");
+    setAuthError("请输入正确的 11 位手机号码");
     return;
   }
-  const btn = document.getElementById("btn-send-code");
-  btn.disabled = true;
+  setAuthError("");
+  const btn = document.getElementById("btnSendCode");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "发送中";
+  }
+
   try {
     const res = await fetch("/api/v1/auth/send-code", {
       method: "POST",
@@ -2267,51 +2438,128 @@ async function sendSmsCode() {
       body: JSON.stringify({ phone })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok || (d.code !== 0 && d.code !== 200)) throw new Error(d.msg || d.message || "发送失败");
-    showToast("验证码已发送，请注意查收短信");
-    smsCountdown = 60;
-    const t = setInterval(() => {
-      smsCountdown--;
-      btn.textContent = `${smsCountdown}s 后重发`;
-      if (smsCountdown <= 0) {
-        clearInterval(t);
-        btn.textContent = "获取验证码";
+    if (!res.ok || (d.code !== 0 && d.code !== 200)) {
+      setAuthError(d.msg || d.message || "验证码下发失败，请稍后重试");
+      if (btn) {
         btn.disabled = false;
+        btn.textContent = "获取验证码";
+      }
+      return;
+    }
+
+    const data = d.data || {};
+    if (data.devCode) {
+      const codeInput = document.getElementById("authCode");
+      if (codeInput) codeInput.value = data.devCode;
+      showToast(`本地联调验证码: ${data.devCode}`);
+    } else {
+      showToast("验证码已发送至手机，请查收");
+    }
+
+    authCountdown = 60;
+    const timer = setInterval(() => {
+      authCountdown--;
+      if (btn) btn.textContent = `${authCountdown}s 后重发`;
+      if (authCountdown <= 0) {
+        clearInterval(timer);
+        if (btn) {
+          btn.textContent = "获取验证码";
+          btn.disabled = false;
+        }
       }
     }, 1000);
-  } catch (err) {
-    btn.disabled = false;
-    showToast("发送异常: " + err.message);
+  } catch (e) {
+    setAuthError("网络异常，请稍后重试");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "获取验证码";
+    }
   }
 }
 
-async function submitLogin() {
-  const phone = (document.getElementById("login-phone").value || "").trim();
-  const code = (document.getElementById("login-code").value || "").trim();
+async function submitAuthForm() {
+  const phone = (document.getElementById("authPhone")?.value || "").trim();
+  const agree = document.getElementById("authAgree")?.checked;
+
+  if (!agree) {
+    setAuthError("请先勾选同意用户服务条款与隐私政策");
+    return;
+  }
   if (!/^1\d{10}$/.test(phone)) {
-    showToast("请输入正确的手机号");
+    setAuthError("请输入有效的 11 位手机号码");
     return;
   }
-  if (!code) {
-    showToast("请输入短信验证码");
-    return;
-  }
+
+  const submitBtn = document.getElementById("authSubmitBtn");
+  const submitText = document.getElementById("authSubmitText");
+  if (submitBtn) submitBtn.disabled = true;
+  if (submitText) submitText.textContent = "验证中...";
+
   try {
-    const res = await fetch("/api/v1/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, code })
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok || (!d.data?.sessionToken && !d.token)) throw new Error(d.msg || d.message || "登录失败");
-    userToken = d.data?.sessionToken || d.token;
-    try { localStorage.setItem("jansee.auth.token", userToken); } catch (e) {}
-    showToast("登录成功，欢迎使用简兮！");
-    updateHeaderUserDisplay();
-    openProfileDrawer('profile');
-    fetchUserProfile();
+    if (authStep === "code") {
+      const code = (document.getElementById("authCode")?.value || "").trim();
+      if (!code) {
+        setAuthError("请输入短信验证码");
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = "立即登录";
+        return;
+      }
+
+      const res = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || (!d.data?.sessionToken && !d.token)) {
+        setAuthError(d.msg || d.message || "登录验证失败，请核对验证码");
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = "立即登录";
+        return;
+      }
+
+      userToken = d.data?.sessionToken || d.token;
+      try { localStorage.setItem("jansee.auth.token", userToken); } catch (e) {}
+
+      closeAuthModal();
+      showToast("登录成功，欢迎使用简兮！");
+      updateHeaderUserDisplay();
+      openProfileDrawer();
+    } else {
+      const password = (document.getElementById("authPassword")?.value || "").trim();
+      if (!password) {
+        setAuthError("请输入登录密码");
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = "立即登录";
+        return;
+      }
+
+      const res = await fetch("/api/v1/auth/login-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || (!d.data?.sessionToken && !d.token)) {
+        setAuthError(d.msg || d.message || "手机号或密码不正确");
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = "立即登录";
+        return;
+      }
+
+      userToken = d.data?.sessionToken || d.token;
+      try { localStorage.setItem("jansee.auth.token", userToken); } catch (e) {}
+
+      closeAuthModal();
+      showToast("登录成功，欢迎使用简兮！");
+      updateHeaderUserDisplay();
+      openProfileDrawer();
+    }
   } catch (err) {
-    showToast("登录异常: " + err.message);
+    setAuthError("网络连接超时，请重试");
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+    if (submitText) submitText.textContent = "立即登录";
   }
 }
 
@@ -2321,8 +2569,8 @@ function logout() {
     localStorage.removeItem("jansee.auth.token");
     localStorage.removeItem("jansee.auth.user");
   } catch (e) {}
+  closeProfileDrawer();
   updateHeaderUserDisplay();
-  openProfileDrawer('login');
   showToast("已退出当前账号");
 }
 
@@ -2330,7 +2578,7 @@ function logout() {
 async function buyBoost() {
   if (!userToken) {
     showToast("请先登录账号后再充值");
-    openProfileDrawer('login');
+    openAuthModal('login');
     return;
   }
   showToast("正在创建加油包订单...");
