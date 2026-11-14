@@ -467,12 +467,13 @@
         <div class="sb-opt-pill active" id="sb-opt-direct" onclick="switchStoryboardSolution('direct')">原片直出 (保原声)</div>
         <div class="sb-opt-pill" id="sb-opt-dub" onclick="switchStoryboardSolution('dub')">AI 配音 (写词解说)</div>
       </div>
-      <div class="video-upload-box" id="storyboard-upload-box" onclick="triggerVideoPick('storyboard')">
-        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-        <div class="video-upload-title">添加实拍分镜头 (支持 2~9 段)</div>
-        <div class="video-upload-sub" id="sb-solution-sub">自动识别分段、消除多余气口并无缝转场</div>
+      <div id="sb-solution-sub" style="font-size:11px; color:var(--text-level4); margin-bottom:10px; line-height:1.4;">原片直出：识别废话与停顿并剪除，保留本人原声</div>
+      <div class="photo-grid" id="storyboard-grid-box">
+        <div class="photo-add-box" onclick="triggerVideoPick('storyboard')">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span class="photo-add-text">添加分镜头</span>
+        </div>
       </div>
-      <div id="sb-clips-list" style="display:none; flex-direction:column; gap:6px;"></div>
       <input type="file" id="storyboard-file-input" multiple accept="video/mp4,video/quicktime" style="display:none" onchange="handleVideoUpload(event, 'storyboard')">
     </div>
   </section>
@@ -780,14 +781,114 @@ function removePhoto(idx) {
   }
 }
 
+
+// 通用移动端触屏与桌面端网格拖拽排序控制器
+function attachSortableGrid(containerId, itemsArray, renderCallback) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const items = container.querySelectorAll(".photo-slot");
+
+  let dragSrcIdx = -1;
+  let touchActive = false;
+  let touchTargetIdx = -1;
+
+  items.forEach((item) => {
+    const idx = parseInt(item.dataset.idx, 10);
+
+    // ① 桌面端拖拽
+    item.setAttribute("draggable", "true");
+    item.addEventListener("dragstart", (e) => {
+      dragSrcIdx = idx;
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(idx));
+      }
+      item.style.opacity = "0.45";
+    });
+    item.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    });
+    item.addEventListener("dragenter", () => {
+      item.style.borderColor = "#ffffff";
+      item.style.boxShadow = "0 0 12px rgba(255,255,255,0.45)";
+    });
+    item.addEventListener("dragleave", () => {
+      item.style.borderColor = "";
+      item.style.boxShadow = "";
+    });
+    item.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (dragSrcIdx >= 0 && dragSrcIdx !== idx && dragSrcIdx < itemsArray.length && idx < itemsArray.length) {
+        const moved = itemsArray.splice(dragSrcIdx, 1)[0];
+        itemsArray.splice(idx, 0, moved);
+        renderCallback();
+      }
+    });
+    item.addEventListener("dragend", () => {
+      dragSrcIdx = -1;
+      container.querySelectorAll(".photo-slot").forEach(el => {
+        el.style.opacity = "";
+        el.style.borderColor = "";
+        el.style.boxShadow = "";
+      });
+    });
+
+    // ② 移动端触摸拖拽 (Touch 搬动排序)
+    item.addEventListener("touchstart", (e) => {
+      if (e.target.classList.contains("photo-del")) return;
+      dragSrcIdx = idx;
+      touchActive = true;
+      item.style.transition = "transform 0.12s ease, opacity 0.12s ease";
+      item.style.opacity = "0.6";
+      item.style.transform = "scale(1.06)";
+      item.style.zIndex = "20";
+    }, { passive: true });
+
+    item.addEventListener("touchmove", (e) => {
+      if (!touchActive || dragSrcIdx === -1) return;
+      const touch = e.touches[0];
+      const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      const slotEl = targetEl ? targetEl.closest(".photo-slot") : null;
+      if (slotEl && slotEl.dataset.idx !== undefined) {
+        touchTargetIdx = parseInt(slotEl.dataset.idx, 10);
+        container.querySelectorAll(".photo-slot").forEach(el => {
+          el.style.borderColor = el === slotEl ? "#ffffff" : "";
+          el.style.boxShadow = el === slotEl ? "0 0 10px rgba(255,255,255,0.4)" : "";
+        });
+      }
+    }, { passive: true });
+
+    item.addEventListener("touchend", () => {
+      if (touchActive && dragSrcIdx >= 0 && touchTargetIdx >= 0 && dragSrcIdx !== touchTargetIdx) {
+        if (dragSrcIdx < itemsArray.length && touchTargetIdx < itemsArray.length) {
+          const moved = itemsArray.splice(dragSrcIdx, 1)[0];
+          itemsArray.splice(touchTargetIdx, 0, moved);
+          renderCallback();
+        }
+      }
+      touchActive = false;
+      dragSrcIdx = -1;
+      touchTargetIdx = -1;
+      container.querySelectorAll(".photo-slot").forEach(el => {
+        el.style.opacity = "";
+        el.style.transform = "";
+        el.style.borderColor = "";
+        el.style.boxShadow = "";
+        el.style.zIndex = "";
+      });
+    });
+  });
+}
+
 function renderPhotoGrid() {
   const box = document.getElementById("photo-grid-box");
   if (!box) return;
   let html = uploadedPhotos.map((item, idx) => `
-    <div class="photo-slot">
-      <img src="${item.url}" class="photo-img">
+    <div class="photo-slot" data-idx="${idx}" style="cursor:grab; touch-action:none;" title="按住可拖动排序">
+      <img src="${item.url}" class="photo-img" style="pointer-events:none;">
       <span class="photo-badge">0${idx + 1}</span>
-      <div class="photo-del" onclick="removePhoto(${idx})">×</div>
+      <div class="photo-del" onclick="removePhoto(${idx})" title="删除">×</div>
     </div>
   `).join("");
 
@@ -801,6 +902,7 @@ function renderPhotoGrid() {
   }
   box.innerHTML = html;
   document.getElementById("material-hint").textContent = `已选 ${uploadedPhotos.length} / 9 张`;
+  attachSortableGrid("photo-grid-box", uploadedPhotos, renderPhotoGrid);
 }
 
 // 视频上传
@@ -817,7 +919,17 @@ function handleVideoUpload(e, type) {
   if (type === 'storyboard') {
     files.forEach(f => {
       const url = URL.createObjectURL(f);
-      storyboardClips.push({ file: f, url, name: f.name });
+      const tempV = document.createElement("video");
+      tempV.preload = "metadata";
+      tempV.src = url;
+      const clipObj = { file: f, url, name: f.name, duration: 3.0 };
+      tempV.onloadedmetadata = () => {
+        if (tempV.duration && !isNaN(tempV.duration)) {
+          clipObj.duration = tempV.duration;
+          renderStoryboardClips();
+        }
+      };
+      storyboardClips.push(clipObj);
     });
     renderStoryboardClips();
     e.target.value = "";
@@ -845,29 +957,41 @@ function handleVideoUpload(e, type) {
 
 function switchStoryboardSolution(sol) {
   storyboardSolution = sol;
-  document.getElementById("sb-opt-direct").classList.toggle("active", sol === 'direct');
-  document.getElementById("sb-opt-dub").classList.toggle("active", sol === 'dub');
-  document.getElementById("sb-solution-sub").textContent = sol === 'direct'
-    ? "原片直出：识别废话与停顿并剪除，保留本人原声"
-    : "AI 配音：大模型逐镜配解说词并替换背景原声";
+  const optDirect = document.getElementById("sb-opt-direct");
+  const optDub = document.getElementById("sb-opt-dub");
+  if (optDirect) optDirect.classList.toggle("active", sol === 'direct');
+  if (optDub) optDub.classList.toggle("active", sol === 'dub');
+  const sub = document.getElementById("sb-solution-sub");
+  if (sub) {
+    sub.textContent = sol === 'direct'
+      ? "原片直出：识别废话与停顿并剪除，保留本人原声"
+      : "AI 配音：大模型逐镜配解说词并替换背景原声";
+  }
 }
 
 function renderStoryboardClips() {
-  const box = document.getElementById("sb-clips-list");
+  const box = document.getElementById("storyboard-grid-box");
   if (!box) return;
-  if (!storyboardClips.length) {
-    box.style.display = "none";
-    box.innerHTML = "";
-    return;
-  }
-  box.style.display = "flex";
-  box.innerHTML = storyboardClips.map((clip, idx) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);padding:6px 10px;border-radius:2px;font-size:12px;">
-      <span style="color:#fff;">分镜 0${idx + 1} · ${clip.name}</span>
-      <span style="color:var(--text-level4);cursor:pointer;" onclick="removeStoryboardClip(${idx})">移除</span>
+  let html = storyboardClips.map((clip, idx) => `
+    <div class="photo-slot" data-idx="${idx}" style="cursor:grab; touch-action:none; background:#000;" title="按住可拖动镜头排序">
+      <video class="photo-img" src="${clip.url}" preload="metadata" muted playsinline style="pointer-events:none; object-fit:cover;"></video>
+      <span class="photo-badge">0${idx + 1}</span>
+      <span class="photo-badge" style="left:auto; right:4px; bottom:4px; top:auto; font-size:9.5px; opacity:0.85;">${(clip.duration || 0).toFixed(1)}s</span>
+      <div class="photo-del" onclick="removeStoryboardClip(${idx})" title="删除此镜头">×</div>
     </div>
   `).join("");
+
+  if (storyboardClips.length < 9) {
+    html += `
+      <div class="photo-add-box" onclick="triggerVideoPick('storyboard')">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span class="photo-add-text">${storyboardClips.length === 0 ? "添加分镜头" : "加分镜"}</span>
+      </div>
+    `;
+  }
+  box.innerHTML = html;
   document.getElementById("material-hint").textContent = `已选 ${storyboardClips.length} / 9 段`;
+  attachSortableGrid("storyboard-grid-box", storyboardClips, renderStoryboardClips);
 }
 
 function removeStoryboardClip(idx) {
@@ -878,8 +1002,86 @@ function removeStoryboardClip(idx) {
   }
 }
 
-// 立即生成 (第 3 步)
+// 图片转 Base64 并压缩至 1200px 内 (防止 OOM 并加快上传)
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSide = 1200;
+        let w = img.width, h = img.height;
+        if (w > maxSide || h > maxSide) {
+          if (w > h) { h = Math.round(h * maxSide / w); w = maxSide; }
+          else { w = Math.round(w * maxSide / h); h = maxSide; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// 真实图片批量上传接口 (/api/v1/upload/images)
+async function uploadImagesToServer(files) {
+  const base64List = [];
+  for (const f of files) {
+    base64List.push(await fileToBase64(f));
+  }
+  const res = await fetch("/api/v1/upload/images", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ images: base64List })
+  });
+  const data = await res.json();
+  if (!res.ok || data.code !== 0 || !data.data?.materialIds) {
+    throw new Error(data.msg || "图片素材上传失败");
+  }
+  return data.data.materialIds;
+}
+
+// 真实视频流式上传接口 (/api/v1/upload/video)
+async function uploadVideoToServer(file) {
+  const res = await fetch("/api/v1/upload/video", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name)
+    },
+    body: file
+  });
+  const data = await res.json();
+  if (!res.ok || data.code !== 0 || !data.data?.materialId) {
+    throw new Error(data.msg || "视频素材上传失败");
+  }
+  return data.data.materialId;
+}
+
+// 真实出片任务发起与全链路物理轮询 (第 3 步接线)
 async function triggerProduce() {
+  // 1. 登录与身份前置校验
+  if (!userToken) {
+    showToast("请先登录账号后再使用商业出片功能");
+    openProfileDrawer();
+    return;
+  }
+
+  // 2. 算力余额校验
+  const requiredCredits = batchCount * 200;
+  if (userCredits < requiredCredits) {
+    showToast(`算力不足（当前余额 ${userCredits.toLocaleString()}，本次需 ${requiredCredits}），请补充加油包`);
+    openProfileDrawer();
+    return;
+  }
+
+  // 3. 物料前端硬校验
   if (currentMode === 'image-film' && uploadedPhotos.length === 0) {
     showToast("请至少添加 1 张商品实拍图");
     return;
@@ -897,50 +1099,135 @@ async function triggerProduce() {
   const modal = document.getElementById("producing-modal");
   const bar = document.getElementById("producing-bar-el");
   const stepText = document.getElementById("producing-step-text");
+
   modal.classList.add("active");
-  bar.style.width = "15%";
-  stepText.textContent = "AI 智能导演正在统筹视觉与分镜脚本...";
+  bar.style.width = "10%";
+  stepText.textContent = "正在同步素材并上传至 AI 重构工场...";
 
-  let progress = 15;
-  const timer = setInterval(() => {
-    progress = Math.min(92, progress + Math.floor(Math.random() * 12) + 6);
-    bar.style.width = progress + "%";
-    if (progress > 40 && progress < 70) {
-      stepText.textContent = "正在渲染发丝级微距字幕与 Sidechain 避让混音...";
-    } else if (progress >= 70) {
-      stepText.textContent = "正在压制 1080P 高清成片与生成五件套...";
-    }
-  }, 400);
-
-  // 模拟 / 调用真实合成流水线
   try {
-    await new Promise(r => setTimeout(r, 2600));
-    clearInterval(timer);
-    bar.style.width = "100%";
-    stepText.textContent = "出片完成！即将呈现全屏商业交付...";
-    await new Promise(r => setTimeout(r, 350));
-    modal.classList.remove("active");
-
-    // 赛马版本交付构建
-    activeDeliveryVersions = [];
-    const angles = ["痛点反转", "微距质感", "促单转化", "生活共鸣", "细节爆发", "限时特惠", "矩阵赛马7", "矩阵赛马8", "矩阵赛马9", "矩阵赛马10"];
-    for (let i = 0; i < batchCount; i++) {
-      activeDeliveryVersions.push({
-        videoUrl: "/assets/gemini_generated_video_daa127b4.mp4",
-        coverUrl: "/assets/poster-daa127b4.jpg",
-        angle: angles[i] || `版本 0${i + 1}`,
-        publish: {
-          caption: `【${angles[i] || '爆款成片'}】${prompt || '秋冬重磅羊绒大衣，版型挺括显瘦。'}无论通勤还是周末聚会，一件穿出高级松弛感！#简兮JANSEE #好物推荐`,
-          cover_title: `${angles[i] || '高级质感'} · 显瘦天花板`,
-          comment: "已为姐妹们锁定官方正品链接，评论区扣 1 秒发同款特惠福利！"
-        }
-      });
+    // 4. 真实素材网络上传
+    let materialIds = [];
+    if (currentMode === 'image-film') {
+      materialIds = await uploadImagesToServer(uploadedPhotos.map(p => p.file));
+    } else if (currentMode === 'video-dub' || currentMode === 'speech-cut') {
+      stepText.textContent = "正在上传视频素材并探测时长...";
+      materialIds = [await uploadVideoToServer(uploadedVideo.file)];
+    } else if (currentMode === 'storyboard') {
+      stepText.textContent = "正在上传多段实拍分镜头...";
+      for (const clip of storyboardClips) {
+        materialIds.push(await uploadVideoToServer(clip.file));
+      }
     }
-    openDeliveryTheater();
+
+    // 5. 真实发起商业出片任务 (/api/v1/creation/create)
+    bar.style.width = "30%";
+    stepText.textContent = "AI 智能导演正在统筹分镜剧本与视听规划...";
+
+    const sceneMap = { ecommerce: 'sell', local: 'local', life: 'personal' };
+    const modeTypeMap = {
+      'image-film': 'image_creator',
+      'video-dub': 'video_dub',
+      'speech-cut': 'speech_cut',
+      'storyboard': 'storyboard'
+    };
+    const title = prompt ? prompt.substring(0, 14) : (currentScene === 'local' ? '同城优选探店' : currentScene === 'life' ? '精选生活记录' : '大厂商业高光商品');
+
+    const createRes = await fetch("/api/v1/creation/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      },
+      body: JSON.stringify({
+        type: modeTypeMap[currentMode] || 'image_creator',
+        scene: sceneMap[currentScene] || 'sell',
+        mode: 'product',
+        title,
+        sellingPoints: prompt,
+        description: prompt,
+        materialIds,
+        versions: batchCount,
+        options: {
+          imageCount: uploadedPhotos.length,
+          storyboardSolution: storyboardSolution
+        }
+      })
+    });
+
+    const createData = await createRes.json();
+    if (!createRes.ok || createData.code !== 0 || !createData.data?.taskId) {
+      throw new Error(createData.msg || "任务调度创建异常");
+    }
+
+    const taskId = createData.data.taskId;
+
+    // 6. 真实进度长轮询 (/api/v1/creation/task/:taskId)
+    let progress = 35;
+    bar.style.width = "35%";
+    stepText.textContent = "任务已进入合成流水线，AI 导演正在精细编排...";
+
+    for (let i = 0; i < 180; i++) {
+      await new Promise(r => setTimeout(r, 1200));
+      const pollRes = await fetch(`/api/v1/creation/task/${taskId}`);
+      if (!pollRes.ok) continue;
+      const pollData = await pollRes.json();
+      const task = pollData.data;
+      if (!task) continue;
+
+      if (task.stageText) stepText.textContent = task.stageText;
+      if (task.progress) {
+        progress = Math.max(progress, task.progress);
+        bar.style.width = `${progress}%`;
+      }
+
+      if (task.status === 'completed' || task.progress >= 100) {
+        bar.style.width = "100%";
+        stepText.textContent = "出片完成！即将呈现全屏商业交付...";
+        await new Promise(r => setTimeout(r, 400));
+        modal.classList.remove("active");
+
+        // 刷新算力扣除后的真实余额
+        fetchUserProfile();
+
+        // 提取后端真实生成的赛马多版本成片与商业五件套
+        if (task.outputs && Array.isArray(task.outputs.versions) && task.outputs.versions.length > 0) {
+          activeDeliveryVersions = task.outputs.versions.map((ver, idx) => ({
+            videoUrl: ver.videoUrl || task.videoUrl || "",
+            coverUrl: ver.coverUrl || "",
+            angle: ver.angle || `版本 0${idx + 1}`,
+            publish: ver.publish || {
+              caption: prompt || "商业带货短视频",
+              cover_title: "爆款实拍 · 高光呈现",
+              comment: "评论区锁定官方链接！"
+            }
+          }));
+        } else {
+          activeDeliveryVersions = [{
+            videoUrl: task.videoUrl || "",
+            coverUrl: task.coverUrl || "",
+            angle: "商业成片",
+            publish: task.publishData || {
+              caption: prompt || "商业带货短视频",
+              cover_title: "爆款实拍 · 高光呈现",
+              comment: "评论区锁定官方链接！"
+            }
+          }];
+        }
+
+        openDeliveryTheater();
+        return;
+      }
+
+      if (task.status === 'failed') {
+        throw new Error(task.error || "出片任务合成异常");
+      }
+    }
+    throw new Error("渲染任务排队超时，请稍后在个人中心查看");
+
   } catch (err) {
-    clearInterval(timer);
     modal.classList.remove("active");
-    showToast("生成异常: " + (err.message || "请稍后重试"));
+    showToast("出片异常: " + (err.message || "请稍后重试"));
   }
 }
 
@@ -981,9 +1268,9 @@ function renderCurrentDeliveryVersion() {
     player.play().catch(() => {});
   }
   document.getElementById("delivery-angle-tag").textContent = item.angle;
-  document.getElementById("pub-caption").textContent = item.publish.caption;
-  document.getElementById("pub-cover-title").textContent = item.publish.cover_title;
-  document.getElementById("pub-comment").textContent = item.publish.comment;
+  document.getElementById("pub-caption").textContent = item.publish.caption || "";
+  document.getElementById("pub-cover-title").textContent = item.publish.cover_title || "";
+  document.getElementById("pub-comment").textContent = item.publish.comment || "";
 }
 
 function closeDelivery() {
@@ -1007,8 +1294,8 @@ function downloadCurrentVideo() {
 
 function copyPublishKit() {
   const item = activeDeliveryVersions[activeDeliveryVerIdx];
-  if (!item) return;
-  const fullText = `【爆款正文】\n${item.publish.caption}\n\n【封面大字】\n${item.publish.cover_title}\n\n【置顶评论】\n${item.publish.comment}`;
+  if (!item || !item.publish) return;
+  const fullText = `【爆款正文】\n${item.publish.caption || ''}\n\n【封面大字】\n${item.publish.cover_title || ''}\n\n【置顶评论】\n${item.publish.comment || ''}`;
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(fullText).then(() => {
       showToast("商业发布五件套文案已全量复制！");
@@ -1040,16 +1327,18 @@ function onDrawerBackdropClick(e) {
 }
 
 async function fetchUserProfile() {
+  if (!userToken) return;
   try {
     const res = await fetch("/api/v1/user/profile", {
       headers: { "Authorization": `Bearer ${userToken}` }
     });
     if (!res.ok) return;
     const data = await res.json();
-    if (data && data.user) {
-      userCredits = data.user.credits || userCredits;
+    if (data && (data.code === 0 || data.code === 200) && data.data) {
+      userCredits = data.data.points || userCredits;
       document.getElementById("header-credits-val").textContent = `${userCredits.toLocaleString()} 算力`;
-      document.getElementById("profile-phone-text").textContent = data.user.phone || "已登录用户";
+      const phone = data.data.phone || "已登录用户";
+      document.getElementById("profile-phone-text").textContent = phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
       document.getElementById("profile-credits-text").textContent = `可用算力: ${userCredits.toLocaleString()}`;
       document.getElementById("login-form-box").style.display = "none";
       document.getElementById("user-info-box").style.display = "block";
@@ -1074,7 +1363,7 @@ async function sendSmsCode() {
       body: JSON.stringify({ phone })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(d.message || "发送失败");
+    if (!res.ok || (d.code !== 0 && d.code !== 200)) throw new Error(d.msg || d.message || "发送失败");
     showToast("验证码已发送，请注意查收短信");
     smsCountdown = 60;
     const t = setInterval(() => {
@@ -1110,10 +1399,10 @@ async function submitLogin() {
       body: JSON.stringify({ phone, code })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok || !d.token) throw new Error(d.message || "登录失败");
-    userToken = d.token;
+    if (!res.ok || !d.data?.sessionToken && !d.token) throw new Error(d.msg || d.message || "登录失败");
+    userToken = d.data?.sessionToken || d.token;
     try { localStorage.setItem("jansee.auth.token", userToken); } catch (e) {}
-    showToast("登录成功！");
+    showToast("登录成功，欢迎使用简兮！");
     fetchUserProfile();
   } catch (err) {
     showToast("登录异常: " + err.message);
@@ -1128,10 +1417,45 @@ function logout() {
   showToast("已退出当前账号");
 }
 
-function buyBoost() {
-  // 极简拉起支付宝支付充值 9.9 元加油包
-  showToast("正在拉起支付宝收银台...");
-  window.open("/#pricing", "_blank");
+// 真实拉起支付宝 JSAPI 支付购买加油包
+async function buyBoost() {
+  if (!userToken) {
+    showToast("请先登录账号后再充值");
+    return;
+  }
+  showToast("正在创建加油包订单...");
+  try {
+    const res = await fetch("/api/v1/order/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      },
+      body: JSON.stringify({ planId: "boost_small" })
+    });
+    const data = await res.json();
+    if (!res.ok || (data.code !== 0 && data.code !== 200) || !data.data?.orderId) {
+      throw new Error(data.msg || "订单创建失败");
+    }
+    const orderId = data.data.orderId;
+    const payRes = await fetch("/api/v1/order/jsapi-unified", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, client: "mobile" })
+    });
+    const payData = await payRes.json();
+    if (payData.payUrl) {
+      showToast("正在拉起支付宝支付...");
+      window.location.href = payData.payUrl;
+    } else if (payData.qrCodeUrl) {
+      window.location.href = payData.qrCodeUrl;
+    } else {
+      showToast("支付订单已创建: " + orderId);
+    }
+  } catch (e) {
+    showToast("拉起支付异常: " + e.message);
+  }
 }
 </script>
 </body>
