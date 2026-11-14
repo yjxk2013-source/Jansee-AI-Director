@@ -3565,6 +3565,9 @@
         return;
       }
 
+      const submitBtn = document.querySelector(".btn-submit-main");
+      const submitText = document.getElementById("btn-submit-text");
+
       if (asrPhase === 'uploading' || asrPhase === 'analyzing') {
         if (emptyBox) emptyBox.style.display = "none";
         if (analyzingBox) analyzingBox.style.display = "flex";
@@ -3572,10 +3575,26 @@
         if (stageTextEl) {
           stageTextEl.textContent = asrStageText || (asrPhase === 'uploading' ? "正在上传媒体素材至服务引擎..." : "正在智能识别口播台词与停顿节奏...");
         }
+        if (submitBtn && submitText) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = asrPhase === 'uploading' ? "正在上传素材，请稍候..." : "正在智能识别视频语音，请稍候...";
+        }
       } else if (asrPhase === 'ready') {
         if (emptyBox) emptyBox.style.display = "none";
         if (analyzingBox) analyzingBox.style.display = "none";
         if (resultBox) resultBox.style.display = "flex";
+        if (submitBtn && submitText) {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = "1";
+          submitBtn.style.cursor = "pointer";
+          submitText.textContent = currentMode === 'speech-cut'
+            ? "第 3 步 · 立即导出无痕口播精剪成片"
+            : (currentMode === 'storyboard' && storyboardSolution === 'direct'
+              ? "第 3 步 · 立即分镜直出成片"
+              : "第 3 步 · 立即生成商业成片");
+        }
         renderAsrWords();
       } else if (asrPhase === 'error') {
         if (emptyBox) emptyBox.style.display = "none";
