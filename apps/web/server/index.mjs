@@ -2170,6 +2170,22 @@ const server = http.createServer((req, res) => {
   // ==========================================
   let reqPath = pathname === '/' ? '/index.html' : pathname;
 
+  // 智能识别移动端浏览器与原生 App (UA 嗅探与路由分流)
+  const ua = String(req.headers['user-agent'] || '');
+  const isMobileUa = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  const forcePc = urlObj.searchParams.get('pc') === '1';
+  const forceMobile = urlObj.searchParams.get('m') === '1' || urlObj.searchParams.get('mobile') === '1';
+
+  if (pathname === '/m' || pathname === '/mobile' || pathname === '/m/' || pathname === '/mobile/') {
+    reqPath = '/mobile/index.html';
+  } else if (pathname === '/' || pathname === '/index.html') {
+    if ((isMobileUa || forceMobile) && !forcePc) {
+      reqPath = '/mobile/index.html';
+    } else {
+      reqPath = '/index.html';
+    }
+  }
+
   // 优先处理 /admin 管理后台静态访问
   if (reqPath === '/admin' || reqPath.startsWith('/admin/')) {
     let sub = reqPath.replace(/^\/admin\/?/, '');

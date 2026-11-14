@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=430, height=932, initial-scale=1.0, user-scalable=no">
+<title>简兮 JANSEE · 智能导演编排中 (画面 2)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+  body {
+    width: 430px; height: 932px; overflow: hidden;
+    background-color: #050505; color: #e4e4e7;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    position: relative; user-select: none;
+  }
+
+  .bg-glow {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(45% 35% at 50% 40%, rgba(255, 255, 255, 0.06) 0%, transparent 80%),
+      radial-gradient(50% 40% at 50% 100%, rgba(20, 20, 30, 0.4) 0%, transparent 80%);
+  }
+
+  /* 状态栏 */
+  .status-bar {
+    height: 48px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 600; color: #ffffff; position: relative; z-index: 10;
+  }
+  .dynamic-island {
+    position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 32px; background: #000000; border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .status-icons { display: flex; align-items: center; gap: 6px; }
+
+  /* 顶栏 */
+  .top-bar {
+    height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between;
+    position: relative; z-index: 10;
+  }
+  .brand-group { display: flex; align-items: baseline; gap: 8px; }
+  .brand-title { font-size: 19px; font-weight: 600; color: #ffffff; letter-spacing: 0.04em; }
+  .stage-tag {
+    font-size: 11px; color: #d4d4d8; padding: 2px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 2px;
+  }
+
+  /* 核心调度容器 */
+  .center-container {
+    padding: 24px 20px; display: flex; flex-direction: column; align-items: center;
+    position: relative; z-index: 10; height: calc(932px - 48px - 52px - 30px);
+  }
+
+  /* 仪表环与百分比 */
+  .progress-ring-box {
+    position: relative; width: 170px; height: 170px; margin: 20px 0 28px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .ring-svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: rgba(255, 255, 255, 0.06); stroke-width: 3.5; }
+  .ring-val {
+    fill: none; stroke: #ffffff; stroke-width: 3.5; stroke-linecap: round;
+    stroke-dasharray: 471; stroke-dashoffset: 150; filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
+  }
+  .percent-num { font-size: 40px; font-weight: 300; color: #ffffff; letter-spacing: -0.02em; }
+  .percent-sub { font-size: 11px; color: #a1a1aa; letter-spacing: 0.08em; text-transform: uppercase; margin-top: -2px; }
+
+  /* 阶段流水状态面板 */
+  .pipeline-card {
+    width: 100%; background: rgba(18, 18, 22, 0.65); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px; padding: 18px 16px;
+    display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;
+  }
+  .pipeline-item { display: flex; align-items: flex-start; gap: 12px; }
+  .step-icon {
+    width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 2px; font-size: 10px; font-weight: 600;
+  }
+  .step-icon.done { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.4); color: #fff; }
+  .step-icon.active { background: #ffffff; color: #000; box-shadow: 0 0 8px #ffffff; }
+  .step-icon.wait { border: 1px solid rgba(255, 255, 255, 0.15); color: #71717a; }
+
+  .step-info { flex: 1; }
+  .step-title { font-size: 13px; font-weight: 500; color: #ffffff; margin-bottom: 2px; }
+  .step-desc { font-size: 11px; color: #a1a1aa; line-height: 1.4; }
+  .step-active .step-title { color: #ffffff; font-weight: 600; }
+  .step-wait .step-title { color: #71717a; font-weight: 400; }
+  .step-wait .step-desc { color: #52525b; }
+
+  /* 提示与预计耗时 */
+  .time-hint {
+    font-size: 12px; color: #a1a1aa; text-align: center; line-height: 1.6;
+    letter-spacing: 0.03em;
+  }
+  .time-bold { color: #ffffff; font-weight: 500; }
+
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 4px; background: rgba(255, 255, 255, 0.3); border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="status-bar">
+  <span>09:41</span>
+  <div class="dynamic-island"></div>
+  <div class="status-icons">
+    <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><path d="M1 8.5C3.5 5 11.5 5 14 8.5M3 10C5 8 10 8 12 10" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="19" height="10" rx="2.5" stroke="#fff"/><rect x="2" y="2" width="14" height="7" rx="1.5" fill="#fff"/><path d="M21 4V7" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg>
+  </div>
+</div>
+
+<div class="top-bar">
+  <div class="brand-group">
+    <div class="brand-title">简兮 JANSEE</div>
+    <div class="stage-tag">AI 导演调度引擎</div>
+  </div>
+</div>
+
+<div class="center-container">
+  <!-- 仪表环 -->
+  <div class="progress-ring-box">
+    <svg class="ring-svg" width="170" height="170" viewBox="0 0 170 170">
+      <circle class="ring-bg" cx="85" cy="85" r="75"/>
+      <circle class="ring-val" cx="85" cy="85" r="75"/>
+    </svg>
+    <div class="percent-num">68%</div>
+    <div class="percent-sub">Rendering</div>
+  </div>
+
+  <!-- 流水阶段卡片 -->
+  <div class="pipeline-card">
+    <div class="pipeline-item">
+      <div class="step-icon done">✓</div>
+      <div class="step-info">
+        <div class="step-title">素材检测与景别编排</div>
+        <div class="step-desc">已对齐 3 张实拍图，提取服装特写与版型轮廓</div>
+      </div>
+    </div>
+    <div class="pipeline-item">
+      <div class="step-icon done">✓</div>
+      <div class="step-info">
+        <div class="step-title">爆款分镜脚本设计</div>
+        <div class="step-desc">黄金 3 秒开场钩子完成，匹配 15 款定稿结尾 CTA</div>
+      </div>
+    </div>
+    <div class="pipeline-item step-active">
+      <div class="step-icon active">●</div>
+      <div class="step-info">
+        <div class="step-title">语音合成与发丝微距字幕</div>
+        <div class="step-desc">腾讯云单通道极速合成，逐字毫秒对齐与避让混音...</div>
+      </div>
+    </div>
+    <div class="pipeline-item step-wait">
+      <div class="step-icon wait">○</div>
+      <div class="step-info">
+        <div class="step-title">1080P Single-Pass 流式压合</div>
+        <div class="step-desc">电影级竖版带货底座直出，注入国标隐式元数据</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="time-hint">
+    AI 导演正在为您统筹完整视听作品<br>
+    预计剩余 <span class="time-bold">18 秒</span> · 请保持当前屏幕
+  </div>
+</div>
+
+<div class="home-indicator"></div>
+</body>
+</html>

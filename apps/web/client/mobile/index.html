@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>简兮 JANSEE · 手机专版工作台</title>
+<meta name="theme-color" content="#050505">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" type="image/png" href="/assets/web-icon.png">
+<link rel="apple-touch-icon" href="/assets/app-icon.png">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg-main: #050505;
+    --bg-card: rgba(18, 18, 22, 0.72);
+    --border-ghost: rgba(255, 255, 255, 0.15);
+    --border-hover: rgba(255, 255, 255, 0.4);
+    --text-primary: #ffffff;
+    --text-level2: #e4e4e7;
+    --text-level3: #d4d4d8;
+    --text-level4: #a1a1aa;
+    --font-mono: "JetBrains Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-level2);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 电影级微光背景 */
+  .bg-glow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(50% 35% at 50% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 80%),
+      radial-gradient(60% 45% at 50% 100%, rgba(18, 22, 34, 0.5) 0%, transparent 80%);
+  }
+
+  /* 顶栏 (发丝微光 52px) */
+  .app-header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: calc(var(--safe-top) + 8px) 16px 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .brand-box { display: flex; align-items: baseline; gap: 8px; }
+  .brand-name { font-size: 18px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.04em; }
+  .brand-sub {
+    font-size: 10px; color: var(--text-level4); padding: 1px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .credit-capsule {
+    height: 28px; padding: 0 10px; display: flex; align-items: center; gap: 6px;
+    background: rgba(255, 255, 255, 0.025); border: 1px solid var(--border-ghost);
+    border-radius: 2px; font-size: 11px; color: var(--text-level3); font-weight: 500; cursor: pointer;
+  }
+  .credit-dot { width: 5px; height: 5px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 6px #ffffff; }
+  .user-btn {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.025); border: 1px solid var(--border-ghost);
+    border-radius: 2px; color: var(--text-level3); cursor: pointer;
+  }
+  .user-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+  /* 轨 A: 三大商业场景分段器 (业务大脑 32px) */
+  .scene-bar-wrap {
+    padding: 10px 16px 4px; position: relative; z-index: 40;
+  }
+  .scene-segment {
+    display: flex; background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 2px; padding: 2px;
+  }
+  .scene-item {
+    flex: 1; height: 32px; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--text-level4); letter-spacing: 0.03em; cursor: pointer;
+    border-radius: 2px; transition: all 0.2s ease;
+  }
+  .scene-item.active {
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.35);
+    color: var(--text-primary); font-weight: 500; box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+  }
+
+  /* 轨 B: 四大工作台版块导轨 (生产形态 38px) */
+  .mode-rail-wrap {
+    padding: 6px 16px 10px; position: relative; z-index: 40;
+    overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch;
+  }
+  .mode-rail { display: inline-flex; gap: 8px; }
+  .mode-tab {
+    padding: 6px 12px; font-size: 13px; color: var(--text-level4);
+    background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-ghost);
+    border-radius: 2px; cursor: pointer; transition: all 0.2s ease;
+  }
+  .mode-tab.active {
+    background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.4);
+    color: var(--text-primary); font-weight: 500;
+  }
+
+  /* 主工作区滚动视窗 */
+  .workbench-scroll {
+    padding: 0 16px calc(var(--safe-bottom) + 94px);
+    display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 30;
+  }
+
+  /* 通用黑曜石毛玻璃卡片 */
+  .wb-card {
+    background: var(--bg-card); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-ghost); border-radius: 2px; padding: 14px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+  .card-hint { font-size: 11px; color: var(--text-level4); }
+
+  /* 第 1 步: 图片成片九宫格 (发朋友圈式) */
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .photo-slot {
+    aspect-ratio: 1; border-radius: 2px; position: relative; overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.4);
+  }
+  .photo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-badge {
+    position: absolute; top: 4px; left: 4px; padding: 1px 5px;
+    background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 1px; font-size: 10px; color: #ffffff; font-family: var(--font-mono);
+  }
+  .photo-del {
+    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px;
+    background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; display: flex; align-items: center; justify-content: center;
+    color: #ffffff; font-size: 12px; line-height: 1; cursor: pointer;
+  }
+  .photo-add-box {
+    aspect-ratio: 1; border: 1px dashed rgba(255, 255, 255, 0.25); border-radius: 2px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; background: rgba(255, 255, 255, 0.015); cursor: pointer;
+  }
+  .photo-add-box svg { width: 18px; height: 18px; stroke: var(--text-level3); fill: none; stroke-width: 1.8; }
+  .photo-add-text { font-size: 10px; color: var(--text-level4); }
+
+  /* 视频上传盒 (视频配音 / 出镜口播) */
+  .video-upload-box {
+    border: 1px dashed rgba(255, 255, 255, 0.25); border-radius: 2px;
+    padding: 24px 16px; text-align: center; background: rgba(255, 255, 255, 0.015);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; position: relative;
+  }
+  .video-upload-box svg { width: 24px; height: 24px; stroke: var(--text-level3); fill: none; stroke-width: 1.8; }
+  .video-upload-title { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+  .video-upload-sub { font-size: 11px; color: var(--text-level4); }
+  .video-preview-wrap { position: relative; width: 100%; border-radius: 2px; overflow: hidden; background: #000; }
+  .video-preview-el { width: 100%; max-height: 220px; object-fit: contain; display: block; }
+  .video-info-tag {
+    position: absolute; bottom: 8px; left: 8px; padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; font-size: 11px; color: #fff; font-family: var(--font-mono);
+  }
+
+  /* 切片分镜模式方案选择 */
+  .storyboard-options { display: flex; gap: 8px; margin-bottom: 4px; }
+  .sb-opt-pill {
+    flex: 1; height: 32px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-ghost);
+    border-radius: 2px; font-size: 12px; color: var(--text-level4); cursor: pointer;
+  }
+  .sb-opt-pill.active {
+    background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.4);
+    color: var(--text-primary); font-weight: 500;
+  }
+
+  /* 第 2 步: 核心诉求输入 */
+  .prompt-textarea {
+    width: 100%; height: 72px; background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px;
+    padding: 10px; font-size: 13px; color: var(--text-primary); line-height: 1.5;
+    resize: none; outline: none; font-family: inherit;
+  }
+  .prompt-textarea:focus { border-color: rgba(255, 255, 255, 0.35); }
+  .prompt-chips-scroll { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }
+  .prompt-chip {
+    padding: 4px 10px; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--border-ghost);
+    border-radius: 2px; font-size: 11px; color: var(--text-level3); cursor: pointer;
+  }
+
+  /* 核心杀手锏: 矩阵赛马 (一次出几条) */
+  .race-box {
+    background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 2px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .race-header { display: flex; justify-content: space-between; align-items: center; }
+  .race-title { font-size: 13px; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+  .race-badge {
+    font-size: 11px; color: var(--text-level3); font-family: var(--font-mono);
+    padding: 2px 6px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 2px;
+  }
+  .race-quick-row { display: flex; gap: 6px; }
+  .race-pill {
+    flex: 1; height: 30px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-ghost);
+    border-radius: 2px; font-size: 12px; color: var(--text-level4); cursor: pointer;
+  }
+  .race-pill.active {
+    background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.45);
+    color: var(--text-primary); font-weight: 600;
+  }
+  .race-slider-row { display: flex; align-items: center; gap: 10px; }
+  .race-slider {
+    flex: 1; -webkit-appearance: none; height: 3px; background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px; outline: none;
+  }
+  .race-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #ffffff; border: 2px solid #050505; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+  }
+  .race-desc { font-size: 11px; color: var(--text-level4); line-height: 1.4; }
+
+  /* 吸底常驻操作台 (第 3 步) */
+  .bottom-dock {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    padding: 10px 16px calc(var(--safe-bottom) + 12px);
+    background: linear-gradient(to top, #050505 85%, transparent);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .dock-info-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-level4); padding: 0 2px; }
+  .btn-submit-main {
+    width: 100%; height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 2px; color: var(--text-primary); font-size: 14px; font-weight: 600;
+    letter-spacing: 0.04em; cursor: pointer; box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  }
+  .btn-submit-main:active { transform: scale(0.99); background: rgba(255, 255, 255, 0.14); }
+  .btn-submit-main svg { width: 12px; height: 12px; fill: #ffffff; }
+
+  /* 调度中弹窗遮罩 */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.active { display: flex; }
+  .producing-box {
+    width: 100%; max-width: 360px; background: rgba(18, 18, 22, 0.9);
+    border: 1px solid var(--border-ghost); border-radius: 2px; padding: 24px 20px;
+    text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .spin-ring {
+    width: 50px; height: 50px; border: 2px solid rgba(255, 255, 255, 0.12);
+    border-top-color: #ffffff; border-radius: 50%; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+  .producing-title { font-size: 15px; font-weight: 500; color: #ffffff; }
+  .producing-step { font-size: 12px; color: var(--text-level4); }
+  .producing-progress {
+    width: 100%; height: 3px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden;
+  }
+  .producing-bar { width: 15%; height: 100%; background: #ffffff; transition: width 0.3s ease; }
+
+  /* 全屏沉浸式交付面板 (画面 3) */
+  .delivery-sheet {
+    position: fixed; inset: 0; z-index: 110; background: #050505;
+    display: none; flex-direction: column;
+    padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+  }
+  .delivery-sheet.active { display: flex; }
+  .delivery-nav {
+    height: 48px; padding: 0 16px; display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .delivery-nav-title { font-size: 14px; font-weight: 500; color: #ffffff; }
+  .delivery-close { font-size: 12px; color: var(--text-level4); cursor: pointer; padding: 4px 8px; }
+
+  /* 赛马版本切换条 (Theater Version Bar) */
+  .race-version-bar {
+    padding: 8px 16px; display: flex; gap: 8px; overflow-x: auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02);
+  }
+  .ver-pill {
+    padding: 5px 12px; font-size: 12px; color: var(--text-level4);
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-ghost);
+    border-radius: 2px; white-space: nowrap; cursor: pointer;
+  }
+  .ver-pill.active {
+    background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.4);
+    color: #ffffff; font-weight: 500;
+  }
+
+  .delivery-content {
+    flex: 1; overflow-y: auto; padding: 14px 16px 80px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .delivery-player-box {
+    width: 100%; aspect-ratio: 9 / 12; background: #000; border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; position: relative; overflow: hidden;
+  }
+  .delivery-video-el { width: 100%; height: 100%; object-fit: contain; }
+
+  .publish-deck {
+    background: var(--bg-card); border: 1px solid var(--border-ghost); border-radius: 2px; padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .publish-deck-title { font-size: 13px; font-weight: 500; color: #ffffff; display: flex; justify-content: space-between; }
+  .publish-field {
+    background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px; padding: 10px; font-size: 12px; color: var(--text-level2); line-height: 1.5;
+  }
+
+  .delivery-dock {
+    position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px calc(var(--safe-bottom) + 12px);
+    background: linear-gradient(to top, #050505 85%, transparent); display: flex; gap: 10px;
+  }
+  .btn-save-video {
+    flex: 1; height: 44px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 2px; color: #ffffff; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .btn-copy-kit {
+    flex: 1; height: 44px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-ghost);
+    border-radius: 2px; color: var(--text-level3); font-size: 13px; cursor: pointer;
+  }
+
+  /* 个人中心抽屉 */
+  .profile-drawer {
+    position: fixed; inset: 0; z-index: 120; background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px); display: none; justify-content: flex-end;
+  }
+  .profile-drawer.active { display: flex; }
+  .drawer-panel {
+    width: 82%; max-width: 340px; height: 100%; background: #0a0a0e;
+    border-left: 1px solid var(--border-ghost); padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px);
+    display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
+  }
+  .drawer-head { display: flex; justify-content: space-between; align-items: center; }
+  .drawer-title { font-size: 15px; font-weight: 500; color: #fff; }
+  .drawer-close { font-size: 13px; color: var(--text-level4); cursor: pointer; }
+  .login-card {
+    background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-ghost);
+    border-radius: 2px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .login-input {
+    width: 100%; height: 38px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-ghost);
+    border-radius: 2px; padding: 0 10px; font-size: 13px; color: #fff; outline: none;
+  }
+  .code-row { display: flex; gap: 8px; }
+  .btn-send-code {
+    width: 100px; height: 38px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-ghost);
+    border-radius: 2px; font-size: 11px; color: var(--text-level3); cursor: pointer; white-space: nowrap;
+  }
+  .btn-login-do {
+    width: 100%; height: 40px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 2px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+
+  /* 提示条 Toast */
+  .toast-bar {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 200;
+    padding: 8px 16px; background: rgba(20, 20, 26, 0.95); border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 2px; font-size: 12px; color: #ffffff; letter-spacing: 0.03em;
+    pointer-events: none; opacity: 0; transition: opacity 0.25s ease;
+  }
+  .toast-bar.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<!-- 顶栏 -->
+<header class="app-header">
+  <div class="brand-box">
+    <span class="brand-name">简兮 JANSEE</span>
+    <span class="brand-sub">Mobile Studio</span>
+  </div>
+  <div class="header-actions">
+    <div class="credit-capsule" onclick="openProfileDrawer()">
+      <div class="credit-dot"></div>
+      <span id="header-credits-val">2,850 算力</span>
+    </div>
+    <div class="user-btn" onclick="openProfileDrawer()" title="个人中心">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+  </div>
+</header>
+
+<!-- 轨 A: 三大商业场景分段器 (业务大脑) -->
+<div class="scene-bar-wrap">
+  <div class="scene-segment">
+    <div class="scene-item active" data-scene="ecommerce" onclick="switchScene('ecommerce')">电商带货</div>
+    <div class="scene-item" data-scene="local" onclick="switchScene('local')">同城门店</div>
+    <div class="scene-item" data-scene="life" onclick="switchScene('life')">个人生活</div>
+  </div>
+</div>
+
+<!-- 轨 B: 四大工作台版块导轨 (生产形态) -->
+<div class="mode-rail-wrap">
+  <div class="mode-rail">
+    <div class="mode-tab active" data-mode="image-film" onclick="switchMode('image-film')">图片成片</div>
+    <div class="mode-tab" data-mode="video-dub" onclick="switchMode('video-dub')">视频配音</div>
+    <div class="mode-tab" data-mode="speech-cut" onclick="switchMode('speech-cut')">出镜口播</div>
+    <div class="mode-tab" data-mode="storyboard" onclick="switchMode('storyboard')">切片分镜</div>
+  </div>
+</div>
+
+<!-- 主工作区滚动视窗 -->
+<main class="workbench-scroll">
+
+  <!-- 物料输入卡片 (根据四大版块动态切换) -->
+  <section class="wb-card" id="material-card">
+    <div class="card-head">
+      <span class="card-title" id="material-title">第 1 步 · 实拍素材组织</span>
+      <span class="card-hint" id="material-hint">已选 0 / 9 张</span>
+    </div>
+
+    <!-- 版块 1: 图片成片九宫格 (发朋友圈式) -->
+    <div id="pane-image-film">
+      <div class="photo-grid" id="photo-grid-box">
+        <div class="photo-add-box" onclick="triggerPhotoPick()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span class="photo-add-text">添加实拍图</span>
+        </div>
+      </div>
+      <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
+    </div>
+
+    <!-- 版块 2: 视频配音上传 -->
+    <div id="pane-video-dub" style="display:none;">
+      <div class="video-upload-box" id="dub-upload-box" onclick="triggerVideoPick('dub')">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="video-upload-title">点击上传实拍视频</div>
+        <div class="video-upload-sub">支持 MP4 / MOV · AI 情绪自适应配音与避让混音</div>
+      </div>
+      <div id="dub-video-preview" style="display:none;" class="video-preview-wrap">
+        <video id="dub-preview-el" class="video-preview-el" controls playsinline></video>
+        <span class="video-info-tag" id="dub-info-tag">1080P · 00:15</span>
+      </div>
+      <input type="file" id="dub-file-input" accept="video/mp4,video/quicktime" style="display:none" onchange="handleVideoUpload(event, 'dub')">
+    </div>
+
+    <!-- 版块 3: 出镜口播上传 -->
+    <div id="pane-speech-cut" style="display:none;">
+      <div class="video-upload-box" id="speech-upload-box" onclick="triggerVideoPick('speech')">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <div class="video-upload-title">上传真人出镜录像</div>
+        <div class="video-upload-sub">保留真实原声 · 剪口落在呼吸停顿处 · 双机位防跳切</div>
+      </div>
+      <div id="speech-video-preview" style="display:none;" class="video-preview-wrap">
+        <video id="speech-preview-el" class="video-preview-el" controls playsinline></video>
+        <span class="video-info-tag" id="speech-info-tag">真人出镜 · 已就绪</span>
+      </div>
+      <input type="file" id="speech-file-input" accept="video/mp4,video/quicktime" style="display:none" onchange="handleVideoUpload(event, 'speech')">
+    </div>
+
+    <!-- 版块 4: 切片分镜 -->
+    <div id="pane-storyboard" style="display:none;">
+      <div class="storyboard-options">
+        <div class="sb-opt-pill active" id="sb-opt-direct" onclick="switchStoryboardSolution('direct')">原片直出 (保原声)</div>
+        <div class="sb-opt-pill" id="sb-opt-dub" onclick="switchStoryboardSolution('dub')">AI 配音 (写词解说)</div>
+      </div>
+      <div class="video-upload-box" id="storyboard-upload-box" onclick="triggerVideoPick('storyboard')">
+        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+        <div class="video-upload-title">添加实拍分镜头 (支持 2~9 段)</div>
+        <div class="video-upload-sub" id="sb-solution-sub">自动识别分段、消除多余气口并无缝转场</div>
+      </div>
+      <div id="sb-clips-list" style="display:none; flex-direction:column; gap:6px;"></div>
+      <input type="file" id="storyboard-file-input" multiple accept="video/mp4,video/quicktime" style="display:none" onchange="handleVideoUpload(event, 'storyboard')">
+    </div>
+  </section>
+
+  <!-- 第 2 步: 核心诉求 (留空 AI 自动提炼) -->
+  <section class="wb-card">
+    <div class="card-head">
+      <span class="card-title">第 2 步 · 核心诉求与卖点</span>
+      <span class="card-hint">留空由 AI 导演全自动规划</span>
+    </div>
+    <textarea class="prompt-textarea" id="prompt-input" maxlength="300" placeholder="例如：秋冬重磅羊绒大衣，版型挺括垂顺，显瘦百搭..."></textarea>
+    <div class="prompt-chips-scroll" id="prompt-chips-container">
+      <!-- 动态插入场景标签 -->
+    </div>
+  </section>
+
+  <!-- 核心杀手锏: 矩阵赛马 (一次出几条) -->
+  <section class="race-box">
+    <div class="race-header">
+      <span class="race-title">矩阵赛马 · 一次出几条</span>
+      <span class="race-badge" id="race-cost-badge">3 条 · 600 算力</span>
+    </div>
+    <div class="race-quick-row">
+      <div class="race-pill" onclick="setBatchCount(1)">1 条</div>
+      <div class="race-pill active" onclick="setBatchCount(3)">3 条 (推荐)</div>
+      <div class="race-pill" onclick="setBatchCount(5)">5 条</div>
+      <div class="race-pill" onclick="setBatchCount(10)">10 条</div>
+    </div>
+    <div class="race-slider-row">
+      <input type="range" class="race-slider" id="race-range" min="1" max="10" step="1" value="3" oninput="onRaceSliderChange(this.value)">
+    </div>
+    <div class="race-desc">
+      单次裂变多版本成片，叙事角度、运镜与吸睛点条条不同，专为投流测款与矩阵赛马而生。
+    </div>
+  </section>
+
+</main>
+
+<!-- 吸底常驻操作台 (第 3 步) -->
+<footer class="bottom-dock">
+  <div class="dock-info-row">
+    <span>单条消耗 200 算力</span>
+    <span id="dock-total-cost">总计消耗 600 算力</span>
+  </div>
+  <button class="btn-submit-main" onclick="triggerProduce()">
+    <span id="btn-submit-text">第 3 步 · 立即生成 3 条带货视频 (60秒极速交付)</span>
+    <svg viewBox="0 0 100 100"><polygon points="20,10 90,50 20,90"/></svg>
+  </button>
+</footer>
+
+<!-- 任务生成进度弹窗 -->
+<div class="modal-backdrop" id="producing-modal">
+  <div class="producing-box">
+    <div class="spin-ring"></div>
+    <div class="producing-title">AI 智能导演编排中</div>
+    <div class="producing-step" id="producing-step-text">正在统筹分镜、生成带货音色与发丝字幕...</div>
+    <div class="producing-progress">
+      <div class="producing-bar" id="producing-bar-el"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 全屏沉浸交付面板 (画面 3) -->
+<div class="delivery-sheet" id="delivery-sheet">
+  <div class="delivery-nav">
+    <span class="delivery-nav-title">商业成片五件套交付</span>
+    <span class="delivery-close" onclick="closeDelivery()">完成 / 返回</span>
+  </div>
+
+  <!-- 赛马版本切换条 (单次出的多条视频无缝切换) -->
+  <div class="race-version-bar" id="delivery-version-bar">
+    <!-- 动态注入版本 1 / 2 / 3 -->
+  </div>
+
+  <div class="delivery-content">
+    <div class="delivery-player-box">
+      <video id="delivery-player" class="delivery-video-el" controls playsinline></video>
+    </div>
+
+    <!-- 商业发布五件套 -->
+    <div class="publish-deck">
+      <div class="publish-deck-title">
+        <span>带货发布方案</span>
+        <span style="font-size:11px;color:var(--text-level4);" id="delivery-angle-tag">痛点反转</span>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-level4);margin-bottom:4px;">爆款文案</div>
+        <div class="publish-field" id="pub-caption">加载中...</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-level4);margin-bottom:4px;">封面吸睛大字</div>
+        <div class="publish-field" id="pub-cover-title">加载中...</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-level4);margin-bottom:4px;">置顶带货评论</div>
+        <div class="publish-field" id="pub-comment">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="delivery-dock">
+    <button class="btn-save-video" onclick="downloadCurrentVideo()">保存成片到相册</button>
+    <button class="btn-copy-kit" onclick="copyPublishKit()">一键复制文案</button>
+  </div>
+</div>
+
+<!-- 个人中心 / 登录抽屉 -->
+<div class="profile-drawer" id="profile-drawer" onclick="onDrawerBackdropClick(event)">
+  <div class="drawer-panel" onclick="event.stopPropagation()">
+    <div class="drawer-head">
+      <span class="drawer-title">个人与算力中心</span>
+      <span class="drawer-close" onclick="closeProfileDrawer()">关闭</span>
+    </div>
+
+    <div class="login-card" id="user-info-box" style="display:none;">
+      <div style="font-size:13px;color:#fff;" id="profile-phone-text">138****0000</div>
+      <div style="font-size:12px;color:var(--text-level4);" id="profile-credits-text">可用算力: 2,850</div>
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <button class="btn-login-do" onclick="buyBoost()" style="height:34px;font-size:12px;">+ 加油包 ¥9.9 (1000算力)</button>
+        <button class="btn-login-do" onclick="logout()" style="height:34px;font-size:12px;background:transparent;">退出登录</button>
+      </div>
+    </div>
+
+    <div class="login-card" id="login-form-box">
+      <div style="font-size:13px;color:#fff;font-weight:500;">快捷手机登录</div>
+      <input type="tel" class="login-input" id="login-phone" maxlength="11" placeholder="输入手机号">
+      <div class="code-row">
+        <input type="number" class="login-input" id="login-code" placeholder="验证码">
+        <button class="btn-send-code" id="btn-send-code" onclick="sendSmsCode()">获取验证码</button>
+      </div>
+      <button class="btn-login-do" onclick="submitLogin()">登录 / 注册</button>
+    </div>
+
+    <div style="font-size:11px;color:var(--text-level4);line-height:1.6;margin-top:auto;">
+      简兮 JANSEE · 全栈 AI 短视频重构工场<br>
+      © 2026 蜀ICP备2026046708号
+    </div>
+  </div>
+</div>
+
+<div class="toast-bar" id="toast-bar"></div>
+
+<script>
+// ==========================================
+// 全局状态模型
+// ==========================================
+let currentScene = 'ecommerce'; // ecommerce | local | life
+let currentMode = 'image-film';  // image-film | video-dub | speech-cut | storyboard
+let batchCount = 3;             // 赛马数量 (默认 3 条)
+let uploadedPhotos = [];         // 图片成片: [{ file, url }] 最多 9 张
+let uploadedVideo = null;        // 单段视频物料
+let storyboardClips = [];       // 切片分镜素材列表
+let storyboardSolution = 'direct'; // direct | dub
+let userCredits = 2850;
+let userToken = '';
+let activeDeliveryVersions = [];
+let activeDeliveryVerIdx = 0;
+
+// 三大商业场景灵感词库 (业务大脑)
+const SCENE_CONFIG = {
+  ecommerce: {
+    placeholder: "输入商品核心卖点（例如：秋冬重磅双面羊绒大衣，版型挺括垂顺，显瘦百搭，实穿保暖...）",
+    chips: ["垂感抗皱", "纯手工双面呢", "显瘦遮肉", "限时特惠", "微距质感"]
+  },
+  local: {
+    placeholder: "输入门店特色或探店亮点（例如：巷子里的十年炭火老火锅，手工现撕鲜毛肚，九宫格经典牛油...）",
+    chips: ["老字号地道味", "手工现做", "到店立减", "市井烟火气", "招牌必点"]
+  },
+  life: {
+    placeholder: "输入生活日常或情感共鸣（例如：风吹过麦浪的下午，把日子过成自己喜欢的节奏...）",
+    chips: ["治愈慢生活", "松弛感", "沉浸式记录", "光影氛围感", "朋友圈质感"]
+  }
+};
+
+// 页面初始化
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    userToken = localStorage.getItem("jansee.auth.token") || "";
+  } catch (e) {}
+  updateSceneView();
+  syncBatchUI();
+  if (userToken) fetchUserProfile();
+});
+
+// Toast 轻提示
+function showToast(msg) {
+  const el = document.getElementById("toast-bar");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+// 场景切换 (轨 A)
+function switchScene(sceneKey) {
+  currentScene = sceneKey;
+  document.querySelectorAll(".scene-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.scene === sceneKey);
+  });
+  updateSceneView();
+}
+
+function updateSceneView() {
+  const cfg = SCENE_CONFIG[currentScene] || SCENE_CONFIG.ecommerce;
+  const area = document.getElementById("prompt-input");
+  if (area) area.placeholder = cfg.placeholder;
+
+  const chipsBox = document.getElementById("prompt-chips-container");
+  if (chipsBox) {
+    chipsBox.innerHTML = cfg.chips.map(chip =>
+      `<div class="prompt-chip" onclick="appendChip('${chip}')">${chip}</div>`
+    ).join("");
+  }
+}
+
+function appendChip(txt) {
+  const area = document.getElementById("prompt-input");
+  if (!area) return;
+  const cur = area.value.trim();
+  area.value = cur ? `${cur}，${txt}` : txt;
+}
+
+// 版块切换 (轨 B)
+function switchMode(modeKey) {
+  currentMode = modeKey;
+  document.querySelectorAll(".mode-tab").forEach(el => {
+    el.classList.toggle("active", el.dataset.mode === modeKey);
+  });
+
+  document.getElementById("pane-image-film").style.display = modeKey === 'image-film' ? 'block' : 'none';
+  document.getElementById("pane-video-dub").style.display = modeKey === 'video-dub' ? 'block' : 'none';
+  document.getElementById("pane-speech-cut").style.display = modeKey === 'speech-cut' ? 'block' : 'none';
+  document.getElementById("pane-storyboard").style.display = modeKey === 'storyboard' ? 'block' : 'none';
+
+  const hintEl = document.getElementById("material-hint");
+  if (modeKey === 'image-film') {
+    hintEl.textContent = `已选 ${uploadedPhotos.length} / 9 张`;
+  } else if (modeKey === 'storyboard') {
+    hintEl.textContent = `已选 ${storyboardClips.length} / 9 段`;
+  } else {
+    hintEl.textContent = uploadedVideo ? "视频已就绪" : "待上传视频";
+  }
+}
+
+// 赛马 (一次出几条) 联动
+function setBatchCount(cnt) {
+  batchCount = Math.max(1, Math.min(10, parseInt(cnt, 10) || 1));
+  const slider = document.getElementById("race-range");
+  if (slider) slider.value = batchCount;
+  syncBatchUI();
+}
+
+function onRaceSliderChange(val) {
+  batchCount = Math.max(1, Math.min(10, parseInt(val, 10) || 1));
+  syncBatchUI();
+}
+
+function syncBatchUI() {
+  document.querySelectorAll(".race-pill").forEach(el => {
+    const num = parseInt(el.textContent, 10);
+    el.classList.toggle("active", num === batchCount);
+  });
+  const cost = batchCount * 200;
+  const badge = document.getElementById("race-cost-badge");
+  if (badge) badge.textContent = `${batchCount} 条 · ${cost} 算力`;
+
+  const dockCost = document.getElementById("dock-total-cost");
+  if (dockCost) dockCost.textContent = `总计消耗 ${cost} 算力`;
+
+  const btnText = document.getElementById("btn-submit-text");
+  if (btnText) btnText.textContent = `第 3 步 · 立即生成 ${batchCount} 条带货视频 (60秒极速交付)`;
+}
+
+// 图片成片: 选图与九宫格
+function triggerPhotoPick() {
+  if (uploadedPhotos.length >= 9) {
+    showToast("商品实拍图已达到 9 张上限");
+    return;
+  }
+  document.getElementById("photo-file-input").click();
+}
+
+function handlePhotoUpload(e) {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  const remain = 9 - uploadedPhotos.length;
+  if (remain <= 0) {
+    showToast("最多只支持上传 9 张实拍图");
+    return;
+  }
+  const toAdd = files.slice(0, remain);
+  toAdd.forEach(file => {
+    const url = URL.createObjectURL(file);
+    uploadedPhotos.push({ file, url });
+  });
+  renderPhotoGrid();
+  e.target.value = "";
+}
+
+function removePhoto(idx) {
+  if (uploadedPhotos[idx]) {
+    URL.revokeObjectURL(uploadedPhotos[idx].url);
+    uploadedPhotos.splice(idx, 1);
+    renderPhotoGrid();
+  }
+}
+
+function renderPhotoGrid() {
+  const box = document.getElementById("photo-grid-box");
+  if (!box) return;
+  let html = uploadedPhotos.map((item, idx) => `
+    <div class="photo-slot">
+      <img src="${item.url}" class="photo-img">
+      <span class="photo-badge">0${idx + 1}</span>
+      <div class="photo-del" onclick="removePhoto(${idx})">×</div>
+    </div>
+  `).join("");
+
+  if (uploadedPhotos.length < 9) {
+    html += `
+      <div class="photo-add-box" onclick="triggerPhotoPick()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span class="photo-add-text">添加实拍图</span>
+      </div>
+    `;
+  }
+  box.innerHTML = html;
+  document.getElementById("material-hint").textContent = `已选 ${uploadedPhotos.length} / 9 张`;
+}
+
+// 视频上传
+function triggerVideoPick(type) {
+  if (type === 'dub') document.getElementById("dub-file-input").click();
+  else if (type === 'speech') document.getElementById("speech-file-input").click();
+  else if (type === 'storyboard') document.getElementById("storyboard-file-input").click();
+}
+
+function handleVideoUpload(e, type) {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+
+  if (type === 'storyboard') {
+    files.forEach(f => {
+      const url = URL.createObjectURL(f);
+      storyboardClips.push({ file: f, url, name: f.name });
+    });
+    renderStoryboardClips();
+    e.target.value = "";
+    return;
+  }
+
+  const file = files[0];
+  const url = URL.createObjectURL(file);
+  uploadedVideo = { file, url, name: file.name };
+
+  if (type === 'dub') {
+    document.getElementById("dub-upload-box").style.display = "none";
+    const prev = document.getElementById("dub-video-preview");
+    prev.style.display = "block";
+    document.getElementById("dub-preview-el").src = url;
+  } else if (type === 'speech') {
+    document.getElementById("speech-upload-box").style.display = "none";
+    const prev = document.getElementById("speech-video-preview");
+    prev.style.display = "block";
+    document.getElementById("speech-preview-el").src = url;
+  }
+  document.getElementById("material-hint").textContent = "视频已就绪";
+  e.target.value = "";
+}
+
+function switchStoryboardSolution(sol) {
+  storyboardSolution = sol;
+  document.getElementById("sb-opt-direct").classList.toggle("active", sol === 'direct');
+  document.getElementById("sb-opt-dub").classList.toggle("active", sol === 'dub');
+  document.getElementById("sb-solution-sub").textContent = sol === 'direct'
+    ? "原片直出：识别废话与停顿并剪除，保留本人原声"
+    : "AI 配音：大模型逐镜配解说词并替换背景原声";
+}
+
+function renderStoryboardClips() {
+  const box = document.getElementById("sb-clips-list");
+  if (!box) return;
+  if (!storyboardClips.length) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+  box.style.display = "flex";
+  box.innerHTML = storyboardClips.map((clip, idx) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);padding:6px 10px;border-radius:2px;font-size:12px;">
+      <span style="color:#fff;">分镜 0${idx + 1} · ${clip.name}</span>
+      <span style="color:var(--text-level4);cursor:pointer;" onclick="removeStoryboardClip(${idx})">移除</span>
+    </div>
+  `).join("");
+  document.getElementById("material-hint").textContent = `已选 ${storyboardClips.length} / 9 段`;
+}
+
+function removeStoryboardClip(idx) {
+  if (storyboardClips[idx]) {
+    URL.revokeObjectURL(storyboardClips[idx].url);
+    storyboardClips.splice(idx, 1);
+    renderStoryboardClips();
+  }
+}
+
+// 立即生成 (第 3 步)
+async function triggerProduce() {
+  if (currentMode === 'image-film' && uploadedPhotos.length === 0) {
+    showToast("请至少添加 1 张商品实拍图");
+    return;
+  }
+  if ((currentMode === 'video-dub' || currentMode === 'speech-cut') && !uploadedVideo) {
+    showToast("请先上传视频素材");
+    return;
+  }
+  if (currentMode === 'storyboard' && storyboardClips.length < 2) {
+    showToast("切片分镜至少需要添加 2 段分镜头");
+    return;
+  }
+
+  const prompt = (document.getElementById("prompt-input").value || "").trim();
+  const modal = document.getElementById("producing-modal");
+  const bar = document.getElementById("producing-bar-el");
+  const stepText = document.getElementById("producing-step-text");
+  modal.classList.add("active");
+  bar.style.width = "15%";
+  stepText.textContent = "AI 智能导演正在统筹视觉与分镜脚本...";
+
+  let progress = 15;
+  const timer = setInterval(() => {
+    progress = Math.min(92, progress + Math.floor(Math.random() * 12) + 6);
+    bar.style.width = progress + "%";
+    if (progress > 40 && progress < 70) {
+      stepText.textContent = "正在渲染发丝级微距字幕与 Sidechain 避让混音...";
+    } else if (progress >= 70) {
+      stepText.textContent = "正在压制 1080P 高清成片与生成五件套...";
+    }
+  }, 400);
+
+  // 模拟 / 调用真实合成流水线
+  try {
+    await new Promise(r => setTimeout(r, 2600));
+    clearInterval(timer);
+    bar.style.width = "100%";
+    stepText.textContent = "出片完成！即将呈现全屏商业交付...";
+    await new Promise(r => setTimeout(r, 350));
+    modal.classList.remove("active");
+
+    // 赛马版本交付构建
+    activeDeliveryVersions = [];
+    const angles = ["痛点反转", "微距质感", "促单转化", "生活共鸣", "细节爆发", "限时特惠", "矩阵赛马7", "矩阵赛马8", "矩阵赛马9", "矩阵赛马10"];
+    for (let i = 0; i < batchCount; i++) {
+      activeDeliveryVersions.push({
+        videoUrl: "/assets/gemini_generated_video_daa127b4.mp4",
+        coverUrl: "/assets/poster-daa127b4.jpg",
+        angle: angles[i] || `版本 0${i + 1}`,
+        publish: {
+          caption: `【${angles[i] || '爆款成片'}】${prompt || '秋冬重磅羊绒大衣，版型挺括显瘦。'}无论通勤还是周末聚会，一件穿出高级松弛感！#简兮JANSEE #好物推荐`,
+          cover_title: `${angles[i] || '高级质感'} · 显瘦天花板`,
+          comment: "已为姐妹们锁定官方正品链接，评论区扣 1 秒发同款特惠福利！"
+        }
+      });
+    }
+    openDeliveryTheater();
+  } catch (err) {
+    clearInterval(timer);
+    modal.classList.remove("active");
+    showToast("生成异常: " + (err.message || "请稍后重试"));
+  }
+}
+
+// 交付看板展示与版本赛马切换 (画面 3)
+function openDeliveryTheater() {
+  const sheet = document.getElementById("delivery-sheet");
+  const bar = document.getElementById("delivery-version-bar");
+  if (!sheet || !bar) return;
+
+  bar.innerHTML = activeDeliveryVersions.map((v, idx) => `
+    <div class="ver-pill ${idx === 0 ? 'active' : ''}" onclick="switchDeliveryVersion(${idx})">
+      版本 ${idx + 1} · ${v.angle}
+    </div>
+  `).join("");
+
+  activeDeliveryVerIdx = 0;
+  renderCurrentDeliveryVersion();
+  sheet.classList.add("active");
+}
+
+function switchDeliveryVersion(idx) {
+  if (!activeDeliveryVersions[idx]) return;
+  activeDeliveryVerIdx = idx;
+  document.querySelectorAll(".ver-pill").forEach((el, i) => {
+    el.classList.toggle("active", i === idx);
+  });
+  renderCurrentDeliveryVersion();
+}
+
+function renderCurrentDeliveryVersion() {
+  const item = activeDeliveryVersions[activeDeliveryVerIdx];
+  if (!item) return;
+
+  const player = document.getElementById("delivery-player");
+  if (player && item.videoUrl) {
+    player.src = item.videoUrl;
+    player.load();
+    player.play().catch(() => {});
+  }
+  document.getElementById("delivery-angle-tag").textContent = item.angle;
+  document.getElementById("pub-caption").textContent = item.publish.caption;
+  document.getElementById("pub-cover-title").textContent = item.publish.cover_title;
+  document.getElementById("pub-comment").textContent = item.publish.comment;
+}
+
+function closeDelivery() {
+  const sheet = document.getElementById("delivery-sheet");
+  if (sheet) sheet.classList.remove("active");
+  const player = document.getElementById("delivery-player");
+  if (player) player.pause();
+}
+
+function downloadCurrentVideo() {
+  const item = activeDeliveryVersions[activeDeliveryVerIdx];
+  if (!item || !item.videoUrl) return;
+  const a = document.createElement("a");
+  a.href = item.videoUrl;
+  a.download = `jansee_video_v${activeDeliveryVerIdx + 1}.mp4`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast("成片已开始保存至本地相册！");
+}
+
+function copyPublishKit() {
+  const item = activeDeliveryVersions[activeDeliveryVerIdx];
+  if (!item) return;
+  const fullText = `【爆款正文】\n${item.publish.caption}\n\n【封面大字】\n${item.publish.cover_title}\n\n【置顶评论】\n${item.publish.comment}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(fullText).then(() => {
+      showToast("商业发布五件套文案已全量复制！");
+    }).catch(() => fallbackCopy(fullText));
+  } else {
+    fallbackCopy(fullText);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  showToast("商业发布五件套文案已全量复制！");
+}
+
+// 个人中心与登录
+function openProfileDrawer() {
+  document.getElementById("profile-drawer").classList.add("active");
+}
+function closeProfileDrawer() {
+  document.getElementById("profile-drawer").classList.remove("active");
+}
+function onDrawerBackdropClick(e) {
+  if (e.target.id === "profile-drawer") closeProfileDrawer();
+}
+
+async function fetchUserProfile() {
+  try {
+    const res = await fetch("/api/v1/user/profile", {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.user) {
+      userCredits = data.user.credits || userCredits;
+      document.getElementById("header-credits-val").textContent = `${userCredits.toLocaleString()} 算力`;
+      document.getElementById("profile-phone-text").textContent = data.user.phone || "已登录用户";
+      document.getElementById("profile-credits-text").textContent = `可用算力: ${userCredits.toLocaleString()}`;
+      document.getElementById("login-form-box").style.display = "none";
+      document.getElementById("user-info-box").style.display = "block";
+    }
+  } catch (e) {}
+}
+
+let smsCountdown = 0;
+async function sendSmsCode() {
+  if (smsCountdown > 0) return;
+  const phone = (document.getElementById("login-phone").value || "").trim();
+  if (!/^1\d{10}$/.test(phone)) {
+    showToast("请输入正确的 11 位手机号码");
+    return;
+  }
+  const btn = document.getElementById("btn-send-code");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/v1/auth/send-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.message || "发送失败");
+    showToast("验证码已发送，请注意查收短信");
+    smsCountdown = 60;
+    const t = setInterval(() => {
+      smsCountdown--;
+      btn.textContent = `${smsCountdown}s 后重发`;
+      if (smsCountdown <= 0) {
+        clearInterval(t);
+        btn.textContent = "获取验证码";
+        btn.disabled = false;
+      }
+    }, 1000);
+  } catch (err) {
+    btn.disabled = false;
+    showToast("发送异常: " + err.message);
+  }
+}
+
+async function submitLogin() {
+  const phone = (document.getElementById("login-phone").value || "").trim();
+  const code = (document.getElementById("login-code").value || "").trim();
+  if (!/^1\d{10}$/.test(phone)) {
+    showToast("请输入正确的手机号");
+    return;
+  }
+  if (!code) {
+    showToast("请输入短信验证码");
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, code })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.token) throw new Error(d.message || "登录失败");
+    userToken = d.token;
+    try { localStorage.setItem("jansee.auth.token", userToken); } catch (e) {}
+    showToast("登录成功！");
+    fetchUserProfile();
+  } catch (err) {
+    showToast("登录异常: " + err.message);
+  }
+}
+
+function logout() {
+  userToken = '';
+  try { localStorage.removeItem("jansee.auth.token"); } catch (e) {}
+  document.getElementById("login-form-box").style.display = "block";
+  document.getElementById("user-info-box").style.display = "none";
+  showToast("已退出当前账号");
+}
+
+function buyBoost() {
+  // 极简拉起支付宝支付充值 9.9 元加油包
+  showToast("正在拉起支付宝收银台...");
+  window.open("/#pricing", "_blank");
+}
+</script>
+</body>
+</html>
