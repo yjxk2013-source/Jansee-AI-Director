@@ -8512,7 +8512,7 @@
         <div class="refund-detail-row"><span class="refund-detail-label">应付金额</span> <span class="refund-detail-val"
             style="color:#fff;font-size:15px;font-weight:600" id="cashierOrderAmount">¥9.90</span></div>
         <div class="refund-detail-row"><span class="refund-detail-label">支付通道</span><span
-            style="font-size:12px;color:#e4e4e7">JSAPI 支付</span></div>
+            style="font-size:12px;color:#e4e4e7">支付宝支付</span></div>
       </div>
     </div>
   </div>
@@ -8588,7 +8588,7 @@ function janseeJsapiQrMount() {
   const c = document.createElement("div");
   c.id = "jansee-pay-embed";
   c.style.cssText = "margin-top:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.025);border-radius:2px;padding:14px;text-align:center";
-  c.innerHTML = '<div style="font-size:13px;font-weight:600;color:#fff">JSAPI 扫码付款</div><div id="jansee-qr-slot" style="margin-top:10px;display:inline-block;width:220px;height:220px;background:rgba(255,255,255,.06);border-radius:2px;line-height:220px;font-size:12px;color:#a1a1aa">正在生成付款码…</div><div id="jansee-qr-status" style="margin-top:10px;font-size:12px;color:#d4d4d8">付款成功后积分自动到账</div><button type="button" style="margin-top:12px;height:34px;padding:0 22px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.2);border-radius:2px;color:#e4e4e7;font-size:12px;cursor:pointer" onclick="closeCashierModal()">取消支付</button>';
+  c.innerHTML = '<div style="font-size:13px;font-weight:600;color:#fff">支付宝扫码付款</div><div id="jansee-qr-slot" style="margin-top:10px;display:inline-block;width:220px;height:220px;background:rgba(255,255,255,.06);border-radius:2px;line-height:220px;font-size:12px;color:#a1a1aa">正在生成付款码…</div><div id="jansee-qr-status" style="margin-top:10px;font-size:12px;color:#d4d4d8">付款成功后积分自动到账</div><button type="button" style="margin-top:12px;height:34px;padding:0 22px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.2);border-radius:2px;color:#e4e4e7;font-size:12px;cursor:pointer" onclick="closeCashierModal()">取消支付</button>';
   panel.appendChild(c);
   janseeJsapiQrArmWatchdog();
   return true;
@@ -8599,11 +8599,11 @@ function janseeJsapiQrFill(t, n) {
   if (!c) return false;
   if (janseeJsapiQrWatchdog) { clearTimeout(janseeJsapiQrWatchdog); janseeJsapiQrWatchdog = null; }
   const s = document.getElementById("jansee-qr-slot");
-  s && (s.style.lineHeight = "normal", s.style.background = "#fff", s.style.padding = "8px", s.innerHTML = '<img src="' + t + '" alt="JSAPI 付款码" style="display:block;width:204px;height:204px">');
+  s && (s.style.lineHeight = "normal", s.style.background = "#fff", s.style.padding = "8px", s.innerHTML = '<img src="' + t + '" alt="支付宝付款码" style="display:block;width:204px;height:204px">');
   const h = c.querySelector("div");
-  h && (h.innerHTML = 'JSAPI 扫码付款 <span style="font-weight:700">¥' + Number(n || 0).toFixed(2) + "</span>");
+  h && (h.innerHTML = '支付宝扫码付款 <span style="font-weight:700">¥' + Number(n || 0).toFixed(2) + "</span>");
   const g = document.getElementById("jansee-qr-status");
-  g && (g.textContent = "请使用手机扫码完成支付，支付成功后自动到账");
+  g && (g.textContent = "请使用支付宝 App 扫码完成支付，支付成功后自动到账");
   return true;
 }
 
