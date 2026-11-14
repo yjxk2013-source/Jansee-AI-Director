@@ -335,16 +335,20 @@ function sendJson(res, statusCode, code, msg, data = {}) {
   if (statusCode >= 400) {
     recordAdminError(statusCode, code, msg);
   }
-  res.writeHead(statusCode, {
+  const isProxied = Boolean(res?.req?.headers?.['x-forwarded-for'] || res?.req?.headers?.['x-real-ip']);
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store, no-cache, must-revalidate',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-session-token, x-admin-token',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'SAMEORIGIN',
-    'Referrer-Policy': 'strict-origin-when-cross-origin'
-  });
+  };
+  if (!isProxied) {
+    headers['X-Content-Type-Options'] = 'nosniff';
+    headers['X-Frame-Options'] = 'SAMEORIGIN';
+    headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+  }
+  res.writeHead(statusCode, headers);
   res.end(JSON.stringify({
     code,
     msg,
@@ -472,14 +476,17 @@ function serveStaticFile(req, res, filePath) {
     const isDownload = urlObj.searchParams.get('download') === '1' || urlObj.searchParams.has('download');
     const filename = urlObj.searchParams.get('filename') || `jansee-${path.basename(filePath)}`;
 
+    const isProxied = Boolean(req.headers['x-forwarded-for'] || req.headers['x-real-ip']);
     const baseHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Access-Control-Allow-Headers': '*',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN',
-      'Referrer-Policy': 'strict-origin-when-cross-origin'
     };
+    if (!isProxied) {
+      baseHeaders['X-Content-Type-Options'] = 'nosniff';
+      baseHeaders['X-Frame-Options'] = 'SAMEORIGIN';
+      baseHeaders['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+    }
     // HTML 强制回源校验：安卓 WebView 壳与 iOS 主屏幕图标均直接加载本页，
     // 若被启发式缓存会长期停留在旧界面（新增版块/卡片后用户看不到）。
     // 仅对 html 生效，图片/字体/视频保留浏览器缓存以维持性能。

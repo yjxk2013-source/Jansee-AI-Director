@@ -7381,7 +7381,7 @@
             onclick='toggleBillingCycle("single")'>单月按次购买 (正价)</button></div>
       </div>
       <div class="pricing-grid-container">
-        <div class="pricing-grid frosted">
+        <div class="pricing-grid">
           <div class="pricing-card" data-tier="lite">
             <div class="plan-top">
               <div class="plan-name-row"><span class="plan-name">Lite</span> <span class="plan-tier-tag">轻度体验</span>
@@ -7486,14 +7486,6 @@
                 会员</span> <svg viewBox="0 0 100 100" style="width:7px;height:7px;fill:currentColor">
                 <polygon points="20,10 90,50 20,90" />
               </svg></button>
-          </div>
-        </div>
-        <div class="pricing-frost-overlay">
-          <div class="pricing-frost-card"><span class="pricing-frost-tag">System Upgrade</span>
-            <h3 class="pricing-frost-title" id="frost-title">会员系统正在升级中</h3>
-            <p class="pricing-frost-desc" id="frost-desc">Lite · Plus · Pro · Ultra
-              四档会员购买通道正进行底层算力模型与架构升级，暂时关闭下单；下方【积分加油包】可正常即充即用，敬请期待！</p>
-            <div class="pricing-frost-tiers">LITE · PLUS · PRO · ULTRA</div>
           </div>
         </div>
       </div>
@@ -8615,6 +8607,22 @@
       .nav-hamburger-btn,
       #nav-drawer {
         display: none !important
+      }
+
+      /* 移动端 APP 体验规范：隐藏 PC 端四列会员大表与升级遮罩，聚焦即充即用【积分加油包】 */
+      .pricing-grid,
+      .pricing-cycle-switch,
+      .pricing-frost-overlay {
+        display: none !important
+      }
+
+      .pricing-header .pricing-subtitle {
+        display: none !important
+      }
+
+      .pricing-header .pricing-title {
+        font-size: 20px !important;
+        margin-bottom: 8px !important
       }
 
       #nav-login-btn {
