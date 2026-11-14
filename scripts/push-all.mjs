@@ -36,6 +36,44 @@ function getLocalHead() {
   return runCmd('git rev-parse HEAD');
 }
 
+/**
+ * 第零阶段：推送前安全雷达扫描 (PRE-PUSH SECURITY RADAR)
+ * 严格拦截一切密钥、二进制构建大包与非标音视频大素材
+ */
+function prePushSecurityAudit() {
+  console.log('--- 第零阶段：推送前安全雷达与合规硬扫描 ---');
+  const FORBIDDEN_PATTERNS = [
+    { pattern: /\.keystore$/i, desc: 'Android 签名密钥证书 (*.keystore)' },
+    { pattern: /\.jks$/i, desc: 'Java 密钥库证书 (*.jks)' },
+    { pattern: /apps\/web\/server\/data\/.*\.json$/i, desc: '生产业务订单/用户会话数据 (*.json)' },
+    { pattern: /\.apk$/i, desc: 'Android 打包二进制产物 (*.apk)' },
+    { pattern: /\.aab$/i, desc: 'Android App Bundle 产物 (*.aab)' },
+    { pattern: /\.mp4$/i, desc: '媒体视频文件 (*.mp4)' },
+    { pattern: /\.tar\.gz$/i, desc: '大归档压缩包 (*.tar.gz)' }
+  ];
+
+  // 获取当前 HEAD 中跟踪的所有文件清单
+  const trackedFiles = runCmd('git ls-tree -r --name-only HEAD').split('\n').filter(Boolean);
+  const violations = [];
+
+  for (const file of trackedFiles) {
+    for (const rule of FORBIDDEN_PATTERNS) {
+      if (rule.pattern.test(file)) {
+        violations.push({ file, violation: rule.desc });
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    console.error('\n❌ [严重安全违规] 检测到仓库中包含禁止推送的凭证/大包/媒体文件：');
+    console.table(violations);
+    console.error('\n🚨 推送已被硬性拦截中断！请先使用 git rm --cached 剔除上述违规文件并更新 .gitignore！\n');
+    process.exit(1);
+  }
+
+  console.log('✓ [安全扫描通过] 0 敏感凭证、0 二进制大包、0 冗余媒体，符合大厂级纯代码库规范。\n');
+}
+
 function pushWithRetry(remote, branch, needsProxy, maxRetries = 3) {
   const proxyFlag = needsProxy ? '-c http.proxy=http://127.0.0.1:10808 -c http.sslBackend=openssl -c http.postBuffer=524288000' : '';
   const pushCmd = `git ${proxyFlag} push ${remote} ${branch}`.replace(/\s+/g, ' ').trim();
@@ -73,6 +111,9 @@ async function main() {
 
   const localHead = getLocalHead();
   console.log(`[本地物理 HEAD] -> ${localHead}\n`);
+
+  // 执行推送前安全雷达扫描（第零阶段）
+  prePushSecurityAudit();
 
   console.log('--- 第一阶段：原子化逐仓推送 ---');
   for (const target of TARGET_REMOTES) {
