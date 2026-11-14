@@ -1245,7 +1245,12 @@ export function listCreationHistory(filter = {}) {
     // 落档标题（LLM 主标题）优先；旧任务无落档标题时回落用户输入
     title: t.title || t.input?.title || '',
     thumbnail: t.outputs?.cover || t.outputs?.coverUrl || '',
+    coverUrl: t.outputs?.cover || t.outputs?.coverUrl || '',
+    videoUrl: t.outputs?.video || t.outputs?.videoUrl || t.videoUrl || '',
+    url: t.outputs?.video || t.outputs?.videoUrl || t.videoUrl || '',
     createdAt: t.createdAt,
     duration: t.outputs?.duration || 0,
+    publish: t.outputs?.publish || null,
+    versions: t.outputs?.versions || null,
   }));
 }

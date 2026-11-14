@@ -36,6 +36,7 @@ import {
 } from './storyboard.mjs';
 import { createCreationTask, getCreationTask, listCreationHistory, isCreationTaskExpired } from './creation.mjs';
 import { creationStore } from './creationStore.mjs';
+import { listUserWorks, saveUserWork } from './userWorkStore.mjs';
 import { createUser, getUser, localDate, getUserAuthRecord, setUserPassword, hasPassword, verifyPassword, findUserByPhone, invitedCount, partnerTarget, upgradeToPartner, usersByInviter, updateWithdrawProfile, recordUserVideoCreated, recordUserVideoDownloaded } from './userStore.mjs';
 import { creditStore } from './creditStore.mjs';
 import { chargeForEntry, chargedAmountOf, settleFailure } from './billing.mjs';
@@ -1708,11 +1709,52 @@ const server = http.createServer((req, res) => {
       sendJson(res, 404, 40400, '创作任务不存在或已过期');
       return;
     }
+    if (task && task.status === 'completed' && task.userId) {
+      const vUrl = task.outputs?.video || task.outputs?.videoUrl || task.videoUrl || '';
+      if (vUrl) {
+        saveUserWork(task.userId, {
+          id: task.taskId,
+          title: task.title || task.input?.title || '商业成片',
+          videoUrl: vUrl,
+          url: vUrl,
+          coverUrl: task.outputs?.cover || task.outputs?.coverUrl || '',
+          duration: task.outputs?.duration || 15,
+          publish: task.outputs?.publish || null,
+          versions: task.outputs?.versions || null,
+          createdAt: task.createdAt,
+        });
+      }
+    }
     sendJson(res, 200, 0, '查询成功', task);
     return;
   }
 
-  // S7/S8 创作历史 API：GET /api/v1/creation/history (带用户隔离)
+  // 用户成片作品库 API（支持跨端同步与持久化落盘）：GET /api/v1/user/works 与 POST /api/v1/user/works
+  if (pathname === '/api/v1/user/works') {
+    const currentUserId = sessionUidOf(req);
+    if (!currentUserId) { rejectNoUid(res); return; }
+
+    if (req.method === 'GET') {
+      const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
+      const works = listUserWorks(currentUserId, limit);
+      sendJson(res, 200, 0, '查询成功', { list: works, works, tasks: works });
+      return;
+    }
+
+    if (req.method === 'POST') {
+      safeReadJson(req, res).then((payload) => {
+        if (!payload || (!payload.videoUrl && !payload.url)) {
+          sendJson(res, 400, 40001, '成片视频地址不能为空');
+          return;
+        }
+        const record = saveUserWork(currentUserId, payload);
+        sendJson(res, 200, 0, '同步成功', record);
+      }).catch(() => {});
+      return;
+    }
+  }
+
+  // S7/S8 创作历史 API：GET /api/v1/creation/history (带用户隔离与持久化作品合并)
   if (pathname === '/api/v1/creation/history' && req.method === 'GET') {
     // 必须登录：空 userId 传给 listCreationHistory 会退化成「返回全站任务」，等于作品库公开
     const currentUserId = sessionUidOf(req);
@@ -1727,7 +1769,34 @@ const server = http.createServer((req, res) => {
       status: statusFilter,
       limit,
     });
-    sendJson(res, 200, 0, '查询成功', { tasks: historyList });
+
+    // 联合持久化作品库，确保重启或多端生成均可检索
+    const userWorks = listUserWorks(currentUserId, limit);
+    const existingUrls = new Set(historyList.map(h => h.videoUrl || h.url).filter(Boolean));
+    const mergedList = [...historyList];
+    userWorks.forEach(w => {
+      const u = w.videoUrl || w.url;
+      if (u && !existingUrls.has(u)) {
+        existingUrls.add(u);
+        mergedList.push({
+          taskId: w.id,
+          type: 'commercial_film',
+          status: 'completed',
+          title: w.title,
+          thumbnail: w.coverUrl || '',
+          coverUrl: w.coverUrl || '',
+          videoUrl: u,
+          url: u,
+          createdAt: w.createdAt,
+          duration: w.duration || 15,
+          publish: w.publish || null,
+          versions: w.versions || null,
+        });
+      }
+    });
+    mergedList.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+
+    sendJson(res, 200, 0, '查询成功', { tasks: mergedList, list: mergedList, works: mergedList });
     return;
   }
 
