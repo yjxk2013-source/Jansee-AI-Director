@@ -22,6 +22,7 @@ import { generateDirectorCut, generateConstitutionScript, generatePublishOnly } 
 import { decideVariantLocal } from './prompt/index.js';
 import { videoDurationSec } from '@jansee/video-creator/video/slicer.js';
 import { selectBgmByEmotion } from '@jansee/audio-kit/bgm.js';
+import { hasAudioStream } from '@jansee/ffmpeg-kit/probe.mjs';
 import { startTtsProbe } from './ttsProbe.mjs';
 import { startSpeechAnalyze, startSpeechProduce } from '@jansee/speech-cut';
 import {
@@ -1087,8 +1088,10 @@ const server = http.createServer((req, res) => {
         } catch (e) {
           console.warn('[JANSEE GATEWAY] 素材登记警告:', e.message);
         }
-        console.log(`[JANSEE GATEWAY] 视频素材上传落盘成功: ${filePath} (${durationSec.toFixed(2)}s, mat: ${materialId}, Session: ${sessionId || 'anon'})`);
-        sendJson(res, 200, 0, '上传成功', { videoPath: filePath, uploadDir, durationSec, materialId });
+        let hasAudio = false;
+        try { hasAudio = hasAudioStream(filePath); } catch (e) { hasAudio = false; }
+        console.log(`[JANSEE GATEWAY] 视频素材上传落盘成功: ${filePath} (${durationSec.toFixed(2)}s, audio: ${hasAudio ? 'YES' : 'NO'}, mat: ${materialId}, Session: ${sessionId || 'anon'})`);
+        sendJson(res, 200, 0, '上传成功', { videoPath: filePath, uploadDir, durationSec, materialId, hasAudio });
       });
     });
     req.pipe(ws);
