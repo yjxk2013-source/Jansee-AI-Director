@@ -9331,6 +9331,33 @@ function toggleFaqItem(e) { const t = document.getElementById(`faq-item-${e}`); 
 async function syncUserWorksFromServer() {
   try {
     const apiBase = "function" == typeof window.getJanseeApiBase ? window.getJanseeApiBase() : "";
+    N();
+
+    // 1. 本地存量作品自动上报同步至服务端（解决此前本地生成未上报的问题）
+    if (Array.isArray(D) && D.length > 0) {
+      D.forEach(work => {
+        const u = work.url || work.videoUrl;
+        if (u) {
+          fetch(apiBase + "/api/v1/user/works", {
+            method: "POST",
+            headers: window.janseeAuthHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              id: work.id,
+              title: work.title || "商业成片",
+              videoUrl: u,
+              coverUrl: work.coverUrl || "",
+              duration: work.duration || 15,
+              meta: work.meta || "",
+              publish: work.publish || null,
+              versions: work.versions || null,
+              createdAt: Number(work.createdAt) || Date.now()
+            })
+          }).catch(() => {});
+        }
+      });
+    }
+
+    // 2. 从服务端拉取最新作品并双向合并
     const res = await fetch(apiBase + "/api/v1/user/works?limit=50", {
       headers: window.janseeAuthHeaders()
     });

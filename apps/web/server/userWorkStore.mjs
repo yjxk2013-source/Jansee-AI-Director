@@ -1,6 +1,12 @@
 // 简兮 (JANSEE) · 用户成片作品库持久化存储 (apps/web/server/userWorkStore.mjs)
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { dataFile, readJson, writeJsonAtomic } from './dataStore.mjs';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+const OUTPUTS_DIR = path.resolve(REPO_ROOT, 'storage', 'outputs');
 const WORKS_FILE = dataFile('user_works.json');
 
 function loadStore() {
@@ -16,10 +22,76 @@ function saveStore(data) {
 }
 
 /**
+ * 物理成片目录扫描兜底：当用户成片库缺失但 outputs 物理目录有已生成视频时，自动兜底恢复
+ */
+function scanAndBackfillOutputs(userId) {
+  if (!userId || !fs.existsSync(OUTPUTS_DIR)) return;
+  const store = loadStore();
+  const existingUrls = new Set(store.works.map(w => w.videoUrl || w.url).filter(Boolean));
+
+  try {
+    const entries = fs.readdirSync(OUTPUTS_DIR, { withFileTypes: true });
+    let updated = false;
+
+    entries.forEach(ent => {
+      if (!ent.isDirectory()) return;
+      const subDir = path.join(OUTPUTS_DIR, ent.name);
+      const finalMp4 = path.join(subDir, 'final.mp4');
+      if (!fs.existsSync(finalMp4)) return;
+
+      const stat = fs.statSync(finalMp4);
+      // 仅关联 24 小时内的有效成片
+      if (Date.now() - stat.mtimeMs > 24 * 3600 * 1000) return;
+
+      const webUrl = `/storage/outputs/${ent.name}/final.mp4`;
+      if (existingUrls.has(webUrl)) return;
+
+      const coverJpg = path.join(subDir, 'cover.jpg');
+      const coverUrl = fs.existsSync(coverJpg) ? `/storage/outputs/${ent.name}/cover.jpg` : '';
+
+      let title = '商业成片';
+      let duration = 15;
+      if (ent.name.startsWith('spk_')) title = '出镜口播精修成片';
+      else if (ent.name.startsWith('sb_')) title = '实拍分镜精修成片';
+      else if (ent.name.startsWith('crt_')) title = '图片成片 · 商业带货';
+
+      store.works.push({
+        id: `work_${ent.name}`,
+        userId: String(userId).trim(),
+        title,
+        url: webUrl,
+        videoUrl: webUrl,
+        coverUrl,
+        duration,
+        meta: '1080P · 高清商业交付',
+        publish: {
+          caption: `${title}，AI 智能导演高清重构！`,
+          cover_title: '商业高光 · 精致呈现',
+          comment: '正品现货，欢迎咨询选购！',
+          coverUrl
+        },
+        versions: null,
+        createdAt: stat.mtimeMs || Date.now()
+      });
+      existingUrls.add(webUrl);
+      updated = true;
+    });
+
+    if (updated) {
+      store.works.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+      saveStore(store);
+    }
+  } catch (err) {
+    console.warn('[userWorkStore] 扫描 outputs 自动归集异常:', err.message);
+  }
+}
+
+/**
  * 查询指定用户的历史成片列表（按创建时间倒序）
  */
 export function listUserWorks(userId, limit = 50) {
   if (!userId) return [];
+  scanAndBackfillOutputs(userId);
   const store = loadStore();
   const uidStr = String(userId).trim();
   const userWorks = store.works.filter((w) => String(w.userId).trim() === uidStr);

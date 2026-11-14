@@ -4644,6 +4644,7 @@
                 coverUrl = t.videoUrl.replace(/\/final\.mp4$/, "/cover.jpg");
               }
 
+              saveMobileDeliveredWork({ videoUrl: t.videoUrl, coverUrl: coverUrl, title: "出镜精修成片" });
               activeDeliveryVersions = [{
                 videoUrl: t.videoUrl,
                 coverUrl: coverUrl,
@@ -4724,6 +4725,7 @@
                 coverUrl = t.videoUrl.replace(/\/final\.mp4$/, "/cover.jpg");
               }
 
+              saveMobileDeliveredWork({ videoUrl: t.videoUrl, coverUrl: coverUrl, title: "分镜直出成片" });
               activeDeliveryVersions = [{
                 videoUrl: t.videoUrl,
                 coverUrl: coverUrl,
@@ -4885,6 +4887,7 @@
               }];
             }
 
+            if (Array.isArray(activeDeliveryVersions)) activeDeliveryVersions.forEach(v => saveMobileDeliveredWork(v));
             openDeliveryTheater();
             return;
           }
@@ -5272,6 +5275,59 @@
       loadRecentWorks();
     }
 
+    
+    function saveMobileDeliveredWork(item) {
+      if (!item || (!item.videoUrl && !item.url)) return;
+      const vUrl = item.videoUrl || item.url;
+      const cUrl = item.coverUrl || "";
+      const title = item.title || item.angle || "商业成片";
+      const record = {
+        id: "work_" + Date.now(),
+        title: title,
+        url: vUrl,
+        videoUrl: vUrl,
+        coverUrl: cUrl,
+        duration: item.duration || 15,
+        meta: "1080P · 刚刚生成",
+        publish: item.publish || null,
+        createdAt: Date.now()
+      };
+
+      try {
+        const key = "jansee.auth.works";
+        let list = [];
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) list = JSON.parse(raw);
+        } catch (_) {}
+        if (!Array.isArray(list)) list = [];
+        const exists = list.some(w => (w.videoUrl || w.url) === vUrl);
+        if (!exists) {
+          list.unshift(record);
+          if (list.length > 50) list = list.slice(0, 50);
+          localStorage.setItem(key, JSON.stringify(list));
+        }
+      } catch (_) {}
+
+      try {
+        const token = userToken || (localStorage.getItem("jansee.auth.token") || "");
+        if (token) {
+          fetch("/api/v1/user/works", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify(record)
+          }).catch(() => {});
+        }
+      } catch (_) {}
+
+      if (typeof loadRecentWorks === "function") {
+        setTimeout(loadRecentWorks, 100);
+      }
+    }
+
     async function loadRecentWorks() {
       const container = document.getElementById("profile-works-list");
       if (!container) return;
@@ -5335,6 +5391,41 @@
           }
         }
       } catch (e) { }
+
+      // 本地 localStorage 兜底回显
+      try {
+        const raw = localStorage.getItem("jansee.auth.works");
+        if (raw) {
+          const localList = JSON.parse(raw);
+          if (Array.isArray(localList) && localList.length > 0) {
+            container.innerHTML = localList.slice(0, 10).map(item => {
+              const videoUrl = item.videoUrl || item.url || '';
+              const title = (item.title || "商业成片").replace(/"/g, '&quot;');
+              let timeStr = item.time || "";
+              if (!timeStr && item.createdAt) {
+                const dateObj = new Date(Number(item.createdAt));
+                timeStr = (dateObj.getMonth() + 1) + "/" + dateObj.getDate() + " " + String(dateObj.getHours()).padStart(2, '0') + ":" + String(dateObj.getMinutes()).padStart(2, '0');
+              }
+              timeStr = timeStr || "刚刚";
+              const durStr = item.duration ? (item.duration + "s") : "15s";
+              const safeUrl = videoUrl.replace(/'/g, "\\'");
+              const safeTitle = title.replace(/'/g, "\\'");
+              return `
+                <div class="user-work-card">
+                  <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
+                    <span class="user-work-name">${title}</span>
+                    <span class="user-work-meta">${timeStr} · ${durStr}</span>
+                  </div>
+                  <button type="button" class="user-work-btn" onclick="previewUserWork('${safeUrl}', '${safeTitle}')">预览</button>
+                </div>
+              `;
+            }).join("");
+            const worksEl = document.getElementById("profile-works-val");
+            if (worksEl) worksEl.textContent = String(localList.length);
+            return;
+          }
+        }
+      } catch (_) {}
 
       // 本地已生成的作品回显
       if (activeDeliveryVersions.length > 0) {
