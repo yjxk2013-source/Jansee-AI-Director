@@ -16,7 +16,8 @@
     "check:health": "node scripts/check-health.mjs",
     "test:mocker": "node scripts/run-mocker-test.mjs",
     "build:web": "node scripts/build-web.mjs",
-    "sync:materials": "node scripts/sync-materials.mjs"
+    "sync:materials": "node scripts/sync-materials.mjs",
+    "push:all": "node scripts/push-all.mjs"
   },
   "keywords": [
     "jansee",
