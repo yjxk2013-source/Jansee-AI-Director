@@ -428,17 +428,19 @@ const TOTAL_TIMEOUT_MS = (() => {
 
 export async function callDirectorLLM(prompt, temperature, model = PRIMARY_MODEL) {
   const llmT0 = Date.now();
+  const isGlm = /glm/i.test(String(model));
   const body = {
     model,
     messages: [{ role: 'user', content: prompt }],
     temperature,
     max_tokens: Number(process.env.JX_DIRECTOR_MAX_TOKENS) || 6144,
-    response_format: { type: 'json_object' },
+    // GLM 带有思考链，硅基网关下发 response_format 会引发语法强约束冲突导致返回空或卡死首包；非 GLM 正常下发
+    ...(!isGlm && { response_format: { type: 'json_object' } }),
     stream: true, // 流式：不是为了提速，是为了 12s 内能看到数据在流动，避免被误判为超时
   };
   // 思考控制：GLM 用 reasoning_effort；DeepSeek-V4.1-Flash 显式关闭思考链。
   // 其他模型不下发未支持字段，避免直接 400。
-  if (/glm/i.test(String(model))) body.reasoning_effort = REASONING_EFFORT;
+  if (isGlm) body.reasoning_effort = REASONING_EFFORT;
   else if (/deepseek-v4\.1/i.test(String(model))) body.enable_thinking = false;
 
   const controller = new AbortController();
