@@ -1358,7 +1358,7 @@ function renderMerchantRowHtml(u) {
                       <td>${escapeHtml(o.title || '积分套餐')}</td>
                       <td style="color: var(--accent-emerald);">¥${Number(o.amount || 0).toFixed(2)}</td>
                       <td>+${Number(o.points || 0).toLocaleString()} 点</td>
-                      <td style="font-size: 11px; color: var(--text-l4);">${escapeHtml(o.payChannel || 'alipay')}</td>
+                      <td style="font-size: 11px; color: var(--text-l4);">${escapeHtml(o.payChannel || 'jsapi')}</td>
                       <td style="font-size: 11px; color: var(--text-l4);">${formatTime(o.createdAt)}</td>
                       <td style="font-size: 11px;">
                         ${o.refundable ? `<span style="color: var(--accent-amber);">剩 ${o.remainHours || 72}h 可退</span>` : '<span style="color: var(--text-l4);">已过退款期</span>'}

@@ -672,16 +672,6 @@ const DEFAULT_BOOST_PACKS = [
     tag: '基础补给',
     desc: '得 1,000 积分 · 约 5 次出片 · 单次低至 ¥1.98',
   },
-  {
-    id: 'boost_large',
-    name: '大加油包 · 27 次出片',
-    price: 49.9,
-    strike: '¥99.9',
-    points: 5000,
-    bonusPoints: 500,
-    tag: '立赠 500 积分',
-    desc: '得 5,000 + 加赠 500 = 5,500 积分 · 约 27 次出片',
-  },
 ];
 
 const DEFAULT_MEMBER_PRICING = [

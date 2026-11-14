@@ -58,10 +58,9 @@ import {
   commissionsOf,
 } from './partnerStore.mjs';
 import { createOrder, getOrder, ordersOf } from './payStore.mjs';
-import { createAlipayRouteHandler, alipayReturnUrl } from './alipayRoutes.mjs';
+import { createJsapiRouteHandler, jsapiReturnUrl } from './jsapiRoutes.mjs';
 import { createAdminRouteHandler } from './adminRoutes.mjs';
 import { metrics } from './metrics.mjs';
-import { initAlipay } from './alipayProvider.mjs';
 import { fulfillPaidOrder } from './payFulfillment.mjs';
 import { updateUser } from './userStore.mjs';
 import { generateLlmsTxt, generateLlmsFullTxt, generateGeoNeedsTxt } from './llmsGenerator.mjs';
@@ -378,9 +377,9 @@ function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', 'sessionToken=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly');
 }
 
-// —— 支付宝网页支付路由（下单表单/查单/关单/异步通知/同步回跳页）——
+// —— 统一 JSAPI 聚合支付路由（下单/查单/关单/异步通知/同步回跳页）——
 // 依赖注入避免循环引用：sendJson/safeReadJson 为模块级函数，会话校验直接用 auth 层。
-const handleAlipayRoutes = createAlipayRouteHandler({
+const handleJsapiRoutes = createJsapiRouteHandler({
   sendJson,
   safeReadJson,
   sessionUidOf: (req) => {
@@ -708,8 +707,8 @@ const server = http.createServer((req, res) => {
 
   const rejectNoUid = (res) => sendJson(res, 401, 40101, '未登录或登录已失效，请重新登录');
 
-  // 2.-1 支付宝网页支付路由（checkout / status / close / notify / return）：命中即短路返回
-  if (handleAlipayRoutes(req, res, pathname)) {
+  // 2.-1 统一 JSAPI 支付路由（checkout / status / close / notify / return）：命中即短路返回
+  if (handleJsapiRoutes(req, res, pathname)) {
     return;
   }
 
@@ -1959,7 +1958,7 @@ const server = http.createServer((req, res) => {
         kind: quote.kind,
         tierId: quote.tierId,
         billingMode: payload.billingMode || 'single',
-        channel: payload.channel || payload.payChannel || 'alipay',
+        channel: payload.channel || payload.payChannel || 'jsapi',
       });
       sendJson(res, 200, 0, '订单创建成功', { ...order, orderId: order.id });
     }).catch(() => { });
@@ -2355,17 +2354,8 @@ server.listen(PORT, HOST, async () => {
     console.error(`[JANSEE GATEWAY] 短信通道未就绪: ${sms.reason || '未知原因'} → 登录接口将返回 503`);
   }
   startTtsProbe(); // 腾讯云 TTS 账号级探活：启动 30s 后首探，此后每日 04:00 错峰自检
-  // 支付宝通道启动自检：配置缺失只降级（通道接口报 503），不影响网关其他功能
-  try {
-    const st = initAlipay();
-    if (st.ready) {
-      console.log(`[JANSEE GATEWAY] 支付宝通道: 就绪（${st.sandbox ? '沙箱' : '生产'}，appId=${st.appId.slice(0, 4)}****）回跳地址 ${alipayReturnUrl()}`);
-    } else {
-      console.warn(`[JANSEE GATEWAY] 支付宝通道未就绪: ${st.reason || '未配置'} → 收银台支付宝支付不可用`);
-    }
-  } catch (err) {
-    console.warn(`[JANSEE GATEWAY] 支付宝通道初始化异常: ${err.message}`);
-  }
+  // 统一支付通道自检：全站锁定 JSAPI 聚合支付
+  console.log(`[JANSEE GATEWAY] 统一支付通道: 锁定 JSAPI 聚合支付，回跳地址 ${jsapiReturnUrl()}`);
   await reapZombieTasks(); // 开机收割僵尸任务
   startStorageJanitor(); // 启动存储生命周期定时守护器
 });
