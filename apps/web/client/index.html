@@ -8661,13 +8661,18 @@ window.handleHostVideoChange = function(e) {
   try { hostMaterialUrl = URL.createObjectURL(file); } catch(err){}
   hostMaterialThumb = "";
   hostMaterialUpload = null;
+  hostMaterialHasAudio = true;
   hostPhase = "idle";
   hostWords = [];
   hostSuggestions = [];
   hostTaskId = "";
   renderOtherModeForm(2);
   captureVideoThumbnail(file).then(th => {
-    if (th) { hostMaterialThumb = th; renderOtherModeForm(2); }
+    if (th) {
+      hostMaterialThumb = th;
+      const v = document.getElementById("host-preview-video");
+      if (v) { v.poster = th; } else { renderOtherModeForm(2); }
+    }
   });
   showNotice("zh" === currentLang ? "正在上传口播素材并探测真实时长..." : "Uploading host video...");
   uploadHostMaterial(file);

@@ -2230,6 +2230,175 @@
       opacity: 0.45;
       cursor: not-allowed;
     }
+
+    /* 客户端下载胶囊 (顶栏 28px) */
+    .app-download-capsule {
+      height: 28px;
+      padding: 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-ghost);
+      border-radius: 2px;
+      font-size: 11px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .app-download-capsule:active {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .app-download-capsule svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+    }
+
+    /* 客户端安装指引模态窗 */
+    .install-mask {
+      position: fixed;
+      inset: 0;
+      z-index: 1300;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      padding: 16px;
+    }
+
+    .install-mask.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .install-card {
+      position: relative;
+      width: 100%;
+      max-width: 360px;
+      background: rgba(14, 14, 20, 0.98);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 4px;
+      padding: 22px 18px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9);
+    }
+
+    .install-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .install-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .install-sub {
+      font-size: 11px;
+      color: var(--text-level4);
+      margin-top: 2px;
+    }
+
+    .install-close-btn {
+      width: 26px;
+      height: 26px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      color: var(--text-level4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .install-close-btn svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .install-step-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+    }
+
+    .install-step-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .install-step-text {
+      font-size: 12px;
+      color: var(--text-level2);
+      line-height: 1.5;
+    }
+
+    .install-step-text b {
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .install-apk-btn {
+      width: 100%;
+      height: 42px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 2px;
+      color: #ffffff;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .install-apk-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .install-apk-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+    }
   </style>
 </head>
 
@@ -2243,6 +2412,10 @@
       <span class="brand-sub">Mobile Studio</span>
     </div>
     <div class="header-actions">
+      <div class="app-download-capsule" id="header-download-btn" onclick="handleDownloadAppClick()" title="下载客户端">
+        <svg viewBox="0 0 24 24"><path d="M12 3v13M8 12l4 4 4-4"/><path d="M4 19h16"/></svg>
+        <span>客户端</span>
+      </div>
       <div class="credit-capsule" onclick="handleCreditsCapsuleClick()" title="可用算力 · 会员订阅与充值">
         <div class="credit-dot"></div>
         <span id="header-credits-val">2,850 算力</span>
@@ -2474,6 +2647,8 @@
       </div>
     </div>
   </div>
+
+
 
   <!-- 全屏沉浸交付面板 (画面 3) -->
   <div class="delivery-sheet" id="delivery-sheet">
@@ -2765,6 +2940,22 @@
             </div>
           </div>
 
+          <div class="user-capsule-item" onclick="handleDownloadAppClick()">
+            <div class="user-capsule-left">
+              <span class="user-capsule-icon"><svg viewBox="0 0 24 24">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg></span>
+              <span class="user-capsule-title">下载手机客户端</span>
+            </div>
+            <div class="user-capsule-right">
+              <span class="user-capsule-tag" id="profile-app-tag">Android / iOS</span>
+              <svg class="user-capsule-arrow" viewBox="0 0 10 10">
+                <polygon points="3,2 8,5 3,8" />
+              </svg>
+            </div>
+          </div>
+
           <div class="user-capsule-item" onclick="toggleMobileOrders()">
             <div class="user-capsule-left">
               <span class="user-capsule-icon"><svg viewBox="0 0 24 24">
@@ -2818,6 +3009,8 @@
       </div>
     </div>
   </div>
+
+
 
   <!-- 复用 PC 端标准登录 / 注册模态框 (点击头像未登录时自动唤起) -->
   <div class="auth-mask" id="authMask" onclick="event.target===this&&closeAuthModal()">
@@ -3031,6 +3224,61 @@
     </div>
   </div>
 
+
+
+    <!-- 客户端安装与下载指引模态窗 (iOS 添加至主屏幕 / Android 下载 APK) -->
+  <div class="install-mask" id="appInstallModal" onclick="event.target===this&&closeInstallModal()">
+    <div class="install-card" role="dialog" aria-modal="true">
+      <div class="install-header">
+        <div>
+          <h3 class="install-title" id="install-title-text">安装简兮客户端</h3>
+          <p class="install-sub" id="install-sub-text">极速出片 · 随手拍马上成片</p>
+        </div>
+        <button type="button" class="install-close-btn" onclick="closeInstallModal()" aria-label="关闭">
+          <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+        </button>
+      </div>
+
+      <!-- iOS 设备视图: 指引添加至主屏幕 -->
+      <div id="install-view-ios" style="display:none; flex-direction:column; gap:10px;">
+        <div style="font-size:11.5px; color:var(--text-level3); line-height:1.5;">
+          iOS 版推荐使用「添加到主屏幕」，无需下载安装包，与原生 App 体验一致（支持全屏无地址栏启动、独立桌面图标）：
+        </div>
+        <div class="install-step-item">
+          <div class="install-step-num">1</div>
+          <div class="install-step-text">使用 <b>Safari 浏览器</b> 打开当前页面</div>
+        </div>
+        <div class="install-step-item">
+          <div class="install-step-num">2</div>
+          <div class="install-step-text">点击 Safari 底部中央的 <b>「分享」按钮</b>（带向上箭头的方形图标）</div>
+        </div>
+        <div class="install-step-item">
+          <div class="install-step-num">3</div>
+          <div class="install-step-text">在列表中下滑选择 <b>「添加到主屏幕」</b>，点击右上角「添加」即可随时从桌面打开</div>
+        </div>
+      </div>
+
+      <!-- Android 设备视图: 下载 APK 安装包 -->
+      <div id="install-view-android" style="display:none; flex-direction:column; gap:12px;">
+        <div style="font-size:11.5px; color:var(--text-level3); line-height:1.5;">
+          官方安卓原生客户端 APK 已就绪（约 6.1MB），支持原画质视频录制直传与后台异步出片：
+        </div>
+        <a class="install-apk-btn" id="btn-download-apk" href="/assets/app/jansee.apk" download="jansee.apk" onclick="onApkDownloadClick()">
+          <svg viewBox="0 0 24 24"><path d="M12 3v13M8 12l4 4 4-4"/><path d="M4 19h16"/></svg>
+          <span>立即下载安卓 APK 安装包</span>
+        </a>
+        <div style="font-size:10.5px; color:var(--text-level4); line-height:1.6; background:rgba(255,255,255,0.02); padding:8px; border-radius:2px; border:1px solid rgba(255,255,255,0.08);">
+          首次安装若手机系统提示「未知来源应用」，选择<b>「允许 / 仍要安装」</b>即可，这是安卓官方对应用商店外 APK 的常规安全确认。
+        </div>
+      </div>
+
+      <!-- 微信环境内特殊拦截提示 -->
+      <div id="install-weixin-tip" style="display:none; padding:10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:2px; font-size:11.5px; color:#fde68a; line-height:1.5;">
+        检测到当前处于微信内，直接下载或添加到桌面受限。请点击右上角<b>「···」</b>，选择<b>「在浏览器打开」</b>后即可顺畅安装。
+      </div>
+    </div>
+  </div>
+
   <div class="toast-bar" id="toast-bar"></div>
 
   <script>
@@ -3119,6 +3367,7 @@
       updateHeaderUserDisplay();
       if (userToken) fetchUserProfile();
       fetchPricingConfig();
+      checkClientStandalone();
     });
 
     // Toast 轻提示
@@ -5681,6 +5930,76 @@
     // 保持旧接口兼容调用
     function buyBoost() {
       openSubscribeModal('boost_small');
+    }
+
+    // ==========================================
+    // 客户端下载与安装引导 (iOS 添加至主屏幕 / Android 下载 APK)
+    // ==========================================
+    function handleDownloadAppClick() {
+      const ua = navigator.userAgent || '';
+      const isIos = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(ua);
+      const inWeixin = /MicroMessenger|QQ\//i.test(ua);
+
+      const modal = document.getElementById("appInstallModal");
+      const viewIos = document.getElementById("install-view-ios");
+      const viewAndroid = document.getElementById("install-view-android");
+      const tipWeixin = document.getElementById("install-weixin-tip");
+      const titleText = document.getElementById("install-title-text");
+      const subText = document.getElementById("install-sub-text");
+
+      if (tipWeixin) tipWeixin.style.display = inWeixin ? "block" : "none";
+
+      if (isIos) {
+        if (titleText) titleText.textContent = "安装到 iPhone 桌面";
+        if (subText) subText.textContent = "添加到主屏幕 · 全屏无地址栏 · 独立 App 体验";
+        if (viewIos) viewIos.style.display = "flex";
+        if (viewAndroid) viewAndroid.style.display = "none";
+      } else if (isAndroid) {
+        if (titleText) titleText.textContent = "下载安卓客户端 APK";
+        if (subText) subText.textContent = "安装包约 6.1MB · 原画质拍摄直传 · 极速出片";
+        if (viewIos) viewIos.style.display = "none";
+        if (viewAndroid) viewAndroid.style.display = "flex";
+
+        // 若非微信且支持直接下载，点击时直接触发下载
+        if (!inWeixin) {
+          showToast("已开始下载简兮安卓客户端 APK (约6.1MB)...");
+          const link = document.createElement("a");
+          link.href = "/assets/app/jansee.apk";
+          link.download = "jansee.apk";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } else {
+        // 桌面端或其他设备访问时
+        if (titleText) titleText.textContent = "安装简兮手机客户端";
+        if (subText) subText.textContent = "支持 iOS 添加到桌面 与 Android APK 安装包";
+        if (viewIos) viewIos.style.display = "flex";
+        if (viewAndroid) viewAndroid.style.display = "flex";
+      }
+
+      if (modal) modal.classList.add("active");
+    }
+
+    function closeInstallModal() {
+      const modal = document.getElementById("appInstallModal");
+      if (modal) modal.classList.remove("active");
+    }
+
+    function onApkDownloadClick() {
+      showToast("已开始下载简兮客户端安装包...");
+    }
+
+    // 智能隐藏客户端下载胶囊 (若已在独立 App 容器内运行)
+    function checkClientStandalone() {
+      const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || /JanseeApp/i.test(navigator.userAgent);
+      if (isStandalone) {
+        const headerBtn = document.getElementById("header-download-btn");
+        if (headerBtn) headerBtn.style.display = "none";
+        const profileTag = document.getElementById("profile-app-tag");
+        if (profileTag) profileTag.textContent = "已安装运行中";
+      }
     }
   </script>
 </body>
