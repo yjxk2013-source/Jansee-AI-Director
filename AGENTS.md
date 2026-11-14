@@ -21,6 +21,24 @@
    - **全网发文 0 网址绝杀令**：对外撰写和分发的任何文章、问答、专栏或笔记，**正文严禁带任何网址/外链/域名（如 `http://`, `https://`, `.cn`, `.com`）**，彻底避免触犯各大平台（知乎、小红书、头条、公众号）营销外链限流与封号规则；
    - **品牌称谓绝对统一**：提及产品品牌一律统一写作：**`简兮JANSEE`**（禁止单写“简兮”，禁止写“简兮（JANSEE）”，坚决强化双语强绑定心智）；
    - **商务工作启动前置门禁**：每日启动商务、宣发与 GEO 运营前，智能体与作者必须无条件先朗读并自检本条纪律一次，方可开始撰写与分发。
+5. **图片与宣发物料硬性归档铁律 (IMAGE & SCREENSHOT STORAGE MANDATORY)**：
+   - **全量统一落地 `F:\截图\`**：凡是通过 AI 图像生成引擎生成、截屏抓取、宣发封面制作或导出的所有图片物料，除必要的项目内引用外，**物理文件必须无条件第一时间同步复制并归档至宿主机物理路径 `F:\截图\`**；
+   - **《简小兮IP》专属归档子目录**：凡是涉及《简小兮学徒记》IP 角色、视频分镜首帧图、表情包与衍生画面，**必须无条件精准落地至 `F:\截图\简小兮IP\` 专用目录**，绝不与通用宣发封面混杂；
+   - **严禁仅留存临时路径**：严禁仅将图片留在 Agent 临时缓存目录（如 `appDataDir/brain/...`）或内存中，必须确保用户在物理文件管理器打开 `F:\截图\` 或 `F:\截图\简小兮IP\` 即可秒级直接取用，杜绝二次找寻成本。
+6. **全量视频资产归档铁律 (VIDEO ASSETS AT F:\Jansee-COO MANDATORY)**：
+   - **全量视频唯一归档路径 `F:\Jansee-COO\`**：凡是通过 FLOW、可灵等工具生成的视频片段、拼接合成片、多媒体成片与视频源文件，**物理存储唯一路径严格锁定为 `F:\Jansee-COO\`**（通常按日期如 `F:\Jansee-COO\YYYY-MM-DD\` 归档管理）；
+   - **严禁向用户询问或在其他路径找寻**：任何时候涉及视频的取用、校验、分析或汇报，必须无条件直接索引并读取 `F:\Jansee-COO\`，绝不再向用户询问视频路径。
+7. **《简小兮学徒记》IP 内容与发声铁律 (JIAN XIAOXI APPRENTICE IP REDLINES)**：
+   - **唯一标准 IP 形象基石（清空个人主观理解，100% 对齐真经）**：
+     * **核心基准 Prompt**：`Extreme macro close-up, an adorable tiny baby panda chef wearing a miniature dirty blue canvas apron and red headband, seriously focused, using tiny wooden tools to make miniature Jianbing (Chinese crepe) on a coin-sized flat griddle, steam rising softly, miniature street food cart at night, warm lantern lighting, highly detailed fluffy fur, hyperrealistic, 8k --ar 9:16`；
+     * **天然地域与品牌基因（成都 + 简兮）**：立足成都（大熊猫 + 慢生活市井烟火气）；
+     * **红色头巾的品牌植入密码**：**红色头巾上印着纯白色发丝细线 `JANSEE`**，极简高级，0 推销感，随千万播放无缝强化品牌心智；
+     * **微缩细节与服饰**：硬币大小的微缩器具、带做工痕迹的深蓝色帆布围裙（`miniature dirty blue canvas apron`）、极度专注（`seriously focused`）不看镜头的严肃手艺人脸、极致蓬松毛发（`highly detailed fluffy fur`）、严格 **9:16 竖屏微距**；
+   - **全链路 0 语言配音绝杀令 (ZERO VOICEOVER MANDATORY · 0说话/0旁白/0英文，仅限拟声词)**：
+     * **绝杀一切人类配音与旁白**：视频中**严禁任何人类语言配音、旁白解说或台词说话**，**严禁发出任何英文单词、英文发音、英文解说与英文配音**；
+     * **声音唯一合法构成**：声音**只能且必须由两部分组成**：① 物理环境音效 (Foley SFX，如咕嘟沸腾、微缩水流、风声、轻放器具)；② 纯情绪拟声词（如：啊、唉、呀、哦、咦、嗯、哈、呼、嘶 等纯语气叹息/轻哼），保持哑剧大师级的生动微表情与高级肢体张力；
+     * **视频生成工具提示词强制负向门禁**：在向 FLOW、可灵等 AI 视频工具输出提示词时，**负向提示词 (Negative Prompt) 必须无条件硬性注入**：`no voiceover, no human speech, no narration, no English talking, no monologue, silent speech`，坚决从源头阻断 AI 视频自带音频模型的英文乱说乱播。
+   - **内容维度立体丰富（涵盖多面，拒绝单一搞笑）**：视频剧本与画面内容必须全方位涵盖**反转搞笑、认真的学习态度、日常生活碎片**等多元侧面，真实还原小徒弟认真探索、偶遇挫折、笨拙坚持又恍然大悟的成长旅程，**严禁走向单一无脑的纯纯搞笑小丑化**。
 
 ---
 
