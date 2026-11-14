@@ -721,6 +721,12 @@ const DEFAULT_MEMBER_PRICING = [
 // 9. 定价管理服务 (Pricing - 四大付费会员 + 积分加油包)
 // =========================================================================
 export function getAdminPricing() {
+  const sanitizePacks = (packs) => {
+    const list = Array.isArray(packs) && packs.length > 0 ? packs : DEFAULT_BOOST_PACKS;
+    const filtered = list.filter((b) => b && b.id !== 'boost_large' && Math.abs(Number(b.price) - 49.9) >= 0.01);
+    return filtered.length > 0 ? filtered : DEFAULT_BOOST_PACKS;
+  };
+
   const data = readJson(PRICING_FILE, null);
   if (data && typeof data === 'object') {
     if (Array.isArray(data) && data.length > 0) {
@@ -730,9 +736,16 @@ export function getAdminPricing() {
       };
     }
     if (Array.isArray(data.members)) {
+      const sanitized = sanitizePacks(data.boostPacks);
+      if (Array.isArray(data.boostPacks) && data.boostPacks.length !== sanitized.length) {
+        // 自动清洗历史落盘数据中已下线的 49.9 元大加油包
+        try {
+          writeJsonAtomic(PRICING_FILE, { members: data.members, boostPacks: sanitized });
+        } catch (_) {}
+      }
       return {
         members: data.members.length > 0 ? data.members : DEFAULT_MEMBER_PRICING,
-        boostPacks: Array.isArray(data.boostPacks) && data.boostPacks.length > 0 ? data.boostPacks : DEFAULT_BOOST_PACKS,
+        boostPacks: sanitized,
       };
     }
   }
@@ -750,9 +763,11 @@ export function saveAdminPricing(payload) {
       boostPacks: DEFAULT_BOOST_PACKS,
     };
   } else if (payload && typeof payload === 'object') {
+    const packs = Array.isArray(payload.boostPacks) ? payload.boostPacks : DEFAULT_BOOST_PACKS;
+    const sanitized = packs.filter((b) => b && b.id !== 'boost_large' && Math.abs(Number(b.price) - 49.9) >= 0.01);
     toSave = {
       members: Array.isArray(payload.members) ? payload.members : (Array.isArray(payload.pricing) ? payload.pricing : DEFAULT_MEMBER_PRICING),
-      boostPacks: Array.isArray(payload.boostPacks) ? payload.boostPacks : DEFAULT_BOOST_PACKS,
+      boostPacks: sanitized.length > 0 ? sanitized : DEFAULT_BOOST_PACKS,
     };
   } else {
     throw createAppError(ERROR_CODES.BAD_REQUEST, '定价数据格式不合法', { status: 400 });
