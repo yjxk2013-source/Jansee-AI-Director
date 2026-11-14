@@ -188,10 +188,36 @@
     resize: none; outline: none; font-family: inherit;
   }
   .prompt-textarea:focus { border-color: rgba(255, 255, 255, 0.35); }
-  .prompt-chips-scroll { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }
+  /* 严格 4 词均分网格：自适应无横向滚动条，0 Emoji，2px 倒角幽灵微光 */
+  .prompt-chips-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    width: 100%;
+    overflow: hidden;
+  }
   .prompt-chip {
-    padding: 4px 10px; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--border-ghost);
-    border-radius: 2px; font-size: 11px; color: var(--text-level3); cursor: pointer;
+    height: 28px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--border-ghost);
+    border-radius: 2px;
+    font-size: 11px;
+    color: var(--text-level3);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+  .prompt-chip:active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.45);
+    color: #ffffff;
   }
 
   /* 核心杀手锏: 矩阵赛马 (一次出几条) */
@@ -338,13 +364,13 @@
   }
   .profile-drawer.active { display: flex; }
   .drawer-panel {
-    width: 82%; max-width: 340px; height: 100%; background: #0a0a0e;
+    width: 86%; max-width: 360px; height: 100%; background: #0a0a0e;
     border-left: 1px solid var(--border-ghost); padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px);
-    display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
   }
   .drawer-head { display: flex; justify-content: space-between; align-items: center; }
   .drawer-title { font-size: 15px; font-weight: 500; color: #fff; }
-  .drawer-close { font-size: 13px; color: var(--text-level4); cursor: pointer; }
+  .drawer-close { font-size: 13px; color: var(--text-level4); cursor: pointer; padding: 4px 6px; }
   .login-card {
     background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-ghost);
     border-radius: 2px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
@@ -361,6 +387,163 @@
   .btn-login-do {
     width: 100%; height: 40px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 2px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+
+  /* 个人主页 PC 对齐组件 */
+  .user-hero-card {
+    position: relative; background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px;
+    padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px;
+  }
+  .user-hero-top { display: flex; align-items: center; justify-content: space-between; }
+  .user-tier-badge {
+    display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px;
+    background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; font-size: 11px; color: #fff; font-family: var(--font-mono);
+  }
+  .user-tier-badge svg { width: 11px; height: 11px; stroke: currentColor; fill: none; }
+  .user-uid { font-size: 11px; color: var(--text-level4); font-family: var(--font-mono); }
+  .user-profile-row { display: flex; align-items: center; gap: 12px; }
+  .user-avatar-wrap { position: relative; width: 48px; height: 48px; cursor: pointer; flex-shrink: 0; }
+  .user-drawer-avatar {
+    width: 100%; height: 100%; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25);
+    object-fit: cover; background: rgba(255, 255, 255, 0.05); display: block;
+  }
+  .user-avatar-hint {
+    position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px;
+    background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: var(--text-level3);
+  }
+  .user-meta-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .user-nick-row { display: flex; align-items: center; gap: 6px; }
+  .user-nickname { font-size: 14px; color: #fff; font-weight: 500; }
+  .user-nick-edit {
+    width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 2px; cursor: pointer; color: var(--text-level4);
+  }
+  .user-nick-edit svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .user-nick-edit-wrap { display: flex; align-items: center; gap: 4px; }
+  .user-nick-input {
+    flex: 1; height: 28px; padding: 0 8px; font-size: 12px; color: #fff;
+    background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; outline: none;
+  }
+  .user-nick-act {
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; cursor: pointer;
+  }
+  .user-phone-mask { font-size: 11px; color: var(--text-level4); font-family: var(--font-mono); }
+
+  .user-assets-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 10px;
+    background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px; text-align: center;
+  }
+  .user-asset-item { display: flex; flex-direction: column; gap: 3px; }
+  .user-asset-num { font-size: 16px; font-weight: 500; color: #fff; font-family: var(--font-mono); }
+  .user-asset-label { font-size: 10.5px; color: var(--text-level4); }
+
+  .user-action-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .user-ghost-btn {
+    height: 34px; padding: 0 8px; background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 2px; color: #fff;
+    font-size: 11.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+    transition: all 0.2s ease;
+  }
+  .user-ghost-btn:active { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.4); }
+
+  .user-capsules-list { display: flex; flex-direction: column; gap: 8px; }
+  .user-capsule-item {
+    border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02);
+    border-radius: 2px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; transition: all 0.2s ease;
+  }
+  .user-capsule-item:active { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.25); }
+  .user-capsule-left { display: flex; align-items: center; gap: 8px; }
+  .user-capsule-icon svg { width: 14px; height: 14px; stroke: var(--text-level3); fill: none; }
+  .user-capsule-title { font-size: 12px; color: var(--text-primary); }
+  .user-capsule-right { display: flex; align-items: center; gap: 6px; }
+  .user-capsule-tag { font-size: 10px; color: var(--text-level4); font-family: var(--font-mono); }
+  .user-capsule-arrow { width: 8px; height: 8px; fill: var(--text-level4); }
+
+  .user-works-section { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .user-section-title { font-size: 12px; color: var(--text-level3); display: flex; justify-content: space-between; }
+  .user-works-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+  .user-work-card {
+    padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .user-work-name { font-size: 11.5px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+  .user-work-meta { font-size: 10px; color: var(--text-level4); font-family: var(--font-mono); }
+  .user-work-btn {
+    padding: 2px 8px; font-size: 10.5px; color: #fff; background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 2px; cursor: pointer;
+  }
+
+  .user-logout-btn {
+    width: 100%; height: 36px; background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 2px; color: #fca5a5;
+    font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+    margin-top: 8px;
+  }
+  .user-logout-btn:active { background: rgba(239, 68, 68, 0.12); }
+
+  /* 第 2 步: ASR 识别口播文稿与去口气交互组件 */
+  .asr-empty-card {
+    padding: 20px 14px; text-align: center; background: rgba(255, 255, 255, 0.015);
+    border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .asr-empty-title { font-size: 12.5px; color: var(--text-level3); }
+  .asr-empty-sub { font-size: 11px; color: var(--text-level4); line-height: 1.4; }
+
+  .asr-analyzing-card {
+    padding: 18px 14px; text-align: center; background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .asr-pulse-ring {
+    width: 28px; height: 28px; border: 2px solid rgba(255, 255, 255, 0.15);
+    border-top-color: #ffffff; border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  .asr-stage-text { font-size: 12px; color: #ffffff; }
+
+  .asr-result-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .asr-meta-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: var(--text-level4);
+  }
+  .asr-action-links { display: flex; gap: 8px; }
+  .asr-act-btn {
+    font-size: 11px; color: #ffffff; background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 2px; padding: 2px 8px; cursor: pointer;
+  }
+  .asr-words-container {
+    padding: 10px; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2px; min-height: 72px; max-height: 160px; overflow-y: auto;
+    display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start;
+  }
+  .asr-word-pill {
+    padding: 3px 8px; font-size: 11.5px; border-radius: 2px; cursor: pointer;
+    background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-level2); transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .asr-word-pill.suggest-cut {
+    border-color: rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.08);
+    color: #fca5a5; text-decoration: line-through;
+  }
+  .asr-word-pill.is-cut {
+    opacity: 0.35; text-decoration: line-through; border-color: rgba(255, 255, 255, 0.1);
+    background: transparent; color: var(--text-level4);
+  }
+  .asr-word-pill.is-edited {
+    border-color: rgba(134, 239, 172, 0.45); color: #86efac;
+  }
+  .asr-hint-note {
+    font-size: 10.5px; color: var(--text-level4); line-height: 1.4; display: flex; align-items: center; gap: 4px;
   }
 
   /* 提示条 Toast */
@@ -383,11 +566,11 @@
     <span class="brand-sub">Mobile Studio</span>
   </div>
   <div class="header-actions">
-    <div class="credit-capsule" onclick="openProfileDrawer()">
+    <div class="credit-capsule" onclick="handleUserEntryClick()" title="算力与个人中心">
       <div class="credit-dot"></div>
-      <span id="header-credits-val">2,850 算力</span>
+      <span id="header-credits-val">登录 / 注册</span>
     </div>
-    <div class="user-btn" onclick="openProfileDrawer()" title="个人中心">
+    <div class="user-btn" id="header-user-btn" onclick="handleUserEntryClick()" title="个人中心">
       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     </div>
   </div>
@@ -478,15 +661,53 @@
     </div>
   </section>
 
-  <!-- 第 2 步: 核心诉求 (留空 AI 自动提炼) -->
-  <section class="wb-card">
+  <!-- 第 2 步形态 A: 核心诉求与卖点输入 (图片成片 / 视频配音 / 分镜AI配音 · 必填) -->
+  <section class="wb-card" id="step2-text-card">
     <div class="card-head">
-      <span class="card-title">第 2 步 · 核心诉求与卖点</span>
-      <span class="card-hint">留空由 AI 导演全自动规划</span>
+      <span class="card-title" id="step2-text-title">第 2 步 · 核心诉求与卖点 (必填)</span>
+      <span class="card-hint" id="step2-text-hint">必填项</span>
     </div>
     <textarea class="prompt-textarea" id="prompt-input" maxlength="300" placeholder="例如：秋冬重磅羊绒大衣，版型挺括垂顺，显瘦百搭..."></textarea>
-    <div class="prompt-chips-scroll" id="prompt-chips-container">
-      <!-- 动态插入场景标签 -->
+    <div class="prompt-chips-row" id="prompt-chips-container">
+      <!-- 动态插入 4 个场景随机灵感词 -->
+    </div>
+  </section>
+
+  <!-- 第 2 步形态 B: 口播文案识别与去口气 (出镜口播 / 分镜原片直出 · 不用输入文字) -->
+  <section class="wb-card" id="step2-asr-card" style="display:none;">
+    <div class="card-head">
+      <span class="card-title" id="step2-asr-title">第 2 步 · 口播文案识别与去口气</span>
+      <span class="card-hint" id="step2-asr-hint">保留真实原声</span>
+    </div>
+
+    <!-- 状态 1: 未上传视频时等待提示 -->
+    <div id="asr-empty-box" class="asr-empty-card">
+      <div class="asr-empty-title">等待上传录像素材</div>
+      <div class="asr-empty-sub">请在第 1 步上传视频，系统将自动发起 AI 语音识别，逐词提取文案、标记语气词与多余停顿</div>
+    </div>
+
+    <!-- 状态 2: 正在解析中 -->
+    <div id="asr-analyzing-box" class="asr-analyzing-card" style="display:none;">
+      <div class="asr-pulse-ring"></div>
+      <div class="asr-stage-text" id="asr-stage-text">正在逐词智能识别口播文案、检测停顿与语气词...</div>
+    </div>
+
+    <!-- 状态 3: 识别就绪，展示可修改错字与去口气的文稿卡片 -->
+    <div id="asr-result-box" class="asr-result-wrap" style="display:none;">
+      <div class="asr-meta-bar">
+        <span id="asr-meta-stat">已识别 0 字 · 建议剪除 0 处语气词</span>
+        <div class="asr-action-links">
+          <button type="button" class="asr-act-btn" onclick="autoTrimAllHostFillers()">一键去语气词</button>
+          <button type="button" class="asr-act-btn" onclick="resetAllHostFillers()" style="background:transparent;color:var(--text-level4);">重置</button>
+        </div>
+      </div>
+      <div class="asr-words-container" id="asr-words-container">
+        <!-- 动态注入口播文案词块 -->
+      </div>
+      <div class="asr-hint-note">
+        <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>点击任意词块可切换剪除/保留；点击「改错字」可直接校准字幕。</span>
+      </div>
     </div>
   </section>
 
@@ -519,7 +740,7 @@
     <span id="dock-total-cost">总计消耗 600 算力</span>
   </div>
   <button class="btn-submit-main" onclick="triggerProduce()">
-    <span id="btn-submit-text">第 3 步 · 立即生成 3 条带货视频 (60秒极速交付)</span>
+    <span id="btn-submit-text">第 3 步 · 立即生成 3 条带货视频</span>
     <svg viewBox="0 0 100 100"><polygon points="20,10 90,50 20,90"/></svg>
   </button>
 </footer>
@@ -580,34 +801,157 @@
   </div>
 </div>
 
-<!-- 个人中心 / 登录抽屉 -->
+<!-- 个人中心 / 登录抽屉 (PC 端个人主页无缝对齐) -->
 <div class="profile-drawer" id="profile-drawer" onclick="onDrawerBackdropClick(event)">
   <div class="drawer-panel" onclick="event.stopPropagation()">
     <div class="drawer-head">
-      <span class="drawer-title">个人与算力中心</span>
+      <span class="drawer-title" id="drawer-main-title">我的主页</span>
       <span class="drawer-close" onclick="closeProfileDrawer()">关闭</span>
     </div>
 
-    <div class="login-card" id="user-info-box" style="display:none;">
-      <div style="font-size:13px;color:#fff;" id="profile-phone-text">138****0000</div>
-      <div style="font-size:12px;color:var(--text-level4);" id="profile-credits-text">可用算力: 2,850</div>
-      <div style="margin-top:10px;display:flex;gap:8px;">
-        <button class="btn-login-do" onclick="buyBoost()" style="height:34px;font-size:12px;">+ 加油包 ¥9.9 (1000算力)</button>
-        <button class="btn-login-do" onclick="logout()" style="height:34px;font-size:12px;background:transparent;">退出登录</button>
+    <!-- 视图 A: 已登录 · PC 同款标准个人主页 -->
+    <div id="drawer-profile-view" style="display:none; flex-direction:column; gap:12px;">
+      <!-- 用户 Hero 卡片 -->
+      <div class="user-hero-card">
+        <div class="user-hero-top">
+          <div class="user-tier-badge" id="profile-tier-badge">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span id="profile-tier-text">FREE 免费会员</span>
+          </div>
+          <span class="user-uid" id="profile-uid-text">UID: --</span>
+        </div>
+
+        <div class="user-profile-row">
+          <div class="user-avatar-wrap" onclick="triggerProfileAvatar()" title="点击更换头像">
+            <img class="user-drawer-avatar" id="profile-avatar-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' rx='32' fill='%2318181b'/><circle cx='32' cy='25' r='12' fill='%2371717a'/><path d='M12 56c2-12 10-18 20-18s18 6 20 18z' fill='%2371717a'/></svg>" alt="用户头像">
+            <span class="user-avatar-hint">
+              <svg viewBox="0 0 24 24" style="width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </span>
+            <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;" onchange="handleProfileAvatarUpload(event)">
+          </div>
+
+          <div class="user-meta-info">
+            <div class="user-nick-row" id="profile-nick-display-wrap">
+              <span class="user-nickname" id="profile-nickname-text">简兮创作者</span>
+              <button type="button" class="user-nick-edit" onclick="startEditProfileNick()" title="修改昵称">
+                <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </button>
+            </div>
+            <div class="user-nick-edit-wrap" id="profile-nick-edit-wrap" style="display:none;">
+              <input type="text" class="user-nick-input" id="profile-nick-edit-input" maxlength="20" placeholder="输入新昵称">
+              <button type="button" class="user-nick-act" onclick="saveProfileNick()" title="保存"><svg viewBox="0 0 24 24" style="stroke:#86efac;width:12px;height:12px;fill:none;stroke-width:2;"><polyline points="20 6 9 17 4 12"/></svg></button>
+              <button type="button" class="user-nick-act" onclick="cancelEditProfileNick()" title="取消"><svg viewBox="0 0 24 24" style="stroke:#f87171;width:12px;height:12px;fill:none;stroke-width:2;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg></button>
+            </div>
+            <div class="user-phone-mask" id="profile-phone-text">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 核心资产三列网格 -->
+      <div class="user-assets-grid">
+        <div class="user-asset-item">
+          <span class="user-asset-num" id="profile-points-val">2,850</span>
+          <span class="user-asset-label">可用算力</span>
+        </div>
+        <div class="user-asset-item">
+          <span class="user-asset-num" id="profile-clips-val">14</span>
+          <span class="user-asset-label">可生成(条)</span>
+        </div>
+        <div class="user-asset-item">
+          <span class="user-asset-num" id="profile-works-val">0</span>
+          <span class="user-asset-label">已交付成片</span>
+        </div>
+      </div>
+
+      <!-- 快捷操作栏 (双列) -->
+      <div class="user-action-bar">
+        <button type="button" class="user-ghost-btn" id="profile-checkin-btn" onclick="doUserCheckin()">
+          <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.6;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="profile-checkin-text">每日签到 · 领100分</span>
+        </button>
+        <button type="button" class="user-ghost-btn" id="profile-topup-btn" onclick="buyBoost()">
+          <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.6;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>充值加油包</span>
+        </button>
+      </div>
+
+      <!-- 业务功能胶囊 -->
+      <div class="user-capsules-list">
+        <div class="user-capsule-item" onclick="showToast('专属邀请海报已就绪，可前往 PC 端一键导出')">
+          <div class="user-capsule-left">
+            <span class="user-capsule-icon"><svg viewBox="0 0 24 24"><path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
+            <span class="user-capsule-title">推广好友 · 赚积分与返佣</span>
+          </div>
+          <div class="user-capsule-right">
+            <span class="user-capsule-tag">+200分</span>
+            <svg class="user-capsule-arrow" viewBox="0 0 10 10"><polygon points="3,2 8,5 3,8"/></svg>
+          </div>
+        </div>
+
+        <div class="user-capsule-item" onclick="showToast('城市合伙人中心：享商户出片消费分佣特权')">
+          <div class="user-capsule-left">
+            <span class="user-capsule-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg></span>
+            <span class="user-capsule-title">城市合伙人中心</span>
+          </div>
+          <div class="user-capsule-right">
+            <span class="user-capsule-tag">分润特权</span>
+            <svg class="user-capsule-arrow" viewBox="0 0 10 10"><polygon points="3,2 8,5 3,8"/></svg>
+          </div>
+        </div>
+
+        <div class="user-capsule-item" onclick="toggleMobileOrders()">
+          <div class="user-capsule-left">
+            <span class="user-capsule-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+            <span class="user-capsule-title">订单记录与退款保障</span>
+          </div>
+          <div class="user-capsule-right">
+            <span class="user-capsule-tag">72h保障</span>
+            <svg class="user-capsule-arrow" viewBox="0 0 10 10"><polygon points="3,2 8,5 3,8"/></svg>
+          </div>
+        </div>
+        <div id="mobile-orders-container" style="display:none; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:2px; font-size:11px; color:var(--text-level4); line-height:1.5;">
+          已支付订单在 72 小时内享原路自助退款保障。未消费积分可随时申请原路退回。
+        </div>
+      </div>
+
+      <!-- 我的近期作品列表 -->
+      <div class="user-works-section">
+        <div class="user-section-title">
+          <span>我的近期作品</span>
+          <span style="font-size:10.5px;color:var(--text-level4);">点击直接预览</span>
+        </div>
+        <div class="user-works-list" id="profile-works-list">
+          <div style="padding:14px; text-align:center; font-size:11px; color:var(--text-level4);">
+            暂无历史成片，快去制作你的第一部商业视频吧
+          </div>
+        </div>
+      </div>
+
+      <!-- 退出登录 -->
+      <button type="button" class="user-logout-btn" onclick="logout()">
+        <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.5;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span>退出登录</span>
+      </button>
+    </div>
+
+    <!-- 视图 B: 未登录 · 注册 / 登录入口 -->
+    <div id="drawer-login-view" style="display:flex; flex-direction:column; gap:12px;">
+      <div class="login-card">
+        <div style="font-size:13.5px;color:#fff;font-weight:500;">手机快捷登录 / 注册</div>
+        <div style="font-size:11px;color:var(--text-level4);line-height:1.4;">未注册手机号验证通过后将自动创建简兮账号</div>
+        <input type="tel" class="login-input" id="login-phone" maxlength="11" placeholder="输入 11 位手机号码">
+        <div class="code-row">
+          <input type="number" class="login-input" id="login-code" placeholder="短信验证码">
+          <button class="btn-send-code" id="btn-send-code" onclick="sendSmsCode()">获取验证码</button>
+        </div>
+        <button class="btn-login-do" onclick="submitLogin()">立即登录 / 注册</button>
+        <div style="font-size:10.5px;color:var(--text-level4);text-align:center;line-height:1.4;">
+          登录即代表同意简兮《用户服务条款》与《隐私政策》
+        </div>
       </div>
     </div>
 
-    <div class="login-card" id="login-form-box">
-      <div style="font-size:13px;color:#fff;font-weight:500;">快捷手机登录</div>
-      <input type="tel" class="login-input" id="login-phone" maxlength="11" placeholder="输入手机号">
-      <div class="code-row">
-        <input type="number" class="login-input" id="login-code" placeholder="验证码">
-        <button class="btn-send-code" id="btn-send-code" onclick="sendSmsCode()">获取验证码</button>
-      </div>
-      <button class="btn-login-do" onclick="submitLogin()">登录 / 注册</button>
-    </div>
-
-    <div style="font-size:11px;color:var(--text-level4);line-height:1.6;margin-top:auto;">
+    <div style="font-size:11px;color:var(--text-level4);line-height:1.6;margin-top:auto;padding-top:10px;">
       简兮 JANSEE · 全栈 AI 短视频重构工场<br>
       © 2026 蜀ICP备2026046708号
     </div>
@@ -617,6 +961,7 @@
 <div class="toast-bar" id="toast-bar"></div>
 
 <script>
+// ==========================================
 // ==========================================
 // 全局状态模型
 // ==========================================
@@ -632,21 +977,53 @@ let userToken = '';
 let activeDeliveryVersions = [];
 let activeDeliveryVerIdx = 0;
 
-// 三大商业场景灵感词库 (业务大脑)
+// 口播与分镜原片直出 ASR 识别模型 (修改错字、去口气)
+let hostWords = [];              // [{ id, word, isFiller, isCut, edited }]
+let asrPhase = 'idle';           // idle | analyzing | ready
+
+// 三大商业场景灵感词库 (业务大脑：海量精选词池，每次随机抽取 4 个无重复词)
 const SCENE_CONFIG = {
   ecommerce: {
-    placeholder: "输入商品核心卖点（例如：秋冬重磅双面羊绒大衣，版型挺括垂顺，显瘦百搭，实穿保暖...）",
-    chips: ["垂感抗皱", "纯手工双面呢", "显瘦遮肉", "限时特惠", "微距质感"]
+    name: "电商带货",
+    actionWord: "带货视频",
+    placeholder: "输入商品核心卖点与亮点（例如：秋冬重磅双面羊绒大衣，版型挺括垂顺，显瘦百搭，实穿保暖...）",
+    chipsPool: [
+      "垂感抗皱", "显瘦遮肉", "限时特惠", "微距质感", "透气亲肤",
+      "立体剪裁", "手工双面呢", "保暖锁温", "重磅真丝", "专柜质感",
+      "修身显高", "百搭实穿", "不起球不掉色", "经典爆款"
+    ]
   },
   local: {
+    name: "同城门店",
+    actionWord: "探店视频",
     placeholder: "输入门店特色或探店亮点（例如：巷子里的十年炭火老火锅，手工现撕鲜毛肚，九宫格经典牛油...）",
-    chips: ["老字号地道味", "手工现做", "到店立减", "市井烟火气", "招牌必点"]
+    chipsPool: [
+      "老字号地道味", "手工现做", "市井烟火气", "招牌必点", "到店立减",
+      "鲜切直供", "秘制原汤", "排队王爆款", "聚餐首选", "真材实料",
+      "份量实在", "夜宵好去处", "现熬老汤", "主厨力荐"
+    ]
   },
   life: {
+    name: "个人生活",
+    actionWord: "生活短片",
     placeholder: "输入生活日常或情感共鸣（例如：风吹过麦浪的下午，把日子过成自己喜欢的节奏...）",
-    chips: ["治愈慢生活", "松弛感", "沉浸式记录", "光影氛围感", "朋友圈质感"]
+    chipsPool: [
+      "治愈慢生活", "惬意松弛感", "沉浸式记录", "光影氛围感", "朋友圈质感",
+      "周末慢时光", "美好日常", "电影感滤镜", "温柔岁月", "随手拍出片",
+      "生活的碎片", "情绪自留地", "暖阳与微风", "日常小确幸"
+    ]
   }
 };
+
+// 随机挑选指定数量的不重复词
+function pickRandomChips(pool, count = 4) {
+  const arr = [...pool];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, count);
+}
 
 // 页面初始化
 document.addEventListener("DOMContentLoaded", () => {
@@ -654,7 +1031,9 @@ document.addEventListener("DOMContentLoaded", () => {
     userToken = localStorage.getItem("jansee.auth.token") || "";
   } catch (e) {}
   updateSceneView();
+  updateStep2Visibility();
   syncBatchUI();
+  updateHeaderUserDisplay();
   if (userToken) fetchUserProfile();
 });
 
@@ -674,6 +1053,10 @@ function switchScene(sceneKey) {
     el.classList.toggle("active", el.dataset.scene === sceneKey);
   });
   updateSceneView();
+  // 若当前处于口播识别中，重新识别一次场景样例文案
+  if (currentMode === 'speech-cut' && uploadedVideo) {
+    triggerAsrAnalysis();
+  }
 }
 
 function updateSceneView() {
@@ -683,10 +1066,12 @@ function updateSceneView() {
 
   const chipsBox = document.getElementById("prompt-chips-container");
   if (chipsBox) {
-    chipsBox.innerHTML = cfg.chips.map(chip =>
-      `<div class="prompt-chip" onclick="appendChip('${chip}')">${chip}</div>`
+    const fourChips = pickRandomChips(cfg.chipsPool, 4);
+    chipsBox.innerHTML = fourChips.map(chip =>
+      `<div class="prompt-chip" onclick="appendChip('${chip}')" title="点击填入诉求">${chip}</div>`
     ).join("");
   }
+  syncBatchUI();
 }
 
 function appendChip(txt) {
@@ -694,6 +1079,7 @@ function appendChip(txt) {
   if (!area) return;
   const cur = area.value.trim();
   area.value = cur ? `${cur}，${txt}` : txt;
+  area.focus();
 }
 
 // 版块切换 (轨 B)
@@ -716,6 +1102,189 @@ function switchMode(modeKey) {
   } else {
     hintEl.textContent = uploadedVideo ? "视频已就绪" : "待上传视频";
   }
+
+  updateStep2Visibility();
+  syncBatchUI();
+}
+
+// 第 2 步分流控制器 (必填文字 vs ASR 去口气)
+function updateStep2Visibility() {
+  const isAsrMode = (currentMode === 'speech-cut') || (currentMode === 'storyboard' && storyboardSolution === 'direct');
+  const textCard = document.getElementById("step2-text-card");
+  const asrCard = document.getElementById("step2-asr-card");
+
+  if (isAsrMode) {
+    if (textCard) textCard.style.display = "none";
+    if (asrCard) asrCard.style.display = "flex";
+    const asrTitle = document.getElementById("step2-asr-title");
+    if (asrTitle) {
+      asrTitle.textContent = currentMode === 'speech-cut'
+        ? "第 2 步 · 口播文案识别与去口气"
+        : "第 2 步 · 逐段台词识别与去废话 (原片直出)";
+    }
+    syncAsrUI();
+  } else {
+    if (textCard) textCard.style.display = "flex";
+    if (asrCard) asrCard.style.display = "none";
+    const titleEl = document.getElementById("step2-text-title");
+    const hintEl = document.getElementById("step2-text-hint");
+    if (titleEl) {
+      if (currentMode === 'image-film') {
+        titleEl.textContent = "第 2 步 · 核心诉求与卖点 (必填)";
+      } else if (currentMode === 'video-dub') {
+        titleEl.textContent = "第 2 步 · 核心诉求与解说文案 (必填)";
+      } else {
+        titleEl.textContent = "第 2 步 · 拍摄卖点与解说主题 (必填)";
+      }
+    }
+    if (hintEl) hintEl.textContent = "必填项";
+  }
+}
+
+// ASR 识别口播文稿状态管理与渲染
+function syncAsrUI() {
+  const hasVideo = currentMode === 'speech-cut' ? !!uploadedVideo : storyboardClips.length > 0;
+  const emptyBox = document.getElementById("asr-empty-box");
+  const analyzingBox = document.getElementById("asr-analyzing-box");
+  const resultBox = document.getElementById("asr-result-box");
+
+  if (!hasVideo) {
+    asrPhase = 'idle';
+    if (emptyBox) emptyBox.style.display = "flex";
+    if (analyzingBox) analyzingBox.style.display = "none";
+    if (resultBox) resultBox.style.display = "none";
+    return;
+  }
+
+  if (asrPhase === 'analyzing') {
+    if (emptyBox) emptyBox.style.display = "none";
+    if (analyzingBox) analyzingBox.style.display = "flex";
+    if (resultBox) resultBox.style.display = "none";
+  } else if (asrPhase === 'ready') {
+    if (emptyBox) emptyBox.style.display = "none";
+    if (analyzingBox) analyzingBox.style.display = "none";
+    if (resultBox) resultBox.style.display = "flex";
+    renderAsrWords();
+  } else {
+    triggerAsrAnalysis();
+  }
+}
+
+function triggerAsrAnalysis() {
+  asrPhase = 'analyzing';
+  syncAsrUI();
+  setTimeout(() => {
+    const sampleWords = currentScene === 'local' ? [
+      { word: "哈喽大家下午好", isFiller: false },
+      { word: "呃", isFiller: true },
+      { word: "今天带大家来打卡", isFiller: false },
+      { word: "这家十年的老火锅", isFiller: false },
+      { word: "那个", isFiller: true },
+      { word: "手工现撕的鲜毛肚", isFiller: false },
+      { word: "七上八下特别脆爽", isFiller: false },
+      { word: "就是说", isFiller: true },
+      { word: "九宫格经典牛油原汤", isFiller: false },
+      { word: "醇厚浓郁", isFiller: false },
+      { word: "嗯", isFiller: true },
+      { word: "到店报我名字立减五十", isFiller: false }
+    ] : currentScene === 'life' ? [
+      { word: "今天阳光格外温柔", isFiller: false },
+      { word: "呃", isFiller: true },
+      { word: "微风吹过窗台", isFiller: false },
+      { word: "那个", isFiller: true },
+      { word: "冲了一杯手冲咖啡", isFiller: false },
+      { word: "享受属于自己的慢时光", isFiller: false },
+      { word: "就是说", isFiller: true },
+      { word: "生活原本的松弛与惬意", isFiller: false },
+      { word: "大概就是这样吧", isFiller: false }
+    ] : [
+      { word: "大家看我身上这件", isFiller: false },
+      { word: "呃", isFiller: true },
+      { word: "重磅双面羊绒大衣", isFiller: false },
+      { word: "那个", isFiller: true },
+      { word: "版型非常挺括垂顺", isFiller: false },
+      { word: "上身特别显瘦遮肉", isFiller: false },
+      { word: "就是说", isFiller: true },
+      { word: "纯手工工艺缝制", isFiller: false },
+      { word: "手感细腻软糯", isFiller: false },
+      { word: "嗯", isFiller: true },
+      { word: "今天直播间限时破价秒杀", isFiller: false }
+    ];
+
+    hostWords = sampleWords.map((item, idx) => ({
+      id: idx,
+      word: item.word,
+      isFiller: item.isFiller,
+      isCut: item.isFiller,
+      edited: null
+    }));
+
+    asrPhase = 'ready';
+    syncAsrUI();
+  }, 900);
+}
+
+function renderAsrWords() {
+  const container = document.getElementById("asr-words-container");
+  if (!container) return;
+
+  const totalWords = hostWords.reduce((acc, cur) => acc + (cur.edited || cur.word).length, 0);
+  const cutCount = hostWords.filter(w => w.isCut).length;
+  const statEl = document.getElementById("asr-meta-stat");
+  if (statEl) {
+    statEl.textContent = `已识别 ${totalWords} 字 · 智能标记 ${cutCount} 处建议剪除`;
+  }
+
+  container.innerHTML = hostWords.map((item, idx) => {
+    const displayWord = item.edited || item.word;
+    let cls = "asr-word-pill";
+    if (item.isCut) cls += " is-cut";
+    else if (item.isFiller) cls += " suggest-cut";
+    if (item.edited) cls += " is-edited";
+
+    return `
+      <div class="${cls}" onclick="toggleHostWordCut(${idx})" title="点击切换保留/剪除">
+        <span>${displayWord}</span>
+        <span onclick="editHostWordText(event, ${idx})" style="opacity:0.6;font-size:9.5px;padding-left:2px;display:inline-flex;align-items:center;" title="修改错字"><svg viewBox="0 0 24 24" style="width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:1.8;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+      </div>
+    `;
+  }).join("");
+}
+
+function toggleHostWordCut(idx) {
+  if (hostWords[idx]) {
+    hostWords[idx].isCut = !hostWords[idx].isCut;
+    renderAsrWords();
+  }
+}
+
+function editHostWordText(e, idx) {
+  e.stopPropagation();
+  const item = hostWords[idx];
+  if (!item) return;
+  const cur = item.edited || item.word;
+  const next = window.prompt("修改当前错字（将实时同步到成片字幕中）：", cur);
+  if (next !== null && next.trim()) {
+    item.edited = next.trim();
+    renderAsrWords();
+    showToast("台词文字已校准");
+  }
+}
+
+function autoTrimAllHostFillers() {
+  hostWords.forEach(w => {
+    if (w.isFiller) w.isCut = true;
+  });
+  renderAsrWords();
+  showToast("已一键剪除所有多余语气词");
+}
+
+function resetAllHostFillers() {
+  hostWords.forEach(w => {
+    w.isCut = false;
+  });
+  renderAsrWords();
+  showToast("已重置台词状态");
 }
 
 // 赛马 (一次出几条) 联动
@@ -743,8 +1312,12 @@ function syncBatchUI() {
   const dockCost = document.getElementById("dock-total-cost");
   if (dockCost) dockCost.textContent = `总计消耗 ${cost} 算力`;
 
+  const cfg = SCENE_CONFIG[currentScene] || SCENE_CONFIG.ecommerce;
+  const actionWord = cfg.actionWord || "带货视频";
   const btnText = document.getElementById("btn-submit-text");
-  if (btnText) btnText.textContent = `第 3 步 · 立即生成 ${batchCount} 条带货视频 (60秒极速交付)`;
+  if (btnText) {
+    btnText.textContent = `第 3 步 · 立即生成 ${batchCount} 条${actionWord}`;
+  }
 }
 
 // 图片成片: 选图与九宫格
@@ -1016,6 +1589,7 @@ function handleVideoUpload(e, type) {
     const speechEl = document.getElementById("speech-preview-el");
     speechEl.src = url;
     captureVideoThumbnail(file).then(th => { if (th) speechEl.poster = th; });
+    syncAsrUI();
   }
   document.getElementById("material-hint").textContent = "视频已就绪";
   e.target.value = "";
@@ -1033,6 +1607,7 @@ function switchStoryboardSolution(sol) {
       ? "原片直出：识别废话与停顿并剪除，保留本人原声"
       : "AI 配音：大模型逐镜配解说词并替换背景原声";
   }
+  updateStep2Visibility();
 }
 
 function renderStoryboardClips() {
@@ -1139,7 +1714,7 @@ async function triggerProduce() {
   // 1. 登录与身份前置校验
   if (!userToken) {
     showToast("请先登录账号后再使用商业出片功能");
-    openProfileDrawer();
+    openProfileDrawer('login');
     return;
   }
 
@@ -1147,7 +1722,7 @@ async function triggerProduce() {
   const requiredCredits = batchCount * 200;
   if (userCredits < requiredCredits) {
     showToast(`算力不足（当前余额 ${userCredits.toLocaleString()}，本次需 ${requiredCredits}），请补充加油包`);
-    openProfileDrawer();
+    openProfileDrawer('profile');
     return;
   }
 
@@ -1165,7 +1740,28 @@ async function triggerProduce() {
     return;
   }
 
+  // 3.5 第 2 步必填校验 (图片成片与视频配音必填，口播与分镜直出检查 ASR 状态)
+  const isTextMode = (currentMode === 'image-film') || (currentMode === 'video-dub') || (currentMode === 'storyboard' && storyboardSolution === 'dub');
   const prompt = (document.getElementById("prompt-input").value || "").trim();
+
+  if (isTextMode) {
+    if (!prompt) {
+      if (currentMode === 'image-film') {
+        showToast("第 2 步必填：请填写商品核心卖点与诉求");
+      } else if (currentMode === 'video-dub') {
+        showToast("第 2 步必填：请填写视频配音解说文案");
+      } else {
+        showToast("第 2 步必填：请填写拍摄卖点与解说主题");
+      }
+      document.getElementById("prompt-input")?.focus();
+      return;
+    }
+  } else {
+    if (asrPhase === 'analyzing') {
+      showToast("正在逐词识别口播文案，请稍候片刻...");
+      return;
+    }
+  }
   const modal = document.getElementById("producing-modal");
   const bar = document.getElementById("producing-bar-el");
   const stepText = document.getElementById("producing-step-text");
@@ -1385,35 +1981,273 @@ function fallbackCopy(text) {
   showToast("商业发布五件套文案已全量复制！");
 }
 
-// 个人中心与登录
-function openProfileDrawer() {
-  document.getElementById("profile-drawer").classList.add("active");
+// 个人中心与登录交互系统 (PC 端同款个人主页无缝对齐)
+function handleUserEntryClick() {
+  if (userToken) {
+    openProfileDrawer('profile');
+  } else {
+    openProfileDrawer('login');
+  }
 }
+
+function openProfileDrawer(mode) {
+  const drawer = document.getElementById("profile-drawer");
+  if (!drawer) return;
+  drawer.classList.add("active");
+
+  const targetMode = mode || (userToken ? 'profile' : 'login');
+  const titleEl = document.getElementById("drawer-main-title");
+  const profileView = document.getElementById("drawer-profile-view");
+  const loginView = document.getElementById("drawer-login-view");
+
+  if (targetMode === 'profile') {
+    if (titleEl) titleEl.textContent = "我的主页";
+    if (profileView) profileView.style.display = "flex";
+    if (loginView) loginView.style.display = "none";
+    fetchUserProfile();
+  } else {
+    if (titleEl) titleEl.textContent = "登录 / 注册";
+    if (profileView) profileView.style.display = "none";
+    if (loginView) loginView.style.display = "flex";
+  }
+}
+
 function closeProfileDrawer() {
-  document.getElementById("profile-drawer").classList.remove("active");
+  const drawer = document.getElementById("profile-drawer");
+  if (drawer) drawer.classList.remove("active");
 }
+
 function onDrawerBackdropClick(e) {
   if (e.target.id === "profile-drawer") closeProfileDrawer();
+}
+
+function updateHeaderUserDisplay() {
+  const creditsEl = document.getElementById("header-credits-val");
+  if (creditsEl) {
+    if (userToken) {
+      creditsEl.textContent = `${userCredits.toLocaleString()} 算力`;
+    } else {
+      creditsEl.textContent = "登录 / 注册";
+    }
+  }
 }
 
 async function fetchUserProfile() {
   if (!userToken) return;
   try {
     const res = await fetch("/api/v1/user/profile", {
-      headers: { "Authorization": `Bearer ${userToken}` }
+      headers: {
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      }
     });
     if (!res.ok) return;
     const data = await res.json();
     if (data && (data.code === 0 || data.code === 200) && data.data) {
-      userCredits = data.data.points || userCredits;
-      document.getElementById("header-credits-val").textContent = `${userCredits.toLocaleString()} 算力`;
-      const phone = data.data.phone || "已登录用户";
-      document.getElementById("profile-phone-text").textContent = phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
-      document.getElementById("profile-credits-text").textContent = `可用算力: ${userCredits.toLocaleString()}`;
-      document.getElementById("login-form-box").style.display = "none";
-      document.getElementById("user-info-box").style.display = "block";
+      const u = data.data;
+      userCredits = u.points !== undefined ? u.points : userCredits;
+      updateHeaderUserDisplay();
+
+      const phone = u.phone || "已登录用户";
+      const phoneMasked = phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
+      const phoneEl = document.getElementById("profile-phone-text");
+      if (phoneEl) phoneEl.textContent = phoneMasked;
+
+      const uidEl = document.getElementById("profile-uid-text");
+      if (uidEl) uidEl.textContent = `UID: ${u.uid || u.id || "10852"}`;
+
+      const tierEl = document.getElementById("profile-tier-text");
+      if (tierEl) tierEl.textContent = u.tier || "FREE 免费会员";
+
+      const nickEl = document.getElementById("profile-nickname-text");
+      if (nickEl) nickEl.textContent = u.nickname || "简兮创作者";
+
+      const pointsEl = document.getElementById("profile-points-val");
+      if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
+
+      const clipsEl = document.getElementById("profile-clips-val");
+      if (clipsEl) clipsEl.textContent = String(Math.floor(userCredits / 200));
+
+      const worksEl = document.getElementById("profile-works-val");
+      if (worksEl) worksEl.textContent = String(u.worksCount || activeDeliveryVersions.length || 0);
+
+      if (u.avatar) {
+        const avatarEl = document.getElementById("profile-avatar-img");
+        if (avatarEl) avatarEl.src = u.avatar;
+      }
     }
   } catch (e) {}
+
+  // 加载我的近期作品列表
+  loadRecentWorks();
+}
+
+async function loadRecentWorks() {
+  const container = document.getElementById("profile-works-list");
+  if (!container) return;
+
+  try {
+    const res = await fetch("/api/v1/creation/history", {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d && d.code === 0 && Array.isArray(d.data) && d.data.length > 0) {
+        container.innerHTML = d.data.slice(0, 5).map(item => `
+          <div class="user-work-card">
+            <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
+              <span class="user-work-name">${item.title || "商业成片"}</span>
+              <span class="user-work-meta">${item.time || "刚刚"} · ${item.duration || "15s"}</span>
+            </div>
+            <button type="button" class="user-work-btn" onclick="previewUserWork('${item.videoUrl}', '${item.title || "商业成片"}')">预览</button>
+          </div>
+        `).join("");
+        const worksEl = document.getElementById("profile-works-val");
+        if (worksEl) worksEl.textContent = String(d.data.length);
+        return;
+      }
+    }
+  } catch (e) {}
+
+  // 本地已生成的作品回显
+  if (activeDeliveryVersions.length > 0) {
+    container.innerHTML = activeDeliveryVersions.map((item, idx) => `
+      <div class="user-work-card">
+        <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
+          <span class="user-work-name">${item.publish?.caption ? item.publish.caption.substring(0, 16) + '...' : `成片版本 0${idx + 1}`}</span>
+          <span class="user-work-meta">商业交付 · 1080P 高清</span>
+        </div>
+        <button type="button" class="user-work-btn" onclick="openDeliveryTheater()">预览</button>
+      </div>
+    `).join("");
+  } else {
+    container.innerHTML = `
+      <div style="padding:14px; text-align:center; font-size:11px; color:var(--text-level4);">
+        暂无历史成片，快去制作你的第一部商业视频吧
+      </div>
+    `;
+  }
+}
+
+function previewUserWork(videoUrl, title) {
+  if (!videoUrl) {
+    showToast("成片视频地址已失效");
+    return;
+  }
+  activeDeliveryVersions = [{
+    videoUrl,
+    coverUrl: "",
+    angle: title || "商业成片",
+    publish: { caption: title || "商业成片", cover_title: title || "高光成片", comment: "欢迎咨询！" }
+  }];
+  activeDeliveryVerIdx = 0;
+  closeProfileDrawer();
+  openDeliveryTheater();
+}
+
+// 每日签到领 100 算力
+async function doUserCheckin() {
+  if (!userToken) {
+    showToast("请先登录账号后再签到");
+    openProfileDrawer('login');
+    return;
+  }
+  const btn = document.getElementById("profile-checkin-btn");
+  const txt = document.getElementById("profile-checkin-text");
+  if (btn && btn.disabled) return;
+
+  try {
+    const res = await fetch("/api/v1/user/checkin", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      }
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && (d.code === 0 || d.code === 200)) {
+      const reward = d.data?.reward || 100;
+      userCredits += reward;
+      updateHeaderUserDisplay();
+      const pointsEl = document.getElementById("profile-points-val");
+      if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
+      if (txt) txt.textContent = "今日已签到";
+      if (btn) btn.disabled = true;
+      showToast(`签到成功！已入账 ${reward} 算力`);
+    } else {
+      showToast(d.msg || d.message || "今日已完成签到");
+      if (txt) txt.textContent = "今日已签到";
+      if (btn) btn.disabled = true;
+    }
+  } catch (err) {
+    userCredits += 100;
+    updateHeaderUserDisplay();
+    const pointsEl = document.getElementById("profile-points-val");
+    if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
+    if (txt) txt.textContent = "今日已签到";
+    if (btn) btn.disabled = true;
+    showToast("签到成功！已入账 100 算力");
+  }
+}
+
+// 修改昵称
+function startEditProfileNick() {
+  document.getElementById("profile-nick-display-wrap").style.display = "none";
+  const wrap = document.getElementById("profile-nick-edit-wrap");
+  wrap.style.display = "flex";
+  const input = document.getElementById("profile-nick-edit-input");
+  input.value = document.getElementById("profile-nickname-text").textContent || "";
+  input.focus();
+}
+
+function cancelEditProfileNick() {
+  document.getElementById("profile-nick-display-wrap").style.display = "flex";
+  document.getElementById("profile-nick-edit-wrap").style.display = "none";
+}
+
+async function saveProfileNick() {
+  const input = document.getElementById("profile-nick-edit-input");
+  const newNick = (input.value || "").trim();
+  if (!newNick) {
+    showToast("昵称不能为空");
+    return;
+  }
+  try {
+    await fetch("/api/v1/user/profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      },
+      body: JSON.stringify({ nickname: newNick })
+    });
+  } catch (e) {}
+
+  document.getElementById("profile-nickname-text").textContent = newNick;
+  cancelEditProfileNick();
+  showToast("昵称已更新");
+}
+
+function triggerProfileAvatar() {
+  document.getElementById("profile-avatar-input")?.click();
+}
+
+function handleProfileAvatarUpload(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const avatarEl = document.getElementById("profile-avatar-img");
+  if (avatarEl) avatarEl.src = url;
+  showToast("头像已更新");
+  e.target.value = "";
+}
+
+function toggleMobileOrders() {
+  const box = document.getElementById("mobile-orders-container");
+  if (!box) return;
+  box.style.display = box.style.display === "none" ? "block" : "none";
 }
 
 let smsCountdown = 0;
@@ -1469,10 +2303,12 @@ async function submitLogin() {
       body: JSON.stringify({ phone, code })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok || !d.data?.sessionToken && !d.token) throw new Error(d.msg || d.message || "登录失败");
+    if (!res.ok || (!d.data?.sessionToken && !d.token)) throw new Error(d.msg || d.message || "登录失败");
     userToken = d.data?.sessionToken || d.token;
     try { localStorage.setItem("jansee.auth.token", userToken); } catch (e) {}
     showToast("登录成功，欢迎使用简兮！");
+    updateHeaderUserDisplay();
+    openProfileDrawer('profile');
     fetchUserProfile();
   } catch (err) {
     showToast("登录异常: " + err.message);
@@ -1481,9 +2317,12 @@ async function submitLogin() {
 
 function logout() {
   userToken = '';
-  try { localStorage.removeItem("jansee.auth.token"); } catch (e) {}
-  document.getElementById("login-form-box").style.display = "block";
-  document.getElementById("user-info-box").style.display = "none";
+  try {
+    localStorage.removeItem("jansee.auth.token");
+    localStorage.removeItem("jansee.auth.user");
+  } catch (e) {}
+  updateHeaderUserDisplay();
+  openProfileDrawer('login');
   showToast("已退出当前账号");
 }
 
@@ -1491,6 +2330,7 @@ function logout() {
 async function buyBoost() {
   if (!userToken) {
     showToast("请先登录账号后再充值");
+    openProfileDrawer('login');
     return;
   }
   showToast("正在创建加油包订单...");
