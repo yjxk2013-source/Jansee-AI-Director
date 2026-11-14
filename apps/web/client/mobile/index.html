@@ -637,6 +637,298 @@
     pointer-events: none; opacity: 0; transition: opacity 0.25s ease;
   }
   .toast-bar.show { opacity: 1; }
+
+  /* 个人主页 · VIP 会员尊享横幅 */
+  .user-vip-banner {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .user-vip-banner:active {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+  .user-vip-left {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .user-vip-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .user-vip-icon svg {
+    width: 14px;
+    height: 14px;
+    fill: #ffffff;
+    stroke: none;
+  }
+  .user-vip-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .user-vip-title {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+  }
+  .user-vip-sub {
+    font-size: 10.5px;
+    color: var(--text-level4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .user-vip-btn {
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    font-size: 11px;
+    color: #ffffff;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* 商业会员订阅与算力中心模态弹窗 */
+  .subscribe-mask {
+    position: fixed; inset: 0; z-index: 1050;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .subscribe-mask.active { opacity: 1; pointer-events: auto; }
+  .subscribe-panel {
+    width: 100%; max-width: 480px; max-height: 88vh;
+    background: rgba(12, 12, 16, 0.98);
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 4px 4px 0 0;
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.9);
+    display: flex; flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+  }
+  .subscribe-mask.active .subscribe-panel { transform: translateY(0); }
+
+  .sub-panel-header {
+    padding: 14px 16px 10px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .sub-header-left { display: flex; flex-direction: column; gap: 3px; }
+  .sub-brand-badge {
+    font-size: 9.5px; letter-spacing: 0.15em; color: var(--text-level4);
+    font-family: var(--font-mono); text-transform: uppercase;
+  }
+  .sub-panel-title {
+    font-size: 16px; font-weight: 600; color: #ffffff; letter-spacing: 0.02em;
+  }
+  .sub-close-btn {
+    width: 28px; height: 28px; background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 2px;
+    color: var(--text-level4); display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .sub-close-btn svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+
+  /* 顶部当前用户算力状态胶囊条 */
+  .sub-status-bar {
+    margin: 10px 16px 4px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .sub-status-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-level3); }
+  .sub-status-dot { width: 5px; height: 5px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 6px #ffffff; }
+  .sub-status-val { color: #ffffff; font-weight: 500; font-family: var(--font-mono); }
+  .sub-status-tier { font-size: 11px; color: var(--text-level4); padding: 1px 6px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 2px; }
+
+  /* 主滚动区域 */
+  .sub-scroll-body {
+    padding: 10px 16px 120px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 2x2 对称四宫格 */
+  .sub-grid-2x2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .sub-plan-card {
+    position: relative;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 2px;
+    padding: 12px 10px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .sub-plan-card.active {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.1);
+  }
+  .sub-plan-badge {
+    position: absolute; top: 0; right: 0;
+    padding: 2px 6px;
+    background: #ffffff;
+    color: #050505;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border-radius: 0 1px 0 2px;
+  }
+  .sub-plan-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .sub-plan-name { font-size: 13px; font-weight: 600; color: #ffffff; }
+  .sub-plan-price-row { display: flex; align-items: baseline; gap: 4px; }
+  .sub-plan-price-cur { font-size: 11px; color: #ffffff; font-weight: 600; }
+  .sub-plan-price-num { font-size: 20px; font-weight: 600; color: #ffffff; font-family: var(--font-mono); }
+  .sub-plan-price-strike { font-size: 10.5px; color: var(--text-level4); text-decoration: line-through; }
+  .sub-plan-price-cycle { font-size: 10.5px; color: var(--text-level4); }
+  .sub-plan-credits-bar {
+    padding: 4px 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .sub-plan-credits-num { font-size: 11.5px; color: #ffffff; font-weight: 500; font-family: var(--font-mono); }
+  .sub-plan-clips { font-size: 10px; color: var(--text-level4); }
+  .sub-plan-feature {
+    font-size: 10.5px; color: var(--text-level3); line-height: 1.35;
+    min-height: 28px;
+  }
+
+  /* 1 通栏底座: 积分加油包 */
+  .sub-boost-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 2px;
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .sub-boost-card.active {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.1);
+  }
+  .sub-boost-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sub-boost-icon {
+    width: 32px; height: 32px; border-radius: 2px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sub-boost-icon svg { width: 15px; height: 15px; stroke: #ffffff; fill: none; stroke-width: 1.8; }
+  .sub-boost-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .sub-boost-title-row { display: flex; align-items: center; gap: 6px; }
+  .sub-boost-title { font-size: 13px; font-weight: 600; color: #ffffff; }
+  .sub-boost-tag {
+    font-size: 9.5px; padding: 1px 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px; color: var(--text-level3);
+  }
+  .sub-boost-desc { font-size: 10.5px; color: var(--text-level4); }
+  .sub-boost-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+  .sub-boost-price { font-size: 18px; font-weight: 600; color: #ffffff; font-family: var(--font-mono); }
+  .sub-boost-strike { font-size: 10.5px; color: var(--text-level4); text-decoration: line-through; }
+
+  /* 商业保障说明 */
+  .sub-guarantee-note {
+    font-size: 10.5px; color: var(--text-level4); line-height: 1.6;
+    padding: 4px 2px; text-align: center;
+  }
+
+  /* 动态吸底支付栏 */
+  .sub-dock {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 10px 16px calc(var(--safe-bottom) + 10px);
+    background: linear-gradient(to top, rgba(10, 10, 14, 0.98) 85%, transparent);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .sub-dock-summary { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .sub-dock-target { font-size: 11px; color: var(--text-level4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub-dock-amount { font-size: 18px; font-weight: 600; color: #ffffff; font-family: var(--font-mono); }
+  .btn-sub-pay {
+    flex: 1; max-width: 220px; height: 42px;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 2px;
+    color: #ffffff; font-size: 13.5px; font-weight: 500;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+  }
+  .btn-sub-pay:active { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.7); }
+  .btn-sub-pay:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* 移动端统一收银台小弹窗 */
+  .sub-cashier-mask {
+    position: fixed; inset: 0; z-index: 1200;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease;
+    padding: 16px;
+  }
+  .sub-cashier-mask.active { opacity: 1; pointer-events: auto; }
+  .sub-cashier-card {
+    position: relative; width: 100%; max-width: 340px;
+    background: rgba(14, 14, 20, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px; padding: 22px 18px; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+  }
+  .sub-cashier-title { font-size: 15px; font-weight: 600; color: #ffffff; }
+  .sub-cashier-amount { font-size: 24px; font-weight: 600; color: #ffffff; font-family: var(--font-mono); }
+  .sub-cashier-qr-wrap {
+    width: 200px; height: 200px; background: #ffffff; padding: 8px;
+    border-radius: 2px; display: flex; align-items: center; justify-content: center;
+  }
+  .sub-cashier-qr-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .sub-cashier-hint { font-size: 11px; color: var(--text-level4); line-height: 1.4; }
+  .sub-cashier-actions { width: 100%; display: flex; gap: 8px; margin-top: 4px; }
+  .sub-cashier-btn {
+    flex: 1; height: 36px; background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 2px;
+    color: #ffffff; font-size: 12px; cursor: pointer;
+  }
+  .sub-cashier-btn:active { background: rgba(255, 255, 255, 0.12); }
 </style>
 </head>
 <body>
@@ -649,7 +941,7 @@
     <span class="brand-sub">Mobile Studio</span>
   </div>
   <div class="header-actions">
-    <div class="credit-capsule" onclick="handleUserEntryClick()" title="可用算力">
+    <div class="credit-capsule" onclick="handleCreditsCapsuleClick()" title="可用算力 · 会员订阅与充值">
       <div class="credit-dot"></div>
       <span id="header-credits-val">2,850 算力</span>
     </div>
@@ -1031,13 +1323,27 @@
         </div>
       </div>
 
+      <!-- 会员专区尊享横幅 (直达商业会员中心) -->
+      <div class="user-vip-banner" onclick="openSubscribeModal()" title="点击开通商业会员">
+        <div class="user-vip-left">
+          <div class="user-vip-icon">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <div class="user-vip-texts">
+            <div class="user-vip-title">商业会员与算力中心</div>
+            <div class="user-vip-sub">四档月度会员 · 1000 算力加油包 · 72h保障</div>
+          </div>
+        </div>
+        <div class="user-vip-btn">升级特权</div>
+      </div>
+
       <!-- 快捷操作栏 (双列) -->
       <div class="user-action-bar">
         <button type="button" class="user-ghost-btn" id="profile-checkin-btn" onclick="doUserCheckin()">
           <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.6;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span id="profile-checkin-text">每日签到 · 领100分</span>
         </button>
-        <button type="button" class="user-ghost-btn" id="profile-topup-btn" onclick="buyBoost()">
+        <button type="button" class="user-ghost-btn" id="profile-topup-btn" onclick="openSubscribeModal('boost_small')">
           <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.6;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span>充值加油包</span>
         </button>
@@ -1163,6 +1469,169 @@
       </button>
       <div class="auth-error-msg" id="authErrorMsg"></div>
     </form>
+  </div>
+</div>
+
+<!-- 商业会员订阅与算力中心抽屉弹窗 (0 Emoji, 2x2 四宫格 + 1 通栏底座 + 动态吸底支付栏) -->
+<div class="subscribe-mask" id="subscribeMask" onclick="event.target===this&&closeSubscribeModal()">
+  <div class="subscribe-panel" role="dialog" aria-modal="true" aria-labelledby="subPanelTitle">
+    <!-- 头部 -->
+    <div class="sub-panel-header">
+      <div class="sub-header-left">
+        <span class="sub-brand-badge">JANSEE · SUBSCRIPTION &amp; CREDITS</span>
+        <h3 class="sub-panel-title" id="subPanelTitle">商业会员与算力中心</h3>
+      </div>
+      <button type="button" class="sub-close-btn" onclick="closeSubscribeModal()" aria-label="关闭">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+      </button>
+    </div>
+
+    <!-- 用户身份与算力指示条 -->
+    <div class="sub-status-bar">
+      <div class="sub-status-item">
+        <div class="sub-status-dot"></div>
+        <span>当前可用算力:</span>
+        <span class="sub-status-val" id="sub-modal-points">2,850</span>
+      </div>
+      <span class="sub-status-tier" id="sub-modal-tier">FREE 免费会员</span>
+    </div>
+
+    <!-- 滚动区域 -->
+    <div class="sub-scroll-body">
+      <!-- 2×2 对称四宫格会员档位 -->
+      <div class="sub-grid-2x2">
+        <!-- 1. Lite 体验版 -->
+        <div class="sub-plan-card" id="plan-card-lite" onclick="selectSubscribePlan('lite')">
+          <div class="sub-plan-head">
+            <span class="sub-plan-name">Lite 体验</span>
+            <div class="sub-plan-price-row">
+              <span class="sub-plan-price-cur">¥</span>
+              <span class="sub-plan-price-num">41</span>
+              <span class="sub-plan-price-strike">¥69</span>
+              <span class="sub-plan-price-cycle">/月</span>
+            </div>
+          </div>
+          <div class="sub-plan-credits-bar">
+            <span class="sub-plan-credits-num">7,600 积分</span>
+            <span class="sub-plan-clips">约 38 条成片</span>
+          </div>
+          <div class="sub-plan-feature">全高清 1080P · 0 额外扣费 · 适合尝鲜与小批量试跑</div>
+        </div>
+
+        <!-- 2. Plus 日常版 -->
+        <div class="sub-plan-card" id="plan-card-plus" onclick="selectSubscribePlan('plus')">
+          <div class="sub-plan-head">
+            <span class="sub-plan-name">Plus 日常</span>
+            <div class="sub-plan-price-row">
+              <span class="sub-plan-price-cur">¥</span>
+              <span class="sub-plan-price-num">119</span>
+              <span class="sub-plan-price-strike">¥199</span>
+              <span class="sub-plan-price-cycle">/月</span>
+            </div>
+          </div>
+          <div class="sub-plan-credits-bar">
+            <span class="sub-plan-credits-num">24,800 积分</span>
+            <span class="sub-plan-clips">约 124 条成片</span>
+          </div>
+          <div class="sub-plan-feature">高峰期优先渲染通道 · 适合日常高频出片店铺</div>
+        </div>
+
+        <!-- 3. Pro 旗舰版 (主推) -->
+        <div class="sub-plan-card active" id="plan-card-pro" onclick="selectSubscribePlan('pro')">
+          <div class="sub-plan-badge">推荐 · 爆款</div>
+          <div class="sub-plan-head">
+            <span class="sub-plan-name">Pro 旗舰</span>
+            <div class="sub-plan-price-row">
+              <span class="sub-plan-price-cur">¥</span>
+              <span class="sub-plan-price-num">299</span>
+              <span class="sub-plan-price-strike">¥499</span>
+              <span class="sub-plan-price-cycle">/月</span>
+            </div>
+          </div>
+          <div class="sub-plan-credits-bar">
+            <span class="sub-plan-credits-num">66,600 积分</span>
+            <span class="sub-plan-clips">约 333 条成片</span>
+          </div>
+          <div class="sub-plan-feature">专属商业运镜库 · 极速优先 · 品牌矩阵带货首选</div>
+        </div>
+
+        <!-- 4. Ultra 团队版 -->
+        <div class="sub-plan-card" id="plan-card-ultra" onclick="selectSubscribePlan('ultra')">
+          <div class="sub-plan-head">
+            <span class="sub-plan-name">Ultra 团队</span>
+            <div class="sub-plan-price-row">
+              <span class="sub-plan-price-cur">¥</span>
+              <span class="sub-plan-price-num">599</span>
+              <span class="sub-plan-price-strike">¥999</span>
+              <span class="sub-plan-price-cycle">/月</span>
+            </div>
+          </div>
+          <div class="sub-plan-credits-bar">
+            <span class="sub-plan-credits-num">153,800 积分</span>
+            <span class="sub-plan-clips">约 769 条成片</span>
+          </div>
+          <div class="sub-plan-feature">旗舰顶级算力 · 满血并发 · 团队与机构专属通道</div>
+        </div>
+      </div>
+
+      <!-- 1 通栏底座: 积分加油包 (无需订阅 · 永不过期) -->
+      <div class="sub-boost-card" id="plan-card-boost" onclick="selectSubscribePlan('boost_small')">
+        <div class="sub-boost-left">
+          <div class="sub-boost-icon">
+            <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <div class="sub-boost-info">
+            <div class="sub-boost-title-row">
+              <span class="sub-boost-title">1,000 算力加油包</span>
+              <span class="sub-boost-tag">永不过期</span>
+            </div>
+            <div class="sub-boost-desc">得 1,000 积分 · 约 5 次成片 · 算力即时到账 · 无需按月订阅</div>
+          </div>
+        </div>
+        <div class="sub-boost-right">
+          <div class="sub-boost-price">¥9.9</div>
+          <div class="sub-boost-strike">¥19.9</div>
+        </div>
+      </div>
+
+      <!-- 商业信誉与合规保障 -->
+      <div class="sub-guarantee-note">
+        单月订阅不自动续费 · 72小时未消费全额自主退款保障 · 国标 AIGC 全程存证
+      </div>
+    </div>
+
+    <!-- 动态吸底支付栏 -->
+    <div class="sub-dock">
+      <div class="sub-dock-summary">
+        <span class="sub-dock-target" id="sub-dock-target-text">已选: Pro 旗舰版 (单月)</span>
+        <div class="sub-dock-amount" id="sub-dock-amount-text">¥299.00</div>
+      </div>
+      <button type="button" class="btn-sub-pay" id="btn-sub-submit" onclick="submitCurrentSubscribe()">
+        <span id="btn-sub-submit-text">立即开通 Pro 旗舰版</span>
+        <svg viewBox="0 0 100 100" style="width:7px;height:7px;fill:currentColor">
+          <polygon points="20,10 90,50 20,90"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 移动端发丝收银台二维码 / 查单弹窗 -->
+<div class="sub-cashier-mask" id="subCashierMask" onclick="event.target===this&&closeSubCashier()">
+  <div class="sub-cashier-card" role="dialog" aria-modal="true">
+    <div class="sub-cashier-title" id="cashier-plan-title">简兮收银台 · 安全支付</div>
+    <div class="sub-cashier-amount" id="cashier-amount-text">¥299.00</div>
+    <div class="sub-cashier-qr-wrap" id="cashier-qr-box">
+      <img id="cashier-qr-img" class="sub-cashier-qr-img" src="" alt="支付二维码">
+    </div>
+    <div class="sub-cashier-hint" id="cashier-status-hint">
+      支持微信 / 支付宝扫码或长按识别<br>
+      支付完成后算力将秒级自动入账
+    </div>
+    <div class="sub-cashier-actions">
+      <button type="button" class="sub-cashier-btn" id="cashier-open-btn" style="display:none;" onclick="jumpToCashierPayUrl()">前往支付页面</button>
+      <button type="button" class="sub-cashier-btn" onclick="closeSubCashier()">取消并关闭</button>
+    </div>
   </div>
 </div>
 
@@ -2337,8 +2806,8 @@ async function triggerProduce() {
   // 2. 算力余额校验
   const requiredCredits = batchCount * 200;
   if (userCredits < requiredCredits) {
-    showToast(`算力不足（当前余额 ${userCredits.toLocaleString()}，本次需 ${requiredCredits}），请补充加油包`);
-    openProfileDrawer('profile');
+    showToast(`算力不足（当前余额 ${userCredits.toLocaleString()}，本次需 ${requiredCredits}），请开通会员或加油包`);
+    openSubscribeModal();
     return;
   }
 
@@ -3383,7 +3852,13 @@ async function submitAuthForm() {
       closeAuthModal();
       showToast("登录成功，欢迎使用简兮！");
       updateHeaderUserDisplay();
-      openProfileDrawer();
+      fetchUserProfile();
+      if (pendingPostLoginAction === 'openSubscribeModal') {
+        pendingPostLoginAction = null;
+        openSubscribeModal();
+      } else {
+        openProfileDrawer();
+      }
     } else {
       const password = (document.getElementById("authPassword")?.value || "").trim();
       if (!password) {
@@ -3412,7 +3887,13 @@ async function submitAuthForm() {
       closeAuthModal();
       showToast("登录成功，欢迎使用简兮！");
       updateHeaderUserDisplay();
-      openProfileDrawer();
+      fetchUserProfile();
+      if (pendingPostLoginAction === 'openSubscribeModal') {
+        pendingPostLoginAction = null;
+        openSubscribeModal();
+      } else {
+        openProfileDrawer();
+      }
     }
   } catch (err) {
     setAuthError("网络连接超时，请重试");
@@ -3433,15 +3914,168 @@ function logout() {
   showToast("已退出当前账号");
 }
 
-// 真实拉起支付宝 JSAPI 支付购买加油包
-async function buyBoost() {
+// ==========================================
+// 商业会员订阅与算力中心 (4 档会员 + 1 加油包 + 统一收银台)
+// ==========================================
+let selectedSubscribePlanKey = 'pro';
+let pendingPostLoginAction = null;
+let cashierPollingTimer = null;
+let currentCashierOrderId = '';
+let currentCashierPayUrl = '';
+
+const SUBSCRIBE_PLANS = {
+  lite: {
+    key: "lite",
+    name: "Lite 体验版",
+    shortName: "Lite 体验",
+    kind: "membership",
+    tierId: "lite",
+    cardId: "plan-card-lite",
+    price: 41,
+    strike: "¥69",
+    cycleText: "单月",
+    points: 7600,
+    clipsText: "约 38 条成片",
+    desc: "全高清 1080P · 0 额外扣费 · 尝鲜首选"
+  },
+  plus: {
+    key: "plus",
+    name: "Plus 日常版",
+    shortName: "Plus 日常",
+    kind: "membership",
+    tierId: "plus",
+    cardId: "plan-card-plus",
+    price: 119,
+    strike: "¥199",
+    cycleText: "单月",
+    points: 24800,
+    clipsText: "约 124 条成片",
+    desc: "高峰期优先渲染通道 · 日常高频出片"
+  },
+  pro: {
+    key: "pro",
+    name: "Pro 旗舰版",
+    shortName: "Pro 旗舰",
+    kind: "membership",
+    tierId: "pro",
+    cardId: "plan-card-pro",
+    price: 299,
+    strike: "¥499",
+    cycleText: "单月",
+    points: 66600,
+    clipsText: "约 333 条成片",
+    desc: "专属商业运镜库 · 极速优先 · 爆款主推"
+  },
+  ultra: {
+    key: "ultra",
+    name: "Ultra 团队版",
+    shortName: "Ultra 团队",
+    kind: "membership",
+    tierId: "ultra",
+    cardId: "plan-card-ultra",
+    price: 599,
+    strike: "¥999",
+    cycleText: "单月",
+    points: 153800,
+    clipsText: "约 769 条成片",
+    desc: "旗舰顶级算力 · 满血并发 · 团队首选"
+  },
+  boost_small: {
+    key: "boost_small",
+    name: "1,000 算力加油包",
+    shortName: "加油包",
+    kind: "points",
+    planId: "boost_small",
+    cardId: "plan-card-boost",
+    price: 9.9,
+    strike: "¥19.9",
+    cycleText: "永久",
+    points: 1000,
+    clipsText: "约 5 次成片",
+    desc: "得 1,000 积分 · 算力即时入账 · 永不过期"
+  }
+};
+
+// 点击顶栏算力胶囊
+function handleCreditsCapsuleClick() {
   if (!userToken) {
-    showToast("请先登录账号后再充值");
+    pendingPostLoginAction = 'openSubscribeModal';
+    showToast("请先登录账号后查看算力与会员特权");
     openAuthModal('login');
     return;
   }
-  showToast("正在创建加油包订单...");
+  openSubscribeModal();
+}
+
+// 打开会员订阅弹窗
+function openSubscribeModal(targetPlanKey) {
+  const pointsEl = document.getElementById("sub-modal-points");
+  if (pointsEl) pointsEl.textContent = userCredits.toLocaleString();
+
+  const tierEl = document.getElementById("sub-modal-tier");
+  const pTier = document.getElementById("profile-tier-text");
+  if (tierEl) tierEl.textContent = pTier ? pTier.textContent : "FREE 免费会员";
+
+  const targetKey = targetPlanKey || selectedSubscribePlanKey || 'pro';
+  selectSubscribePlan(targetKey);
+
+  const mask = document.getElementById("subscribeMask");
+  if (mask) mask.classList.add("active");
+}
+
+// 关闭会员订阅弹窗
+function closeSubscribeModal() {
+  const mask = document.getElementById("subscribeMask");
+  if (mask) mask.classList.remove("active");
+}
+
+// 选中某个套餐档位
+function selectSubscribePlan(key) {
+  if (!SUBSCRIBE_PLANS[key]) key = 'pro';
+  selectedSubscribePlanKey = key;
+  const cur = SUBSCRIBE_PLANS[key];
+
+  // 更新卡片激活态
+  Object.values(SUBSCRIBE_PLANS).forEach(p => {
+    const el = document.getElementById(p.cardId);
+    if (el) {
+      if (p.key === key) el.classList.add("active");
+      else el.classList.remove("active");
+    }
+  });
+
+  // 更新吸底栏显示
+  const targetText = document.getElementById("sub-dock-target-text");
+  if (targetText) targetText.textContent = `已选: ${cur.name} (${cur.cycleText})`;
+
+  const amountText = document.getElementById("sub-dock-amount-text");
+  if (amountText) amountText.textContent = `¥${cur.price.toFixed(2)}`;
+
+  const btnText = document.getElementById("btn-sub-submit-text");
+  if (btnText) btnText.textContent = cur.kind === 'points' ? `立即充值 ${cur.shortName}` : `立即开通 ${cur.shortName}`;
+}
+
+// 提交订单并拉起聚合支付
+async function submitCurrentSubscribe() {
+  if (!userToken) {
+    pendingPostLoginAction = 'openSubscribeModal';
+    showToast("请先登录账号后再支付");
+    openAuthModal('login');
+    return;
+  }
+
+  const plan = SUBSCRIBE_PLANS[selectedSubscribePlanKey] || SUBSCRIBE_PLANS.pro;
+  const btn = document.getElementById("btn-sub-submit");
+  const btnText = document.getElementById("btn-sub-submit-text");
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = "正在创建订单...";
+
   try {
+    // 1. 创建订单
+    const orderPayload = plan.kind === 'membership'
+      ? { orderType: 'membership', itemKey: plan.tierId, tierId: plan.tierId, billingMode: 'single', title: plan.name }
+      : { orderType: 'boost', itemKey: 'boost_small', planId: 'boost_small', title: plan.name };
+
     const res = await fetch("/api/v1/order/create", {
       method: "POST",
       headers: {
@@ -3449,30 +4083,155 @@ async function buyBoost() {
         "Authorization": `Bearer ${userToken}`,
         "x-session-token": userToken
       },
-      body: JSON.stringify({ planId: "boost_small" })
+      body: JSON.stringify(orderPayload)
     });
-    const data = await res.json();
-    if (!res.ok || (data.code !== 0 && data.code !== 200) || !data.data?.orderId) {
-      throw new Error(data.msg || "订单创建失败");
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || (data.code !== 0 && data.code !== 200)) {
+      throw new Error(data.msg || data.message || "订单创建失败，请稍后重试");
     }
-    const orderId = data.data.orderId;
-    const payRes = await fetch("/api/v1/order/jsapi-unified", {
+
+    const order = data.data || data.order || data;
+    const orderId = order.orderId || order.id;
+    if (!orderId) throw new Error("未能获取有效订单号");
+
+    if (btnText) btnText.textContent = "正在发起支付...";
+
+    // 2. 发起 JSAPI 聚合收银台支付
+    const checkoutRes = await fetch("/api/v1/order/jsapi/checkout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId, client: "mobile" })
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${userToken}`,
+        "x-session-token": userToken
+      },
+      body: JSON.stringify({ orderId, payChannel: "jsapi" })
     });
-    const payData = await payRes.json();
-    if (payData.payUrl) {
-      showToast("正在拉起支付宝支付...");
-      window.location.href = payData.payUrl;
-    } else if (payData.qrCodeUrl) {
-      window.location.href = payData.qrCodeUrl;
-    } else {
-      showToast("支付订单已创建: " + orderId);
+
+    const checkoutData = await checkoutRes.json().catch(() => ({}));
+    if (!checkoutRes.ok || (checkoutData.code !== 0 && checkoutData.code !== 200)) {
+      throw new Error(checkoutData.msg || checkoutData.message || "支付通道响应超时");
     }
-  } catch (e) {
-    showToast("拉起支付异常: " + e.message);
+
+    const payInfo = checkoutData.data || {};
+    currentCashierOrderId = orderId;
+    currentCashierPayUrl = payInfo.payUrl || '';
+
+    // 唤起移动端收银台
+    openSubCashier({
+      title: plan.name,
+      amount: plan.price,
+      orderId: orderId,
+      qrDataUrl: payInfo.qrDataUrl,
+      payUrl: payInfo.payUrl
+    });
+
+  } catch (err) {
+    showToast("发起支付异常: " + (err.message || "网络不稳定"));
+  } finally {
+    if (btn) btn.disabled = false;
+    selectSubscribePlan(selectedSubscribePlanKey);
   }
+}
+
+// 打开收银台小弹窗并开始查单轮询
+function openSubCashier({ title, amount, orderId, qrDataUrl, payUrl }) {
+  const mask = document.getElementById("subCashierMask");
+  const titleEl = document.getElementById("cashier-plan-title");
+  const amountEl = document.getElementById("cashier-amount-text");
+  const qrImg = document.getElementById("cashier-qr-img");
+  const openBtn = document.getElementById("cashier-open-btn");
+  const statusHint = document.getElementById("cashier-status-hint");
+
+  if (titleEl) titleEl.textContent = `简兮收银台 · ${title}`;
+  if (amountEl) amountEl.textContent = `¥${Number(amount || 0).toFixed(2)}`;
+  if (qrImg && qrDataUrl) qrImg.src = qrDataUrl;
+
+  if (openBtn) {
+    if (payUrl) {
+      openBtn.style.display = "block";
+    } else {
+      openBtn.style.display = "none";
+    }
+  }
+
+  if (statusHint) {
+    statusHint.innerHTML = "支持微信 / 支付宝扫码或长按识别<br>支付完成后算力将秒级自动入账";
+  }
+
+  if (mask) mask.classList.add("active");
+
+  // 启动 2 秒一次的主动查单轮询
+  startCashierPolling(orderId);
+}
+
+// 跳转外部支付链接
+function jumpToCashierPayUrl() {
+  if (currentCashierPayUrl) {
+    window.location.href = currentCashierPayUrl;
+  } else {
+    showToast("未检测到外部支付跳转链接，请扫描二维码");
+  }
+}
+
+// 关闭收银台弹窗
+function closeSubCashier() {
+  if (cashierPollingTimer) {
+    clearInterval(cashierPollingTimer);
+    cashierPollingTimer = null;
+  }
+  const mask = document.getElementById("subCashierMask");
+  if (mask) mask.classList.remove("active");
+  currentCashierOrderId = '';
+  currentCashierPayUrl = '';
+}
+
+// 轮询支付状态
+function startCashierPolling(orderId) {
+  if (cashierPollingTimer) clearInterval(cashierPollingTimer);
+
+  let pollCount = 0;
+  const maxPolls = 150; // 最多轮询 5 分钟
+
+  cashierPollingTimer = setInterval(async () => {
+    pollCount++;
+    if (pollCount > maxPolls) {
+      clearInterval(cashierPollingTimer);
+      cashierPollingTimer = null;
+      const statusHint = document.getElementById("cashier-status-hint");
+      if (statusHint) statusHint.textContent = "支付超时，若已扣款请稍后查看个人中心算力";
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/v1/order/jsapi/status?orderId=${encodeURIComponent(orderId)}`, {
+        headers: {
+          "Authorization": `Bearer ${userToken}`,
+          "x-session-token": userToken
+        }
+      });
+      if (!res.ok) return;
+
+      const data = await res.json().catch(() => ({}));
+      if (data && (data.code === 0 || data.code === 200)) {
+        const payload = data.data || {};
+        if (payload.orderStatus === 'paid' || payload.tradeState === 'PAID') {
+          // 支付成功
+          clearInterval(cashierPollingTimer);
+          cashierPollingTimer = null;
+          closeSubCashier();
+          closeSubscribeModal();
+          showToast("支付成功！算力已实时到账，感谢支持简兮！");
+          fetchUserProfile();
+        }
+      }
+    } catch (e) {}
+  }, 2000);
+}
+
+// 保持旧接口兼容调用
+function buyBoost() {
+  openSubscribeModal('boost_small');
 }
 </script>
 </body>
