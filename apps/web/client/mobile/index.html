@@ -122,6 +122,32 @@
       gap: 8px;
     }
 
+    .works-capsule {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--border-ghost);
+      border-radius: 2px;
+      font-size: 11px;
+      color: var(--text-level2);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .works-capsule:active {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+    .works-count-tag {
+      padding: 1px 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      font-size: 10px;
+      color: #ffffff;
+      font-weight: 600;
+    }
     .credit-capsule {
       height: 28px;
       padding: 0 10px;
@@ -2485,6 +2511,13 @@
         </svg>
         <span>客户端</span>
       </div>
+      <div class="works-capsule" id="header-works-btn" onclick="openProfileDrawer('works')" title="我的成片作品库">
+        <svg viewBox="0 0 24 24" style="width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;">
+          <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>
+        <span>作品</span>
+        <span class="works-count-tag" id="header-works-count">0</span>
+      </div>
       <div class="credit-capsule" onclick="handleCreditsCapsuleClick()" title="可用算力 · 会员订阅与充值">
         <div class="credit-dot"></div>
         <span id="header-credits-val">2,850 算力</span>
@@ -2929,12 +2962,26 @@
             <span class="user-asset-num" id="profile-clips-val">14</span>
             <span class="user-asset-label">可生成(条)</span>
           </div>
-          <div class="user-asset-item">
+          <div class="user-asset-item" onclick="scrollToWorksList()" style="cursor:pointer;" title="点击查看全部成片">
             <span class="user-asset-num" id="profile-works-val">0</span>
             <span class="user-asset-label">已交付成片</span>
           </div>
         </div>
 
+        <!-- 我的近期作品列表 -->
+        <div class="user-works-section">
+          <div class="user-section-title">
+            <span>我的近期作品</span>
+            <span style="font-size:10.5px;color:var(--text-level4);">点击直接预览</span>
+          </div>
+          <div class="user-works-list" id="profile-works-list">
+            <div style="padding:14px; text-align:center; font-size:11px; color:var(--text-level4);">
+              暂无历史成片，快去制作你的第一部商业视频吧
+            </div>
+          </div>
+        </div>
+
+        
         <!-- 会员专区尊享横幅 (直达商业会员中心) -->
         <div class="user-vip-banner" onclick="openSubscribeModal()" title="点击开通商业会员">
           <div class="user-vip-left">
@@ -3046,19 +3093,6 @@
           <div id="mobile-orders-container"
             style="display:none; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:2px; font-size:11px; color:var(--text-level4); line-height:1.5;">
             已支付订单在 72 小时内享原路自助退款保障。未消费积分可随时申请原路退回。
-          </div>
-        </div>
-
-        <!-- 我的近期作品列表 -->
-        <div class="user-works-section">
-          <div class="user-section-title">
-            <span>我的近期作品</span>
-            <span style="font-size:10.5px;color:var(--text-level4);">点击直接预览</span>
-          </div>
-          <div class="user-works-list" id="profile-works-list">
-            <div style="padding:14px; text-align:center; font-size:11px; color:var(--text-level4);">
-              暂无历史成片，快去制作你的第一部商业视频吧
-            </div>
           </div>
         </div>
 
@@ -3444,7 +3478,7 @@
       updateStep2Visibility();
       syncBatchUI();
       updateHeaderUserDisplay();
-      if (userToken) fetchUserProfile();
+      if (userToken) { fetchUserProfile(); loadRecentWorks(); } else { loadRecentWorks(); }
       fetchPricingConfig();
       checkClientStandalone();
     });
@@ -5204,7 +5238,20 @@
       }
     }
 
-    function openProfileDrawer() {
+    function openProfileDrawer(target) {
+      const drawer = document.getElementById("profile-drawer");
+      if (!drawer) return;
+      const view = document.getElementById("drawer-profile-view");
+      if (view) view.style.display = "flex";
+      drawer.classList.add("active");
+      fetchUserProfile();
+      loadRecentWorks();
+      if (target === 'works') {
+        setTimeout(scrollToWorksList, 150);
+      }
+    }
+    window.openProfileDrawer = openProfileDrawer;
+    function _unused_oldOpenProfileDrawer() {
       const drawer = document.getElementById("profile-drawer");
       if (!drawer) return;
       const view = document.getElementById("drawer-profile-view");
@@ -5343,6 +5390,20 @@
       }
     }
 
+    
+    function updateWorksCountUI(count) {
+      const c = Number(count) || 0;
+      const worksEl = document.getElementById("profile-works-val");
+      if (worksEl) worksEl.textContent = String(c);
+      const headerWorks = document.getElementById("header-works-count");
+      if (headerWorks) headerWorks.textContent = String(c);
+    }
+
+    function scrollToWorksList() {
+      const el = document.getElementById("profile-works-list");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
     async function loadRecentWorks() {
       const container = document.getElementById("profile-works-list");
       if (!container) return;
@@ -5401,7 +5462,7 @@
             }).join("");
 
             const worksEl = document.getElementById("profile-works-val");
-            if (worksEl) worksEl.textContent = String(list.length);
+            if (worksEl) worksEl.textContent = String(list.length); updateWorksCountUI(list.length);
             return;
           }
         }
@@ -5436,7 +5497,7 @@
               `;
             }).join("");
             const worksEl = document.getElementById("profile-works-val");
-            if (worksEl) worksEl.textContent = String(localList.length);
+            if (worksEl) worksEl.textContent = String(localList.length); updateWorksCountUI(localList.length);
             return;
           }
         }

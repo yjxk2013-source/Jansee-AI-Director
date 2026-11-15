@@ -752,6 +752,7 @@ const server = http.createServer((req, res) => {
     const balance = creditStore.getBalance(uid);
     const paidPoints = creditStore.getPaidBalance(uid);
     const freePoints = creditStore.getFreeBalance(uid);
+    const userWorksList = listUserWorks(uid);
     sendJson(res, 200, 0, '获取成功', {
       userId: uid,
       phone: u?.phone || uid,
@@ -768,6 +769,7 @@ const server = http.createServer((req, res) => {
       maxImagesLimit: 9,
       lastCheckin: u?.lastCheckin || '',
       hasCheckedInToday: !!(u && u.lastCheckin === localDate()),
+      worksCount: userWorksList.length,
     });
     return;
   }
