@@ -136,10 +136,12 @@
       transition: all 0.2s ease;
       white-space: nowrap;
     }
+
     .works-capsule:active {
       background: rgba(255, 255, 255, 0.08);
       border-color: rgba(255, 255, 255, 0.35);
     }
+
     .works-count-tag {
       padding: 1px 5px;
       background: rgba(255, 255, 255, 0.08);
@@ -148,6 +150,7 @@
       color: #ffffff;
       font-weight: 600;
     }
+
     .credit-capsule {
       height: 28px;
       padding: 0 10px;
@@ -3610,11 +3613,9 @@
         }
         if (analyzingBox) analyzingBox.style.display = "none";
         if (resultBox) resultBox.style.display = "none";
+        syncSubmitButtonState();
         return;
       }
-
-      const submitBtn = document.querySelector(".btn-submit-main");
-      const submitText = document.getElementById("btn-submit-text");
 
       if (asrPhase === 'uploading' || asrPhase === 'analyzing') {
         if (emptyBox) emptyBox.style.display = "none";
@@ -3623,26 +3624,12 @@
         if (stageTextEl) {
           stageTextEl.textContent = asrStageText || (asrPhase === 'uploading' ? "正在上传媒体素材至服务引擎..." : "正在智能识别口播台词与停顿节奏...");
         }
-        if (submitBtn && submitText) {
-          submitBtn.disabled = true;
-          submitBtn.style.opacity = "0.6";
-          submitBtn.style.cursor = "not-allowed";
-          submitText.textContent = asrPhase === 'uploading' ? "正在上传素材，请稍候..." : "正在智能识别视频语音，请稍候...";
-        }
+        syncSubmitButtonState();
       } else if (asrPhase === 'ready') {
         if (emptyBox) emptyBox.style.display = "none";
         if (analyzingBox) analyzingBox.style.display = "none";
         if (resultBox) resultBox.style.display = "flex";
-        if (submitBtn && submitText) {
-          submitBtn.disabled = false;
-          submitBtn.style.opacity = "1";
-          submitBtn.style.cursor = "pointer";
-          submitText.textContent = currentMode === 'speech-cut'
-            ? "第 3 步 · 立即导出无痕口播精剪成片"
-            : (currentMode === 'storyboard' && storyboardSolution === 'direct'
-              ? "第 3 步 · 立即分镜直出成片"
-              : "第 3 步 · 立即生成商业成片");
-        }
+        syncSubmitButtonState();
         renderAsrWords();
       } else if (asrPhase === 'error') {
         if (emptyBox) emptyBox.style.display = "none";
@@ -3653,6 +3640,7 @@
           if (errorTitle) errorTitle.textContent = "语音识别未完成";
           if (errorDesc) errorDesc.textContent = asrErrorMessage || "未能识别出清晰人声，请检查视频音轨或重试";
         }
+        syncSubmitButtonState();
       } else {
         triggerAsrAnalysis();
       }
@@ -4050,11 +4038,94 @@
       const dockCost = document.getElementById("dock-total-cost");
       if (dockCost) dockCost.textContent = `总计消耗 ${cost} 算力`;
 
-      const cfg = SCENE_CONFIG[currentScene] || SCENE_CONFIG.ecommerce;
-      const actionWord = cfg.actionWord || "带货视频";
-      const btnText = document.getElementById("btn-submit-text");
-      if (btnText) {
-        btnText.textContent = `第 3 步 · 立即生成 ${batchCount} 条${actionWord}`;
+      syncSubmitButtonState();
+    }
+
+    // 统筹第 3 步操作台按钮状态与文案，严格联动当前模式与素材状态
+    function syncSubmitButtonState() {
+      const submitBtn = document.querySelector(".btn-submit-main");
+      const submitText = document.getElementById("btn-submit-text");
+      const raceBox = document.querySelector(".race-box");
+      const dockTotalCost = document.getElementById("dock-total-cost");
+      if (!submitBtn || !submitText) return;
+
+      const isSpeech = currentMode === 'speech-cut';
+      const isSbDirect = currentMode === 'storyboard' && storyboardSolution === 'direct';
+      const isSbDub = currentMode === 'storyboard' && storyboardSolution === 'dub';
+
+      // 矩阵赛马模块显示控制：出镜口播与分镜直出单片剪除，隐藏赛马
+      if (isSpeech || isSbDirect) {
+        if (raceBox) raceBox.style.display = "none";
+        if (dockTotalCost) dockTotalCost.textContent = "总计消耗 200 算力";
+      } else {
+        if (raceBox) raceBox.style.display = "block";
+        const cost = batchCount * 200;
+        if (dockTotalCost) dockTotalCost.textContent = `总计消耗 ${cost} 算力`;
+      }
+
+      if (isSpeech) {
+        if (!uploadedVideo) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.5";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = "第 3 步 · 请先上传口播视频素材";
+        } else if (asrPhase === 'uploading' || asrPhase === 'analyzing') {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = asrPhase === 'uploading' ? "第 3 步 · 正在上传素材，请稍候..." : "第 3 步 · 正在智能识别视频语音，请稍候...";
+        } else if (asrPhase === 'error') {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = "第 3 步 · 语音识别未完成，请重试";
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = "1";
+          submitBtn.style.cursor = "pointer";
+          submitText.textContent = "第 3 步 · 立即导出无痕口播精剪成片";
+        }
+      } else if (isSbDirect) {
+        if (storyboardClips.length < 2) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.5";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = "第 3 步 · 请至少添加 2 段分镜头";
+        } else if (asrPhase === 'uploading' || asrPhase === 'analyzing') {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = "第 3 步 · 正在逐段智能识别分镜台词...";
+        } else if (asrPhase === 'error') {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = "第 3 步 · 识别未完成，请重试";
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = "1";
+          submitBtn.style.cursor = "pointer";
+          submitText.textContent = "第 3 步 · 立即分镜直出成片";
+        }
+      } else if (isSbDub) {
+        if (storyboardClips.length < 2) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.5";
+          submitBtn.style.cursor = "not-allowed";
+          submitText.textContent = "第 3 步 · 请至少添加 2 段分镜头";
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = "1";
+          submitBtn.style.cursor = "pointer";
+          submitText.textContent = `第 3 步 · AI 配音生成分镜成片${batchCount > 1 ? ` (${batchCount}条)` : ''}`;
+        }
+      } else {
+        const cfg = SCENE_CONFIG[currentScene] || SCENE_CONFIG.ecommerce;
+        const actionWord = cfg.actionWord || "带货视频";
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = "1";
+        submitBtn.style.cursor = "pointer";
+        submitText.textContent = `第 3 步 · 立即生成 ${batchCount} 条${actionWord}`;
       }
     }
 
@@ -4441,6 +4512,7 @@
       if (sol === 'direct') {
         checkAndTriggerStoryboardDirectAsr();
       }
+      syncSubmitButtonState();
     }
 
     function renderStoryboardClips() {
@@ -4470,6 +4542,7 @@
       box.innerHTML = html;
       document.getElementById("material-hint").textContent = `已选 ${storyboardClips.length} / 9 段`;
       attachSortableGrid("storyboard-grid-box", storyboardClips, renderStoryboardClips);
+      syncSubmitButtonState();
     }
 
     function removeStoryboardClip(idx) {
@@ -5389,7 +5462,7 @@
       }
     }
 
-    
+
     function updateWorksCountUI(count) {
       const c = Number(count) || 0;
       const worksEl = document.getElementById("profile-works-val");
