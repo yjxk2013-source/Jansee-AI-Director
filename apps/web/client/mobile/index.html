@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="zh-CN">
 
 <head>
@@ -2436,6 +2437,7 @@
       transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
       pointer-events: auto;
     }
+
     .ios-startup-screen.loaded {
       opacity: 0;
       visibility: hidden;
@@ -2477,7 +2479,10 @@
     </div>
     <div class="header-actions">
       <div class="app-download-capsule" id="header-download-btn" onclick="handleDownloadAppClick()" title="下载客户端">
-        <svg viewBox="0 0 24 24"><path d="M12 3v13M8 12l4 4 4-4"/><path d="M4 19h16"/></svg>
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v13M8 12l4 4 4-4" />
+          <path d="M4 19h16" />
+        </svg>
         <span>客户端</span>
       </div>
       <div class="credit-capsule" onclick="handleCreditsCapsuleClick()" title="可用算力 · 会员订阅与充值">
@@ -2667,16 +2672,16 @@
     <section class="race-box">
       <div class="race-header">
         <span class="race-title">矩阵赛马 · 一次出几条</span>
-        <span class="race-badge" id="race-cost-badge">3 条 · 600 算力</span>
+        <span class="race-badge" id="race-cost-badge">1 条 · 200 算力</span>
       </div>
       <div class="race-quick-row">
-        <div class="race-pill" onclick="setBatchCount(1)">1 条</div>
-        <div class="race-pill active" onclick="setBatchCount(3)">3 条 (推荐)</div>
+        <div class="race-pill active" onclick="setBatchCount(1)">1 条</div>
+        <div class="race-pill" onclick="setBatchCount(3)">3 条 (推荐)</div>
         <div class="race-pill" onclick="setBatchCount(5)">5 条</div>
         <div class="race-pill" onclick="setBatchCount(10)">10 条</div>
       </div>
       <div class="race-slider-row">
-        <input type="range" class="race-slider" id="race-range" min="1" max="10" step="1" value="3"
+        <input type="range" class="race-slider" id="race-range" min="1" max="10" step="1" value="1"
           oninput="onRaceSliderChange(this.value)">
       </div>
       <div class="race-desc">
@@ -2690,10 +2695,10 @@
   <footer class="bottom-dock">
     <div class="dock-info-row">
       <span>单条消耗 200 算力</span>
-      <span id="dock-total-cost">总计消耗 600 算力</span>
+      <span id="dock-total-cost">总计消耗 200 算力</span>
     </div>
     <button class="btn-submit-main" onclick="triggerProduce()">
-      <span id="btn-submit-text">第 3 步 · 立即生成 3 条带货视频</span>
+      <span id="btn-submit-text">第 3 步 · 立即生成 1 条带货视频</span>
       <svg viewBox="0 0 100 100">
         <polygon points="20,10 90,50 20,90" />
       </svg>
@@ -2840,7 +2845,8 @@
     </div>
 
     <div class="delivery-dock">
-      <button type="button" class="btn-save-video" id="btn-theater-download" onclick="downloadCurrentVideo()">保存 1080P 到相册</button>
+      <button type="button" class="btn-save-video" id="btn-theater-download" onclick="downloadCurrentVideo()">保存 1080P
+        到相册</button>
       <button type="button" class="btn-save-cover" id="btn-save-cover-dock"
         onclick="downloadCurrentCover(event)">保存封面图</button>
       <button type="button" class="btn-copy-kit" onclick="copyPublishKit()">一键复制方案</button>
@@ -3290,7 +3296,7 @@
 
 
 
-    <!-- 客户端安装与下载指引模态窗 (iOS 添加至主屏幕 / Android 下载 APK) -->
+  <!-- 客户端安装与下载指引模态窗 (iOS 添加至主屏幕 / Android 下载 APK) -->
   <div class="install-mask" id="appInstallModal" onclick="event.target===this&&closeInstallModal()">
     <div class="install-card" role="dialog" aria-modal="true">
       <div class="install-header">
@@ -3299,7 +3305,10 @@
           <p class="install-sub" id="install-sub-text">极速出片 · 随手拍马上成片</p>
         </div>
         <button type="button" class="install-close-btn" onclick="closeInstallModal()" aria-label="关闭">
-          <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+          <svg viewBox="0 0 24 24">
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="6" y1="18" x2="18" y2="6" />
+          </svg>
         </button>
       </div>
 
@@ -3327,17 +3336,23 @@
         <div style="font-size:11.5px; color:var(--text-level3); line-height:1.5;">
           官方安卓原生客户端 APK 已就绪（约 6.1MB），支持原画质视频录制直传与后台异步出片：
         </div>
-        <a class="install-apk-btn" id="btn-download-apk" href="/assets/app/jansee.apk" download="jansee.apk" onclick="onApkDownloadClick()">
-          <svg viewBox="0 0 24 24"><path d="M12 3v13M8 12l4 4 4-4"/><path d="M4 19h16"/></svg>
+        <a class="install-apk-btn" id="btn-download-apk" href="/assets/app/jansee.apk" download="jansee.apk"
+          onclick="onApkDownloadClick()">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3v13M8 12l4 4 4-4" />
+            <path d="M4 19h16" />
+          </svg>
           <span>立即下载安卓 APK 安装包</span>
         </a>
-        <div style="font-size:10.5px; color:var(--text-level4); line-height:1.6; background:rgba(255,255,255,0.02); padding:8px; border-radius:2px; border:1px solid rgba(255,255,255,0.08);">
+        <div
+          style="font-size:10.5px; color:var(--text-level4); line-height:1.6; background:rgba(255,255,255,0.02); padding:8px; border-radius:2px; border:1px solid rgba(255,255,255,0.08);">
           首次安装若手机系统提示「未知来源应用」，选择<b>「允许 / 仍要安装」</b>即可，这是安卓官方对应用商店外 APK 的常规安全确认。
         </div>
       </div>
 
       <!-- 微信环境内特殊拦截提示 -->
-      <div id="install-weixin-tip" style="display:none; padding:10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:2px; font-size:11.5px; color:#fde68a; line-height:1.5;">
+      <div id="install-weixin-tip"
+        style="display:none; padding:10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:2px; font-size:11.5px; color:#fde68a; line-height:1.5;">
         检测到当前处于微信内，直接下载或添加到桌面受限。请点击右上角<b>「···」</b>，选择<b>「在浏览器打开」</b>后即可顺畅安装。
       </div>
     </div>
@@ -3351,7 +3366,7 @@
     // ==========================================
     let currentScene = 'ecommerce'; // ecommerce | local | life
     let currentMode = 'image-film';  // image-film | video-dub | speech-cut | storyboard
-    let batchCount = 3;             // 赛马数量 (默认 3 条)
+    let batchCount = 1;             // 赛马数量 (默认 1 条)
     let uploadedPhotos = [];         // 图片成片: [{ file, url }] 最多 9 张
     let uploadedVideo = null;        // 单段视频物料
     let storyboardClips = [];       // 切片分镜素材列表
@@ -5275,7 +5290,7 @@
       loadRecentWorks();
     }
 
-    
+
     function saveMobileDeliveredWork(item) {
       if (!item || (!item.videoUrl && !item.url)) return;
       const vUrl = item.videoUrl || item.url;
@@ -5299,7 +5314,7 @@
         try {
           const raw = localStorage.getItem(key);
           if (raw) list = JSON.parse(raw);
-        } catch (_) {}
+        } catch (_) { }
         if (!Array.isArray(list)) list = [];
         const exists = list.some(w => (w.videoUrl || w.url) === vUrl);
         if (!exists) {
@@ -5307,7 +5322,7 @@
           if (list.length > 50) list = list.slice(0, 50);
           localStorage.setItem(key, JSON.stringify(list));
         }
-      } catch (_) {}
+      } catch (_) { }
 
       try {
         const token = userToken || (localStorage.getItem("jansee.auth.token") || "");
@@ -5319,9 +5334,9 @@
               "Authorization": "Bearer " + token
             },
             body: JSON.stringify(record)
-          }).catch(() => {});
+          }).catch(() => { });
         }
-      } catch (_) {}
+      } catch (_) { }
 
       if (typeof loadRecentWorks === "function") {
         setTimeout(loadRecentWorks, 100);
@@ -5425,7 +5440,7 @@
             return;
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 本地已生成的作品回显
       if (activeDeliveryVersions.length > 0) {
@@ -5506,7 +5521,7 @@
               uObj.hasCheckedInToday = true;
               localStorage.setItem("jansee.auth.user", JSON.stringify(uObj));
             }
-          } catch (_) {}
+          } catch (_) { }
           showToast(`签到成功！已入账 ${reward} 算力`);
         } else if (d.code === 40002 || (d.data && d.data.alreadyCheckin)) {
           if (d.data && d.data.totalPoints !== undefined) {

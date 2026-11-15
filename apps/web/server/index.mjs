@@ -2251,6 +2251,36 @@ const server = http.createServer((req, res) => {
   const forcePc = urlObj.searchParams.get('pc') === '1';
   const forceMobile = urlObj.searchParams.get('m') === '1' || urlObj.searchParams.get('mobile') === '1';
 
+  // 客户端统一扫码下载自适应分流路由 (iOS 引导添加到主屏幕 / Android 直接下载 APK)
+  if (pathname === '/download' || pathname === '/app' || pathname === '/download/' || pathname === '/app/') {
+    const isIos = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const inWeixin = /MicroMessenger/i.test(ua);
+
+    if (inWeixin) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>下载简兮客户端</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#0a0a0e;color:#fff;font-family:-apple-system,sans-serif;padding:32px 20px;text-align:center;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;}h2{font-size:20px;font-weight:400;margin-bottom:8px;letter-spacing:0.04em;}p{font-size:12px;color:#a1a1aa;margin-bottom:28px;}.card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.2);padding:24px 20px;border-radius:2px;max-width:320px;width:100%;font-size:13px;line-height:1.7;color:#e4e4e7;}.arrow{position:fixed;top:14px;right:20px;font-size:22px;color:#ffffff;animation:float 1.5s ease-in-out infinite;}@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}</style></head><body><div class="arrow">↗</div><h2>简兮·JANSEE 客户端</h2><p>全栈 AI 短视频重构工场</p><div class="card">微信限制直接安装或下载。<br><br>请点击右上角 <b>【 ··· 】</b><br>选择 <b>【在默认浏览器中打开】</b><br><br><span style="font-size:11px;color:#71717a;">iOS 将自动进入主屏幕安装，Android 将自动下载 APK</span></div></body></html>`);
+      return;
+    }
+
+    if (isAndroid) {
+      res.writeHead(302, { 'Location': '/assets/app/jansee.apk' });
+      res.end();
+      return;
+    }
+
+    if (isIos) {
+      res.writeHead(302, { 'Location': '/mobile/index.html?install=1' });
+      res.end();
+      return;
+    }
+
+    // PC 电脑端访问：跳转首页并自动弹出客户端扫码下载模态框
+    res.writeHead(302, { 'Location': '/index.html?download=1' });
+    res.end();
+    return;
+  }
+
   if (pathname === '/m' || pathname === '/mobile' || pathname === '/m/' || pathname === '/mobile/') {
     reqPath = '/mobile/index.html';
   } else if (pathname === '/' || pathname === '/index.html') {

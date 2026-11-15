@@ -6980,7 +6980,7 @@
         class="brand-text">简兮·JANSEE</span></a>
     <nav class="links" aria-label="主要导航"><a href="#matrix-workbench"
         onclick='event.preventDefault(),document.getElementById("matrix-workbench")?.scrollIntoView({behavior:"smooth"})'>场景创作</a>
-      <a href="#gallery-showcase">真实样片</a> <a href="#pricing-plans">订阅方案</a> <a href="#faq-section">常见问题</a></nav>
+      <a href="#gallery-showcase">真实样片</a> <a href="#pricing-plans">订阅方案</a> <a href="#faq-section">常见问题</a> <a href="javascript:void(0)" onclick="openClientDownloadModal()">客户端</a></nav>
     <div class="topbar-actions"><button class="lang-switch-btn" id="lang-switch-btn" onclick="toggleLanguage()"
         aria-label="切换中英文 (Language Switch)"><span class="lang-opt active" id="lang-opt-zh">中</span> <span
           class="lang-sep">/</span> <span class="lang-opt" id="lang-opt-en">EN</span></button> <button
@@ -9413,6 +9413,55 @@ window.syncUserWorksFromServer = syncUserWorksFromServer; window.toggleWorksFold
       user-select: auto !important
     }
   </style>
+
+  <!-- PC 端专属客户端扫码下载模态框 -->
+  <div id="clientDownloadModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.85); backdrop-filter:blur(18px); align-items:center; justify-content:center; padding:20px;">
+    <div style="width:100%; max-width:440px; background:rgba(18,18,24,0.96); border:1px solid rgba(255,255,255,0.25); border-radius:2px; box-shadow:0 24px 60px rgba(0,0,0,0.9), 0 0 30px rgba(255,255,255,0.06); padding:28px 24px; box-sizing:border-box; position:relative; display:flex; flex-direction:column; align-items:center; text-align:center;">
+      <button type="button" onclick="closeClientDownloadModal()" style="position:absolute; top:14px; right:14px; width:28px; height:28px; background:none; border:1px solid rgba(255,255,255,0.15); border-radius:2px; color:#a1a1aa; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; line-height:1; transition:all 0.2s ease;">&times;</button>
+      
+      <div style="font-size:16px; font-weight:400; color:#ffffff; letter-spacing:0.04em; margin-bottom:6px;">扫码安装 简兮·JANSEE 客户端</div>
+      <div style="font-size:11.5px; color:#a1a1aa; margin-bottom:20px;">支持 iOS 与 Android · 手机相机或微信扫码自动识别安装</div>
+
+      <!-- 高清矢量二维码容器 -->
+      <div style="width:176px; height:176px; background:#ffffff; border-radius:2px; padding:8px; display:flex; align-items:center; justify-content:center; margin-bottom:20px; box-shadow:0 0 20px rgba(255,255,255,0.12);">
+        <img id="clientDownloadQrImg" src="/api/v1/invite/qrcode?link=https%3A%2F%2Fjansee.cn%2Fdownload" alt="客户端下载二维码" style="width:160px; height:160px; display:block; object-fit:contain;">
+      </div>
+
+      <!-- 双平台自适应说明卡片 -->
+      <div style="width:100%; display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; text-align:left;">
+        <div style="padding:10px 12px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.12); border-radius:2px;">
+          <div style="font-size:11.5px; color:#ffffff; font-weight:500; margin-bottom:4px;">iOS (iPhone)</div>
+          <div style="font-size:10px; color:#a1a1aa; line-height:1.4;">Safari 扫码后「添加到主屏幕」即可全屏启动，享独立图标与原生体验</div>
+        </div>
+        <div style="padding:10px 12px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.12); border-radius:2px;">
+          <div style="font-size:11.5px; color:#ffffff; font-weight:500; margin-bottom:4px;">Android (安卓)</div>
+          <div style="font-size:10px; color:#a1a1aa; line-height:1.4;">微信或相机扫码直接极速下载 5.84MB 官方 APK 安装包</div>
+        </div>
+      </div>
+
+      <!-- 电脑端直下备用按钮 -->
+      <a href="/assets/app/jansee.apk" download="jansee.apk" style="width:100%; height:36px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.3); border-radius:2px; color:#ffffff; font-size:12px; font-weight:300; display:flex; align-items:center; justify-content:center; text-decoration:none; transition:all 0.2s ease;">
+        电脑端直接下载 Android APK (5.84 MB)
+      </a>
+    </div>
+  </div>
+
+  <script>
+    function openClientDownloadModal() {
+      const modal = document.getElementById("clientDownloadModal");
+      if (modal) modal.style.display = "flex";
+    }
+    function closeClientDownloadModal() {
+      const modal = document.getElementById("clientDownloadModal");
+      if (modal) modal.style.display = "none";
+    }
+    window.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("download") === "1") {
+        setTimeout(openClientDownloadModal, 300);
+      }
+    });
+  </script>
 </body>
 
 </html>
