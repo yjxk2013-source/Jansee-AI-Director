@@ -234,15 +234,61 @@ function resolveDirectorHits(input: DirectorPlanResolvedInput, plan: DirectorPla
   return { anchorHit: anchorHit && (!route.decidedVariant || plan.variant_type === route.decidedVariant), variantMatched };
 }
 
+function findCanonicalVariant(rawVariant: unknown, allowedVariants: readonly string[]): string | null {
+  if (typeof rawVariant !== "string") return null;
+  const clean = rawVariant.trim();
+  if (!clean) return null;
+  if (allowedVariants.includes(clean)) return clean;
+  const letterMatch = clean.match(/^([A-Za-z])[\s\-._、:：]?/);
+  if (letterMatch) {
+    const letter = letterMatch[1]!.toUpperCase();
+    const candidate = allowedVariants.find((v) => v.startsWith(`${letter}-`));
+    if (candidate) return candidate;
+  }
+  const stripped = clean.replace(/^[A-Za-z][\s\-._、:：]?/, "").trim();
+  if (stripped) {
+    const candidate = allowedVariants.find((v) => {
+      const vDesc = v.replace(/^[A-Za-z]-/, "");
+      return vDesc.includes(stripped) || stripped.includes(vDesc) || stripped.replace(/型$/, "") === vDesc.replace(/型$/, "");
+    });
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
 function normalizePlanForRoute(parsed: Record<string, unknown>, route: DirectorRouteResolution): void {
   if (route.isPersonal) { parsed.anchor = "none"; delete parsed.variant_type; return; }
   const variants = route.scene === "local" ? LOCAL_VARIANT_TYPES : SELL_VARIANT_TYPES;
-  const variant = typeof parsed.variant_type === "string" ? parsed.variant_type : "";
-  if (!variants.includes(variant)) throw new Error("DIRECTOR_VARIANT_INVALID: 导演未选择当前场景允许的人设变体");
+  const canonicalVariant = findCanonicalVariant(parsed.variant_type, variants) || (route.decidedVariant && variants.includes(route.decidedVariant) ? route.decidedVariant : null);
+  if (!canonicalVariant) throw new Error("DIRECTOR_VARIANT_INVALID: 导演未选择当前场景允许的人设变体");
+  parsed.variant_type = canonicalVariant;
+
   const compatible = route.scene === "local"
-    ? ((LOCAL_ROLE_COMPAT as Record<string, string[]>)[variant] ?? [])
-    : compatAnchors(variant);
-  if (typeof parsed.anchor !== "string" || !compatible.includes(parsed.anchor)) throw new Error("DIRECTOR_ANCHOR_MISMATCH: 主播/实体角色与导演选择的变体不兼容");
+    ? ((LOCAL_ROLE_COMPAT as Record<string, string[]>)[canonicalVariant] ?? [])
+    : compatAnchors(canonicalVariant);
+  if (typeof parsed.anchor === "string") {
+    const cleanAnchor = parsed.anchor.trim();
+    if (!compatible.includes(cleanAnchor)) {
+      if (route.scene === "sell") {
+        const found = (HOST_LIBRARY as Array<{ id: string; name: string }>).find(
+          (h) => h.id === cleanAnchor || h.name === cleanAnchor || cleanAnchor.includes(h.name) || cleanAnchor.includes(h.id),
+        );
+        if (found && compatible.includes(found.id)) parsed.anchor = found.id;
+        else if (compatible.length > 0) parsed.anchor = compatible[0]!;
+      } else {
+        const found = (LOCAL_ROLES as Array<{ id: string; name: string; label: string }>).find(
+          (r) => r.id === cleanAnchor || r.name === cleanAnchor || r.label.includes(cleanAnchor) || cleanAnchor.includes(r.id),
+        );
+        if (found && compatible.includes(found.id)) parsed.anchor = found.id;
+        else if (compatible.length > 0) parsed.anchor = compatible[0]!;
+      }
+    } else {
+      parsed.anchor = cleanAnchor;
+    }
+  } else if (compatible.length > 0) {
+    parsed.anchor = compatible[0]!;
+  }
+  if (!compatible.includes(parsed.anchor as string)) throw new Error("DIRECTOR_ANCHOR_MISMATCH: 主播/实体角色与导演选择的变体不兼容");
 }
 
 export function isDirectorPlanCompatible(input: DirectorPlanResolvedInput, plan: DirectorPlan): boolean {

@@ -37,7 +37,7 @@ export interface RenderResult {
 }
 
 export interface MediaRenderer {
-  render(job: GenerationJobRecord, assets: AssetRecord[]): Promise<RenderResult>;
+  render(job: GenerationJobRecord, assets: AssetRecord[], onProgress?: (progress: number) => void): Promise<RenderResult>;
 }
 
 export interface VideoDubEngineInput {
@@ -90,7 +90,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
   const timeoutMs = options.renderTimeoutMs ?? 60_000;
 
   return {
-    async render(job, assets) {
+    async render(job, assets, onProgress) {
       if (assets.length === 0) throw new Error("Cannot render a job with zero assets");
       const renderScene = resolveRendererScene(job);
 
@@ -147,6 +147,12 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             cut,
             voiceId,
             scene: renderScene,
+            onStage: (e: { progress?: number }) => {
+              if (typeof e?.progress === "number" && onProgress) {
+                const scaled = Math.min(89, Math.max(50, 50 + Math.round(e.progress * 0.39)));
+                onProgress(scaled);
+              }
+            },
           });
           const stored = await options.storage.putFile(outputKey, result.outputPath);
           const measuredSize = probeVideoSize(result.outputPath);

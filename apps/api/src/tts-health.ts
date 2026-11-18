@@ -43,12 +43,12 @@ export async function loadTencentVoiceHealth(pool: Pool): Promise<number> {
       [voiceType, candidate.gender, candidate.language, candidate.label, reason],
     );
     const current = await pool.query<{ voice_type: number; status: ProbeStatus }>(
-      "SELECT voice_type, CASE WHEN checked_at IS NULL OR checked_at < now() - interval '24 hours' THEN 'unknown' ELSE status END AS status FROM tts_voice_health",
+      "SELECT voice_type, status FROM tts_voice_health",
     );
     applyTencentVoiceHealthSnapshot(current.rows.map((row) => ({ voiceType: Number(row.voice_type), status: row.status })));
   });
   const result = await pool.query<{ voice_type: number; status: ProbeStatus }>(
-    "SELECT voice_type, CASE WHEN checked_at IS NULL OR checked_at < now() - interval '24 hours' THEN 'unknown' ELSE status END AS status FROM tts_voice_health",
+    "SELECT voice_type, status FROM tts_voice_health",
   );
   applyTencentVoiceHealthSnapshot(result.rows.map((row) => ({
     voiceType: Number(row.voice_type),

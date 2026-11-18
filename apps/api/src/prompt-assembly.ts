@@ -287,7 +287,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
       voice_id: "真实腾讯 TTS VoiceType 数字 ID（例如 403010、402001、404000、402000）",
       speech_speed: 1.0,
       bgm_emotion: "从情绪池选 1 个",
-      variant_type: isPersonal ? "personal-creation" : decidedVariant || "selected-variant-from-current-persona-director",
+      variant_type: isPersonal ? "personal-creation" : (decidedVariant || `从当前场景变体池选1个精确填入：${(scene === "local" ? LOCAL_VARIANT_TYPES : SELL_VARIANT_TYPES).join(" / ")}`),
       packaging: { intro: true, ending: true, subtitles: true, bgm: true },
       publish: {
         caption: "发布正文文案，带 3-5 个垂直长尾话题标签（如 #打工人救星 #私藏宝藏好物）",

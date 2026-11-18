@@ -45,6 +45,7 @@ export interface EngineExecutionContext {
   directorPlan: Record<string, unknown>;
   job: GenerationJobRecord;
   renderer: MediaRenderer;
+  onProgress?: (progress: number) => void;
 }
 
 export interface EngineExecutionResult {

@@ -8,14 +8,16 @@ export interface DatabaseConfig {
 
 const TRANSIENT_DATABASE_CODES = new Set([
   "08000", "08001", "08003", "08004", "08006", "08007", "08P01",
-  "40001", "40P01", "53300", "57P01", "57P03",
+  "34000", "40001", "40P01", "53300", "57P01", "57P03",
 ]);
 
 export function isTransientDatabaseError(error: unknown): boolean {
-  const candidate = error as { code?: unknown; errno?: unknown; name?: unknown } | null;
+  const candidate = error as { code?: unknown; errno?: unknown; name?: unknown; message?: unknown } | null;
   const code = typeof candidate?.code === "string" ? candidate.code : "";
   const errno = typeof candidate?.errno === "string" ? candidate.errno : "";
+  const message = typeof candidate?.message === "string" ? candidate.message : "";
   return TRANSIENT_DATABASE_CODES.has(code)
+    || message.includes('portal "" does not exist')
     || ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EPIPE", "ENETUNREACH"].includes(code)
     || ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EPIPE", "ENETUNREACH"].includes(errno)
     || candidate?.name === "ConnectionError";

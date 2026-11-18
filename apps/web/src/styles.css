@@ -4530,13 +4530,67 @@ html, body, #root {
   }
 }
 
-/* Chat-style job progress: each real worker stage is narrated by its responsible JANSEE role. */
-.job-progress-inline { display: grid; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f0f1f2; }
-.job-progress-inline-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #80868b; font-size: 11px; line-height: 1.4; }
-.job-progress-inline-heading strong { color: #5f6368; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.job-progress-inline-track { height: 4px; overflow: hidden; border-radius: 999px; background: #eef0f2; }
-.job-progress-inline-track > span { display: block; height: 100%; border-radius: inherit; background: #5f6368; transition: width .2s ease; }
-.job-progress-inline.is-failed .job-progress-inline-heading strong { color: #b54747; }
+/* Chat-style job progress: Natural progress percentage is narratively woven into JANSEE team dialogue. */
+.job-progress-inline { display: none; }
+
+/* 简兮团队协作思考状态指示 (遵循 V4 设计规范：极简、中性、轻量对话交互) */
+.message-thinking {
+  margin-top: 4px;
+}
+
+.message-thinking .thinking-bubble {
+  background: var(--jansee-surface-subtle, #f7f7f5);
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px;
+  max-width: 100%;
+}
+
+.thinking-indicator-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.thinking-dots .thinking-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--jansee-text-secondary, #5f6368);
+  display: inline-block;
+  opacity: 0.3;
+  animation: thinking-dot-fade 1.4s infinite ease-in-out both;
+}
+
+.thinking-dots .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dots .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+.thinking-dots .thinking-dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes thinking-dot-fade {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dots .thinking-dot { animation: none; opacity: 0.6; }
+}
+
+.thinking-caption {
+  font-size: 13px;
+  color: var(--jansee-text-secondary, #5f6368);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 
 /* Chat-style job delivery: director posts the finished video and publish copy as chat messages. */
 .job-delivery { display: grid; gap: 10px; margin-top: 10px; }

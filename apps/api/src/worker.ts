@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { withDatabaseRetry } from "./database.js";
 import type { LocalObjectStorage } from "./storage-local.js";
 import type { MediaRenderer, RenderResult } from "./renderer.js";
 import type { JobStore, GenerationJobRecord } from "./jobs.js";
@@ -82,18 +83,29 @@ export async function processJob(
   let ttsChars = 0;
   let providerTelemetry: Record<string, unknown> = {};
   let qcSummaries: Array<{ grade: string; metrics: Record<string, unknown>; warnings: string[] }> = [];
+  let consecutiveHeartbeatFailures = 0;
   if (context.workerId && jobStore.heartbeatJob) {
     const heartbeat = async () => {
       try {
-        const owned = await jobStore.heartbeatJob!(job.userId, job.id, context.workerId!, WORKER_LEASE_SECONDS);
-        if (!owned) leaseLost = true;
-      } catch (error) {
-        leaseLost = true;
-        throw error;
+        const owned = await withDatabaseRetry(
+          () => jobStore.heartbeatJob!(job.userId, job.id, context.workerId!, WORKER_LEASE_SECONDS),
+          { attempts: 3, delayMs: 200 },
+        );
+        if (owned === false) {
+          leaseLost = true;
+        } else {
+          consecutiveHeartbeatFailures = 0;
+        }
+      } catch {
+        consecutiveHeartbeatFailures += 1;
+        // 允许偶发数据库瞬态抖动，仅当连续 4 次心跳失败（超过 2 分钟无法通信）时才认为租约已失
+        if (consecutiveHeartbeatFailures >= 4) {
+          leaseLost = true;
+        }
       }
     };
-    void heartbeat().catch(() => { leaseLost = true; });
-    heartbeatTimer = setInterval(() => { void heartbeat().catch(() => { leaseLost = true; }); }, WORKER_HEARTBEAT_MS);
+    void heartbeat().catch(() => {});
+    heartbeatTimer = setInterval(() => { void heartbeat().catch(() => {}); }, WORKER_HEARTBEAT_MS);
     heartbeatTimer.unref?.();
   }
   const ensureLease = () => {
@@ -314,6 +326,9 @@ export async function processJob(
           directorPlan: plan,
           job: activeJob,
           renderer,
+          onProgress: (p) => {
+            jobStore.updateJobStatus?.(job.userId, job.id, "rendering", p, undefined, context.workerId).catch(() => {});
+          },
         });
         const storageKey = engineResult.storageKey ?? `users/${job.userId}/outputs/${job.id}`;
         const stored = engineResult.storageKey
@@ -337,7 +352,9 @@ export async function processJob(
         await rm(taskDir, { recursive: true, force: true });
       }
     } else {
-      renderResult = await renderer.render(activeJob, assets);
+      renderResult = await renderer.render(activeJob, assets, (p) => {
+        jobStore.updateJobStatus?.(job.userId, job.id, "rendering", p, undefined, context.workerId).catch(() => {});
+      });
       stagedStorageKeys.push(renderResult.storageKey);
       renderResults = [renderResult];
     }
@@ -549,7 +566,7 @@ export function buildJobClaimSql(maxAttempts = WORKER_MAX_ATTEMPTS): string {
   SET status = 'inspecting',
       progress = 20,
       worker_id = $1,
-      lease_expires_at = now() + interval '120 seconds',
+      lease_expires_at = now() + interval '${WORKER_LEASE_SECONDS} seconds',
       last_heartbeat_at = now(),
       attempt_count = job.attempt_count + 1,
       error_code = NULL,

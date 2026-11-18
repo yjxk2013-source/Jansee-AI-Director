@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type TouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type TouchEvent } from "react";
 import type { CreationMode } from "@jansee/contracts";
 import { AdminConsole } from "./AdminConsole";
 import QRCode from "qrcode";
@@ -51,16 +51,16 @@ type SpeechWindow = Window & {
 };
 
 const JOB_PROGRESS_LOGS: Record<string, Array<{ speaker: string; text: string }>> = {
-  queued: [{ speaker: "简兮导演", text: "我已接到你的创作需求，正在统筹制作安排。" }],
-  inspecting: [{ speaker: "简兮美术师", text: "素材已收到，我正在核对素材是否齐全、可读取，为后续画面处理做好准备。" }],
-  planning: [{ speaker: "简兮导演", text: "素材检查完成，创作方案已确定；我正在把镜头结构与表达方向交给制作流程。" }],
+  queued: [{ speaker: "简兮导演", text: "已接到你的创作需求（准备中 10%），正在统筹排期与算力调度。" }],
+  inspecting: [{ speaker: "简兮美术师", text: "素材已收齐并完成画质校验（分析完成 25%），画面无损，准备进入分镜设计。" }],
+  planning: [{ speaker: "简兮导演", text: "分镜脚本与台词已规划定稿（方案进度 40%），已正式交给制作流水线。" }],
   rendering: [
-    { speaker: "简兮剪辑师", text: "我正在编排镜头与转场，让画面衔接自然、节奏清晰。" },
-    { speaker: "简兮音效师", text: "我正在把配音与背景音乐按画面节奏整合，让声音层次更协调。" },
-    { speaker: "简兮包装师", text: "我正在整合字幕、片头片尾与视觉细节，让成片完整呈现。" },
+    { speaker: "简兮剪辑师", text: "正在根据分镜编排运镜与柔和叠画转场（制作进度 55%），让画面衔接自然、节奏清晰。" },
+    { speaker: "简兮音效师", text: "正在合成超自然大模型配音与人声避让混音（制作进度 75%），声画多轨调校中。" },
+    { speaker: "简兮包装师", text: "正在整合发丝级字幕、封面与片尾细节（制作进度 88%），成片封装就绪。" },
   ],
-  "quality-check": [{ speaker: "简兮质检师", text: "成片已经生成，我正在检查文件完整性、声音轨道与交付合规信息。" }],
-  completed: [{ speaker: "简兮导演", text: "成片已通过检查并完成交付，你可以直接在这里预览。" }],
+  "quality-check": [{ speaker: "简兮质检师", text: "成片已生成（质检中 95%），正在逐项核验文件完整性、音轨平衡与交付合规信息。" }],
+  completed: [{ speaker: "简兮导演", text: "成片已全流程通过质检（制作完成 100%），已为你送达，请直接点击预览。" }],
 };
 
 function makeId() {
@@ -100,6 +100,43 @@ export default function App() {
   const uploadPromisesRef = useRef<Map<string, Promise<string>>>(new Map());
   const [fileError, setFileError] = useState("");
   const [isDirectorThinking, setIsDirectorThinking] = useState(false);
+  const activeThinkingState = useMemo(() => {
+    if (isDirectorThinking) {
+      return {
+        speaker: "简兮团队",
+        text: "简兮团队正在分析素材特征，构思分镜脚本与台词...",
+      };
+    }
+    const activeJobMessage = [...messages].reverse().find(
+      (m) => m.jobId && !["completed", "failed", "cancelled"].includes(m.jobStatus ?? "")
+    );
+    if (activeJobMessage) {
+      const status = activeJobMessage.jobStatus;
+      if (status === "queued") {
+        return { speaker: "简兮导演", text: "正在统筹算力资源与排期..." };
+      }
+      if (status === "inspecting") {
+        return { speaker: "简兮美术师", text: "正在解析素材视觉特征与画面色彩基调..." };
+      }
+      if (status === "planning") {
+        return { speaker: "简兮导演", text: "正在编排镜头结构与下发流水线任务..." };
+      }
+      if (status === "rendering") {
+        return { speaker: "简兮制作团队", text: "正在进行分镜运镜转场与多轨混音合成..." };
+      }
+      if (status === "quality-check") {
+        return { speaker: "简兮质检师", text: "正在逐项核验音视频完整性与交付合规信息..." };
+      }
+      return { speaker: "简兮制作团队", text: "正在全力制作中，请稍候..." };
+    }
+    const speechCutActive = messages.some(
+      (m) => m.speechCutSessionId && ["analyzing", "producing"].includes(m.speechCutStatus ?? "")
+    );
+    if (speechCutActive) {
+      return { speaker: "简兮剪辑师", text: "正在进行高精度人声识别与停顿分析..." };
+    }
+    return null;
+  }, [isDirectorThinking, messages]);
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
@@ -784,6 +821,38 @@ export default function App() {
     setFiles([]);
     uploadPromisesRef.current.clear();
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+
+    let intermediateFinished = false;
+    const intermediateTimer1 = window.setTimeout(() => {
+      if (intermediateFinished) return;
+      setConversations((current) => current.map((c) => {
+        if (c.id !== conversationId) return c;
+        if (c.messages.some((m) => m.id === `ack-art-${conversationId}`)) return c;
+        const msg: ChatMessage = {
+          id: `ack-art-${conversationId}`,
+          role: "director",
+          speaker: "简兮美术师",
+          text: "素材画幅与分辨率解析完成，正在提取构图主体与光影特征点…",
+        };
+        return { ...c, messages: [...c.messages, msg] };
+      }));
+    }, 1200);
+
+    const intermediateTimer2 = window.setTimeout(() => {
+      if (intermediateFinished) return;
+      setConversations((current) => current.map((c) => {
+        if (c.id !== conversationId) return c;
+        if (c.messages.some((m) => m.id === `ack-script-${conversationId}`)) return c;
+        const msg: ChatMessage = {
+          id: `ack-script-${conversationId}`,
+          role: "director",
+          speaker: "简兮编导",
+          text: "正在结合短视频黄金前3秒节奏与场景调性，梳理分镜台词与情绪曲线…",
+        };
+        return { ...c, messages: [...c.messages, msg] };
+      }));
+    }, 2600);
+
     try {
       if (authUser.id !== "local-preview-user") {
         try {
@@ -986,7 +1055,12 @@ export default function App() {
       setConversations((current) => current.map((conversation) => conversation.id === conversationId
         ? { ...conversation, updatedAt: Date.now(), messages: [...conversation.messages, { id: makeId(), role: "director" as const, text: "这次创作没能继续：" + reason }] }
         : conversation));
-    } finally { setIsDirectorThinking(false); }
+    } finally {
+      intermediateFinished = true;
+      window.clearTimeout(intermediateTimer1);
+      window.clearTimeout(intermediateTimer2);
+      setIsDirectorThinking(false);
+    }
   }
 
   function toggleSpeechCutSuggestion(messageId: string, suggestionId: string, checked: boolean) {
@@ -1196,26 +1270,7 @@ export default function App() {
                   <div className="message-author">{message.role === "user" ? "你" : (message.speaker || "简兮导演")}</div>
                   <div className="message-bubble">
                     <p>{message.text}</p>
-                    {message.jobStage && (
-                      <div className={`job-progress-inline ${message.jobStatus === "failed" ? "is-failed" : ""}`}>
-                        <div className="job-progress-inline-heading">
-                          <span>{message.jobStatus === "completed" ? "制作完成" : message.jobStatus === "failed" ? "制作中断" : "当前进度"}</span>
-                          <strong>{message.jobStatus === "failed" ? "未完成" : `${Math.round(Math.max(0, Math.min(100, message.jobProgress ?? 0)))}%`}</strong>
-                        </div>
-                        {message.jobStatus !== "failed" && (
-                          <div
-                            className="job-progress-inline-track"
-                            role="progressbar"
-                            aria-label="制作进度"
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={Math.round(Math.max(0, Math.min(100, message.jobProgress ?? 0)))}
-                          >
-                            <span style={{ width: `${Math.max(0, Math.min(100, message.jobProgress ?? 0))}%` }} />
-                          </div>
-                        )}
-                      </div>
-                    )}
+
 
                     {message.jobWorkId && (
                       <div className="job-delivery">
@@ -1313,6 +1368,23 @@ export default function App() {
                 </div>
               </article>
             ))}
+            {activeThinkingState && (
+              <article className="message-row message-director message-thinking" aria-live="polite">
+                <div className="message-content">
+                  <div className="message-author">{activeThinkingState.speaker}</div>
+                  <div className="message-bubble thinking-bubble">
+                    <div className="thinking-indicator-content">
+                      <span className="thinking-dots" aria-hidden="true">
+                        <span className="thinking-dot" />
+                        <span className="thinking-dot" />
+                        <span className="thinking-dot" />
+                      </span>
+                      <span className="thinking-caption">{activeThinkingState.text}</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )}
           </div>
         )}
       </section>

@@ -230,7 +230,7 @@ function createRendererEngine(id: "image-film" | "video-dub"): ProductionEngine 
     id,
     async execute(context) {
       const job = { ...context.job, directorPlan: context.directorPlan };
-      const rendered = await context.renderer.render(job, [...context.assets]);
+      const rendered = await context.renderer.render(job, [...context.assets], context.onProgress);
       return {
         storageKey: rendered.storageKey,
         sizeBytes: rendered.sizeBytes,
