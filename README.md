@@ -78,3 +78,12 @@ The responsive Web client is also the shared installable PWA experience. PC and 
 ## Current milestone
 
 **Alpha.1 — local integration available.** The independent V4 repository contains the authenticated upload/API flow, director planning, job queue/worker, FFmpeg renderer, Auto-QC, output delivery, local/COS storage adapters, and production guards. Build and automated test coverage exist, but this does not mean production deployment is complete: production still needs its own native PostgreSQL, durable media storage, live SMS/payment configuration, production secrets, and deployment verification.
+
+## Team & Contributors (团队协同治理)
+
+JANSEE V4 是一个由工程团队分布式协作研发的企业级 AI 导演系统。关于详细的分工与模块职责矩阵，请查阅 [AUTHORS.md](AUTHORS.md)。
+
+- **Project Lead & Core Contributor**: [YJXK](https://github.com/yjxk2021) (`yjxk2021@gmail.com`) — 系统架构治理、体验一致性与商业化闭环
+- **Chief Architect & Systems**: JANSEE Architecture (`admin@jansee.cn`) — 基础设施、后端服务与异步渲染管线
+- **Visual Design & Audio/Video Labs**: JANSEE Design & Media Teams — 黑曜石设计系统与微光音视频渲染算法
+
