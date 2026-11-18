@@ -1,0 +1,8 @@
+{
+  "name": "@jansee/publish-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 发布方案共享层（字段契约 + 兜底清洗 + 广告法红线词表）",
+  "type": "module",
+  "main": "index.js"
+}

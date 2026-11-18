@@ -1,0 +1,10 @@
+{
+  "name": "@jansee/domain",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./job-state": "./src/job-state.ts"
+  }
+}

@@ -1,0 +1,88 @@
+# Standalone JANSEE V4 stack. PostgreSQL is private to this compose network.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jansee_v4
+      POSTGRES_USER: jansee_v4
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the V4 .env file}
+    volumes:
+      - v4_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jansee_v4 -d jansee_v4"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      v4-private:
+        ipv4_address: 172.30.250.4
+
+  api:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.v4
+      target: api
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      API_HOST: 0.0.0.0
+      API_PORT: 4100
+      DATABASE_URL: postgres://jansee_v4:${POSTGRES_PASSWORD}@postgres:5432/jansee_v4
+      DATABASE_SSL: "false"
+      DATABASE_PRIVATE_NETWORK: "true"
+      TRUST_PROXY_IP: "172.30.250.2"
+      MEDIA_STORAGE_DRIVER: local
+      MEDIA_STORAGE_ROOT: /app/storage/media
+      MEDIA_CACHE_ROOT: /app/storage/cache
+      JX_WHISPER_CLI: /app/whisper.cpp/bin/whisper-cli
+      JX_WHISPER_MODEL: /app/whisper.cpp/models/ggml-small.bin
+      JX_MATERIALS_ROOT: /app/materials
+    volumes:
+      - ../storage/v4:/app/storage
+      - ../materials:/app/materials:ro
+      # Host must provision a Linux whisper-cli and the model; Windows binaries are not valid here.
+      - ../whisper.cpp:/app/whisper.cpp:ro
+    expose:
+      - "4100"
+    networks:
+      v4-private:
+        ipv4_address: 172.30.250.3
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.v4
+      target: web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    networks:
+      v4-private:
+        ipv4_address: 172.30.250.2
+
+volumes:
+  v4_postgres_data:
+
+networks:
+  v4-private:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24

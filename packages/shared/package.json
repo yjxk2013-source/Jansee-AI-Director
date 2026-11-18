@@ -1,0 +1,8 @@
+{
+  "name": "@jansee/shared",
+  "version": "2.0.2",
+  "private": true,
+  "description": "简兮 (JANSEE) 素材目录寻址（assetsPath）",
+  "type": "module",
+  "main": "assetsPath.mjs"
+}

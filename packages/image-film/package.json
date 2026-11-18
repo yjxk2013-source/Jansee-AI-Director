@@ -1,0 +1,19 @@
+{
+  "name": "@jansee/image-film",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 图片成片模块（导演剧本输入 → TTS 实测 → BGM → V4 引擎一次成片，对外唯一 API：produceImageFilm）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "@jansee/visual-engine-v4": "*",
+    "@jansee/ending-kit": "*",
+    "@jansee/intro-kit": "*",
+    "@jansee/tts-kit": "*",
+    "@jansee/audio-kit": "*",
+    "ffmpeg-static": "^5.2.0"
+  }
+}

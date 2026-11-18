@@ -1,0 +1,10 @@
+# Public JANSEE website. Private application endpoints are not crawl targets.
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Disallow: /storage/
+Disallow: /private/
+Disallow: /*?admin=1
+Allow: /
+
+Sitemap: https://jansee.cn/sitemap.xml

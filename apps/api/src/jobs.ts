@@ -1,0 +1,273 @@
+import { z } from "zod";
+import type { CreationMode, AspectRatio, JobStatus } from "@jansee/contracts";
+import type { FastifyInstance } from "fastify";
+import type { AuthStore } from "./auth.js";
+import type { AssetStore } from "./assets.js";
+import { authenticatedUser } from "./assets.js";
+import { assertJobTransition } from "@jansee/domain";
+import type { BillingStore } from "./billing.js";
+import { GENERATION_COST_CREDITS } from "./billing.js";
+import { detectSensitiveTerms } from "./content-safety.js";
+import { BATCH_VERSION_LIMIT, assignBatchVariants, deriveBatchIdempotencyKey } from "./batch-versions.js";
+import { detectCreationScene, type CreationScene } from "./prompt-assembly.js";
+
+export const CreateJobRequestSchema = z.object({
+  mode: z.enum(["image-film", "video-dub", "storyboard"]),
+  prompt: z.string().trim().min(1).max(2_000),
+  aspectRatio: z.enum(["9:16", "16:9", "1:1", "4:3"]).default("9:16"),
+  assetIds: z.array(z.string().uuid()).min(1).max(9).refine((ids) => new Set(ids).size === ids.length, "素材不能重复"),
+  directorPlan: z.record(z.string(), z.unknown()).optional(),
+  idempotencyKey: z.string().uuid(),
+  // 多版成片（批量赛马）：客户端由规划接口返回的 batch.total 透传；服务端在此校验上限
+  versions: z.number().int().min(1).max(BATCH_VERSION_LIMIT).optional(),
+}).strict().superRefine((val, ctx) => {
+  if (val.mode === "video-dub" && val.assetIds.length !== 1) {
+    ctx.addIssue({ code: "custom", path: ["assetIds"], message: "视频配音只接受一个视频素材" });
+  }
+  if (val.mode === "storyboard" && val.assetIds.length < 2) {
+    ctx.addIssue({ code: "custom", path: ["assetIds"], message: "分镜成片至少需要两个视频素材" });
+  }
+});
+export type CreateJobRequest = z.infer<typeof CreateJobRequestSchema>;
+
+/** 批量赛马时服务端逐版构造的任务输入：batchIndex / variantOverride 仅由服务端注入（schema strict 拒绝客户端伪造）。 */
+export type CreateJobInput = CreateJobRequest & {
+  batchIndex?: number;
+  variantOverride?: string;
+  creationScene?: CreationScene;
+};
+
+export interface GenerationJobRecord {
+  id: string;
+  userId: string;
+  mode: CreationMode;
+  status: JobStatus;
+  prompt: string;
+  aspectRatio: AspectRatio;
+  idempotencyKey: string;
+  requestPayload: Record<string, unknown>;
+  directorPlan: Record<string, unknown> | null;
+  progress: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  queuedAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  assetIds: string[];
+}
+
+export interface JobStore {
+  createJob(userId: string, input: CreateJobInput): Promise<GenerationJobRecord>;
+  findJobById(userId: string, jobId: string): Promise<GenerationJobRecord | null>;
+  /** 单用户在途任务门禁：存在 queued/inspecting/planning/rendering/quality-check 任务即返回该任务。 */
+  findUserActiveJob?(userId: string): Promise<GenerationJobRecord | null>;
+  updateJobStatus?(userId: string, jobId: string, toStatus: JobStatus, progress?: number, error?: { code: string; message: string }, workerId?: string): Promise<GenerationJobRecord | null>;
+  updateDirectorPlan?(userId: string, jobId: string, directorPlan: Record<string, unknown>, workerId?: string): Promise<void>;
+  heartbeatJob?(userId: string, jobId: string, workerId: string, leaseSeconds?: number): Promise<boolean>;
+}
+
+export interface JobRoutesOptions {
+  authStore: AuthStore;
+  assetStore: AssetStore;
+  jobStore: JobStore;
+  billingStore?: BillingStore | undefined;
+  allowedOrigins: string[];
+}
+
+function publicDirectorPlan(plan: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!plan) return null;
+  const visible = { ...plan };
+  delete visible["_telemetry"];
+  delete visible["_providerTelemetry"];
+  return visible;
+}
+
+export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOptions): void {
+  app.post("/api/v1/jobs", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+    if (typeof request.headers.origin === "string" && !options.allowedOrigins.includes(request.headers.origin)) {
+      return reply.code(403).send({ error: { code: "ORIGIN_NOT_ALLOWED" } });
+    }
+    const user = await authenticatedUser(request, options.authStore);
+    if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED", message: "请先登录后再提交制作任务" } });
+
+    const parsed = CreateJobRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "生成任务参数不符合要求", requestId: request.id } });
+    }
+    const contentHits = detectSensitiveTerms({ prompt: parsed.data.prompt, directorPlan: parsed.data.directorPlan });
+    if (contentHits.length > 0) {
+      request.log.warn({ userId: user.id, scene: "jobs.create", hitCount: contentHits.length }, "blocked job content by local preflight");
+      return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "内容可能涉及平台禁止内容或高风险宣传用语，请调整描述后重试", requestId: request.id } });
+    }
+    // Only the authenticated confirmation flow may submit a speech-cut plan.
+    if (parsed.data.directorPlan?.operation === "speech-cut" || parsed.data.directorPlan?._serverValidatedSpeechCut === true) {
+      return reply.code(400).send({ error: { code: "UNTRUSTED_SPEECH_CUT_PLAN", message: "语音精剪必须先完成服务端分析并确认建议" } });
+    }
+
+    if (options.assetStore.findUserAssets) {
+      const owned = await options.assetStore.findUserAssets(user.id, parsed.data.assetIds);
+      if (owned.length !== parsed.data.assetIds.length) {
+        return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "指定的部分素材不存在或不属于当前账号", requestId: request.id } });
+      }
+      const kinds = new Set(owned.map((a) => a.mediaType));
+      if (kinds.size !== 1) {
+        return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "一次创作只能使用同一类素材", requestId: request.id } });
+      }
+      if (parsed.data.mode === "image-film" && owned.some((a) => a.mediaType !== "image")) {
+        return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "图片成片只接受图片素材", requestId: request.id } });
+      }
+      if (parsed.data.mode !== "image-film" && owned.some((a) => a.mediaType !== "video")) {
+        return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "视频创作只接受视频素材", requestId: request.id } });
+      }
+    }
+
+    // 多版成片（批量赛马）：personal 场景没有变体体系，强制降为单版（防客户端伪造 versions）。
+    const creationScene = detectCreationScene(parsed.data.prompt, parsed.data.mode);
+    const versions = creationScene === "personal-creation"
+      ? 1
+      : Math.max(1, Math.min(BATCH_VERSION_LIMIT, parsed.data.versions ?? 1));
+
+    // 单用户在途任务门禁：最多 1 个进行中任务（对齐 V2 防算力独占；批量请求自身产出 N 个在途任务，只在创建前检查一次）。
+    // 同一幂等键的重试放行：createJob 按 user_id+idempotency_key 幂等去重，返回的是同一个任务。
+    if (versions === 1 && options.jobStore.findUserActiveJob) {
+      const activeJob = await options.jobStore.findUserActiveJob(user.id);
+      if (activeJob && activeJob.idempotencyKey !== parsed.data.idempotencyKey) {
+        return reply.code(409).send({
+          error: {
+            code: "ACTIVE_JOB_EXISTS",
+            message: "您已有正在制作中的视频任务，请稍候完成后再提交新任务",
+            activeJobId: activeJob.id,
+            requestId: request.id,
+          },
+        });
+      }
+    }
+
+    // 计费检查：每版成片预冻结 200 积分（第一阶段：预冻结），N 版共 N×200。
+    const requiredCredits = GENERATION_COST_CREDITS * versions;
+    if (options.billingStore) {
+      const wallet = await options.billingStore.getWallet(user.id);
+      if (wallet.availableCredits < requiredCredits) {
+        return reply.code(402).send({
+          error: {
+            code: "INSUFFICIENT_CREDITS",
+            message: `积分不足：当前可用 ${wallet.availableCredits} 积分，本次制作需要 ${requiredCredits} 积分`,
+            availableCredits: wallet.availableCredits,
+            requiredCredits,
+            requestId: request.id,
+          },
+        });
+      }
+    }
+
+    const jobSummary = (job: GenerationJobRecord) => ({
+      id: job.id,
+      mode: job.mode,
+      status: job.status,
+      prompt: job.prompt,
+      aspectRatio: job.aspectRatio,
+      progress: job.progress,
+      directorPlan: publicDirectorPlan(job.directorPlan),
+      createdAt: job.createdAt.toISOString(),
+    });
+
+    if (versions === 1) {
+      const job = await options.jobStore.createJob(user.id, { ...parsed.data, creationScene });
+      if (options.billingStore) {
+        await options.billingStore.holdCredits(user.id, job.id, GENERATION_COST_CREDITS);
+      }
+      return reply.code(201).send({ job: jobSummary(job) });
+    }
+
+    // 批量赛马：一次请求连续创建 N 个独立任务（各自幂等键、各自冻结 200 积分、独立生命周期）。
+    // v1 复用客户端 directorPlan（一条成片一次 LLM）；v2..N 剥掉方案由 worker 补跑 LLM，并注入轮转变体实现批内差异化。
+    const scene = creationScene === "physical-store" ? "local" : "sell";
+    const variantAssignments = assignBatchVariants(parsed.data.prompt, scene, versions);
+    const batchBaseInput: Omit<CreateJobRequest, "directorPlan"> & { creationScene: CreationScene } = {
+      creationScene,
+      mode: parsed.data.mode,
+      prompt: parsed.data.prompt,
+      aspectRatio: parsed.data.aspectRatio,
+      assetIds: parsed.data.assetIds,
+      idempotencyKey: parsed.data.idempotencyKey,
+      ...(parsed.data.versions !== undefined ? { versions: parsed.data.versions } : {}),
+    };
+    const created: Array<{ job: GenerationJobRecord; billed: boolean }> = [];
+    try {
+      for (let index = 0; index < versions; index += 1) {
+        const variantOverride = variantAssignments[index];
+        const input: CreateJobInput = index === 0
+          ? { ...parsed.data, creationScene }
+          : {
+              ...batchBaseInput,
+              idempotencyKey: deriveBatchIdempotencyKey(parsed.data.idempotencyKey, index + 1),
+              batchIndex: index + 1,
+              ...(variantOverride ? { variantOverride } : {}),
+            };
+        const job = await options.jobStore.createJob(user.id, input);
+        created.push({ job, billed: false });
+        if (options.billingStore) {
+          await options.billingStore.holdCredits(user.id, job.id, GENERATION_COST_CREDITS);
+          created[created.length - 1]!.billed = true;
+        }
+      }
+    } catch (error) {
+      request.log.error({ userId: user.id, versions, createdCount: created.length }, "batch job creation failed; rolling back");
+      // 商业信誉底线：批量创建中途失败，已冻结积分全额退还、已建任务标 failed（逆序幂等回退）。
+      for (const item of [...created].reverse()) {
+        if (item.billed && options.billingStore) {
+          await options.billingStore.refundCredits(user.id, item.job.id).catch(() => undefined);
+        }
+        await options.jobStore.updateJobStatus?.(user.id, item.job.id, "failed", undefined, {
+          code: "BATCH_CREATE_ROLLBACK",
+          message: error instanceof Error ? error.message.slice(0, 200) : "批量创建失败，本任务已回退",
+        }).catch(() => undefined);
+      }
+      return reply.code(500).send({
+        error: {
+          code: "BATCH_CREATE_FAILED",
+          message: "批量创建任务失败，已创建的任务已回退并退还积分，请稍后重试",
+          requestId: request.id,
+        },
+      });
+    }
+
+    return reply.code(201).send({
+      jobs: created.map((item) => jobSummary(item.job)),
+      job: jobSummary(created[0]!.job),
+      batch: { total: versions },
+    });
+  });
+
+  app.get("/api/v1/jobs/:id", async (request, reply) => {
+    const user = await authenticatedUser(request, options.authStore);
+    if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+    const { id } = request.params as { id: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return reply.code(400).send({ error: { code: "INVALID_JOB_ID", message: "任务 ID 格式无效" } });
+    }
+    const job = await options.jobStore.findJobById(user.id, id);
+    if (!job) {
+      return reply.code(404).send({ error: { code: "JOB_NOT_FOUND", message: "任务不存在或无权访问" } });
+    }
+    return reply.send({
+      job: {
+        id: job.id,
+        mode: job.mode,
+        status: job.status,
+        prompt: job.prompt,
+        aspectRatio: job.aspectRatio,
+        progress: job.progress,
+        directorPlan: publicDirectorPlan(job.directorPlan),
+        errorCode: job.errorCode,
+        errorMessage: job.errorMessage,
+        queuedAt: job.queuedAt.toISOString(),
+        startedAt: job.startedAt?.toISOString() ?? null,
+        finishedAt: job.finishedAt?.toISOString() ?? null,
+        createdAt: job.createdAt.toISOString(),
+      },
+    });
+  });
+}

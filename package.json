@@ -1,0 +1,37 @@
+{
+  "name": "jansee-v4",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "modules/*"
+  ],
+  "overrides": {
+    "esbuild": "0.28.1",
+    "@esbuild/win32-x64": "0.28.1"
+  },
+  "scripts": {
+    "dev:web": "npm run dev --workspace @jansee/web",
+    "dev:api": "npm run dev --workspace @jansee/api",
+    "start:api:local": "node --import tsx apps/api/src/server.ts",
+    "db:local": "node .local/pglite/node_modules/@electric-sql/pglite-socket/dist/scripts/server.js --db=./.local/pglite/data-recovered-20261117 --port=5435 --host=127.0.0.1 --max-connections=10",
+    "db:migrate": "tsx apps/api/src/migrate.ts",
+    "build": "npm run typecheck && npm run build --workspace @jansee/web && npm run build --workspace @jansee/api",
+    "typecheck": "tsc -b",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "check:independence": "node scripts/check-v4-independence.mjs",
+    "dev:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

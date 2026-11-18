@@ -1,0 +1,45 @@
+{
+  "name": "@jansee/api",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/multipart": "^10.1.8",
+    "@fastify/rate-limit": "^10.3.0",
+    "@jansee/anchor-kit": "*",
+    "@jansee/audio-kit": "*",
+    "@jansee/contracts": "*",
+    "@jansee/domain": "*",
+    "@jansee/ending-kit": "*",
+    "@jansee/ffmpeg-kit": "*",
+    "@jansee/image-film": "*",
+    "@jansee/intro-kit": "*",
+    "@jansee/publish-kit": "*",
+    "@jansee/sms-kit": "*",
+    "@jansee/subtitle-kit": "*",
+    "@jansee/tts-kit": "*",
+    "@jansee/video-creator": "*",
+    "@jansee/video-dub": "*",
+    "cos-nodejs-sdk-v5": "^3.0.0",
+    "fastify": "^5.6.2",
+    "ffmpeg-static": "5.3.0",
+    "ip2region": "^4.0.1",
+    "opcpay": "^0.3.4",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.5",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "tsx": "^4.20.6"
+  }
+}

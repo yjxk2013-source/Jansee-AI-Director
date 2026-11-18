@@ -1,0 +1,49 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.cache/
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+/storage/
+/backups/
+/apps/api/storage/
+/apps/web/.vite/
+
+# Large media assets (BGM tracks, raw fonts)
+materials/audio/**/*.mp3
+materials/audio/**/*.wav
+materials/fonts/**/*.ttf
+materials/fonts/**/*.otf
+
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
+apps/web/vite.config.js.map
+apps/web/vite.config.*.js*
+
+# Native Whisper runtime binaries and large model are provisioned as release artifacts.
+whisper.cpp/bin/*
+!whisper.cpp/bin/.gitkeep
+whisper.cpp/models/*.bin
+!whisper.cpp/models/.gitkeep
+
+# Local browser profiles and visual QA artifacts may contain authenticated session data.
+.tmp-admin-profile*/
+.tmp-visual-*/
+playwright-report/
+test-results/
+
+# Local-only media storage and test artifacts
+.local/
+.trae/
+scratch/
+

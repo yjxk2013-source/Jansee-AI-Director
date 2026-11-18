@@ -1,0 +1,23 @@
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+coverage
+storage
+backups
+.env
+.env.*
+!.env.example
+whisper.cpp
+**/*.log
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Never send local browser profiles or visual QA state to the Docker build context.
+.tmp-admin-profile*/
+.tmp-visual-*/
+playwright-report/
+test-results/

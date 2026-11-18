@@ -1,0 +1,17 @@
+import { readFile, writeFile } from "node:fs/promises";
+const p = "F:/Jansee-v4/apps/api/src/auth.ts";
+let s = await readFile(p, "utf8");
+const reg = '      await options.store.createSession({ userId: user.id, tokenHash: hashToken(token), userAgent: request.headers["user-agent"]?.slice(0, 500) ?? null, ipHash: createHash("sha256").update(request.ip).digest("hex"), expiresAt: new Date(now().getTime() + SESSION_TTL_SECONDS * 1000) });\n      reply.header("set-cookie", setSessionCookie(token, options.production));';
+const regNext = '      const tokenHash = hashToken(token);\n      await options.store.createSession({ userId: user.id, tokenHash, userAgent: request.headers["user-agent"]?.slice(0, 500) ?? null, ipHash: createHash("sha256").update(request.ip).digest("hex"), expiresAt: new Date(now().getTime() + SESSION_TTL_SECONDS * 1000) });\n      await options.store.markSessionReauthenticated?.(tokenHash, new Date(now().getTime() + 10 * 60 * 1000));\n      reply.header("set-cookie", setSessionCookie(token, options.production));';
+if (!s.includes(reg)) throw new Error("SMS registration session anchor missing");
+s = s.replace(reg, regNext);
+const login = '    await options.store.createSession({\n      userId: user.id,\n      tokenHash: hashToken(token),\n      userAgent: request.headers["user-agent"]?.slice(0, 500) ?? null,\n      ipHash: createHash("sha256").update(request.ip).digest("hex"),\n      expiresAt: new Date(now().getTime() + SESSION_TTL_SECONDS * 1000),\n    });\n    reply.header("set-cookie", setSessionCookie(token, options.production));';
+const loginNext = '    const tokenHash = hashToken(token);\n    await options.store.createSession({\n      userId: user.id, tokenHash,\n      userAgent: request.headers["user-agent"]?.slice(0, 500) ?? null,\n      ipHash: createHash("sha256").update(request.ip).digest("hex"),\n      expiresAt: new Date(now().getTime() + SESSION_TTL_SECONDS * 1000),\n    });\n    await options.store.markSessionReauthenticated?.(tokenHash, new Date(now().getTime() + 10 * 60 * 1000));\n    reply.header("set-cookie", setSessionCookie(token, options.production));';
+if (!s.includes(login)) throw new Error("SMS login session anchor missing");
+s = s.replace(login, loginNext);
+const authCheck = '    if (!options.store.setPassword) return reply.code(503).send({ error: { code: "PASSWORD_UPDATE_UNAVAILABLE", message: "密码设置服务暂不可用。" } });\n    const user = await options.store.setPassword';
+const authCheckNext = '    if (!options.store.setPassword || !options.store.consumeSessionReauthentication) return reply.code(503).send({ error: { code: "PASSWORD_UPDATE_UNAVAILABLE", message: "密码设置服务暂不可用。" } });\n    const recentlyVerified = await options.store.consumeSessionReauthentication(session.tokenHash);\n    if (!recentlyVerified) return reply.code(403).send({ error: { code: "SMS_VERIFICATION_REQUIRED", message: "请先通过短信验证码登录，再设置或重置密码。" } });\n    const user = await options.store.setPassword';
+if (!s.includes(authCheck)) throw new Error("password route security anchor missing");
+s = s.replace(authCheck, authCheckNext);
+await writeFile(p, s, "utf8");
+console.log("Password changes now require a fresh SMS-authenticated session");

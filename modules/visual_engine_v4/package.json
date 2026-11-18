@@ -1,0 +1,19 @@
+{
+  "name": "@jansee/visual-engine-v4",
+  "version": "4.1.0",
+  "private": true,
+  "description": "图片成片执行引擎（V4 版式 + 字体配对 + 15 款结尾，全平台唯一）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./layouts": "./layouts.js",
+    "./imageFilm": "./imageFilm.js"
+  },
+  "dependencies": {
+    "@jansee/ending-kit": "*",
+    "@jansee/subtitle-kit": "*",
+    "ffmpeg-static": "^5.2.0",
+    "sharp": "^0.35.5"
+  }
+}

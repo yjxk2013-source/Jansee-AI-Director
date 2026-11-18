@@ -1,0 +1,630 @@
+{
+  "version": "4.0.0",
+  "updatedAt": "2026-10-23",
+  "description": "简兮多模态官方高品质视听资产中心 · 免费商用精选字库",
+  "licensePolicy": "仅收录 SIL OFL 1.1 / Apache 2.0 可商用字体。系统字体（Windows/Office 自带）不得进入生产池，见 bannedSystemFonts。",
+  "totalCount": 8,
+  "totalFiles": 13,
+  "_countNote": "totalCount / totalFiles 是磁盘上的真实入库数（8 款字体、13 个字重文件），不是规划目标。categories 里 plannedCount 是招商目标，installedCount 是实际入库——两者必须分开写，否则索引声称 56 款而磁盘上只有 8 款，V4 实验室和出片引擎都会按错的数去挑字。",
+  "categories": [
+    {
+      "id": "chinese_calligraphy",
+      "name": "国风书法与毛笔行草",
+      "plannedCount": 4,
+      "installedCount": 1
+    },
+    {
+      "id": "chinese_creative",
+      "name": "中文创意与趣味招牌",
+      "plannedCount": 3,
+      "installedCount": 3
+    },
+    {
+      "id": "luxury_serif",
+      "name": "顶级高奢与典雅衬线",
+      "plannedCount": 7,
+      "installedCount": 2
+    },
+    {
+      "id": "modern_sans",
+      "name": "极简现代无衬线品牌",
+      "plannedCount": 10,
+      "installedCount": 2
+    },
+    {
+      "id": "poster_condensed",
+      "name": "电影海报与电商紧凑粗黑",
+      "plannedCount": 8,
+      "installedCount": 0
+    },
+    {
+      "id": "signature_script",
+      "name": "手写签名与流线艺术",
+      "plannedCount": 9,
+      "installedCount": 0
+    },
+    {
+      "id": "cyber_techno",
+      "name": "赛博科技与电竞科幻",
+      "plannedCount": 9,
+      "installedCount": 0
+    },
+    {
+      "id": "fun_rounded",
+      "name": "趣味潮玩与霓虹圆体",
+      "plannedCount": 6,
+      "installedCount": 0
+    }
+  ],
+  "fonts": [
+    {
+      "id": "ma-shan-zheng",
+      "pkg": "ma-shan-zheng",
+      "name": "马善政楷书 (Ma Shan Zheng)",
+      "family": "Ma Shan Zheng",
+      "category": "chinese_calligraphy",
+      "license": "OFL 1.1 (免费商用)",
+      "tags": [
+        "中文楷书",
+        "国潮古风",
+        "毛笔手写",
+        "东方意境"
+      ],
+      "bestFor": "国风美妆、茶叶古道、东方文创、节庆大片",
+      "files": [
+        {
+          "file": "MaShanZheng_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        }
+      ],
+      "primaryFile": "MaShanZheng_400Regular.ttf",
+      "primaryRelPath": "materials/fonts/ma-shan-zheng/MaShanZheng_400Regular.ttf",
+      "totalFiles": 1,
+      "glyphCount": 7017,
+      "audit": {
+        "level": "cn-full",
+        "pathOk": true,
+        "cnCoverage": 100,
+        "cnMissing": 0,
+        "cnMissingSample": "",
+        "latinCoverage": 98.48,
+        "unitsPerEm": 1000,
+        "ascender": 0.88,
+        "descender": -0.12,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "素材库内置（OFL）"
+    },
+    {
+      "id": "zcool-kuaile",
+      "pkg": "zcool-kuaile",
+      "name": "站酷快乐体 (ZCOOL KuaiLe)",
+      "family": "ZCOOL KuaiLe",
+      "category": "chinese_creative",
+      "license": "OFL 1.1 (免费商用)",
+      "tags": [
+        "趣味中文",
+        "卡通欢快",
+        "圆润活泼",
+        "亲和力"
+      ],
+      "bestFor": "母婴玩具、零食休闲、宠物日常、少儿动画",
+      "files": [
+        {
+          "file": "ZCOOLKuaiLe_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        }
+      ],
+      "primaryFile": "ZCOOLKuaiLe_400Regular.ttf",
+      "primaryRelPath": "materials/fonts/zcool-kuaile/ZCOOLKuaiLe_400Regular.ttf",
+      "totalFiles": 1,
+      "glyphCount": 7055,
+      "audit": {
+        "level": "cn-full",
+        "pathOk": true,
+        "cnCoverage": 100,
+        "cnMissing": 0,
+        "cnMissingSample": "",
+        "latinCoverage": 100,
+        "unitsPerEm": 1000,
+        "ascender": 0.88,
+        "descender": -0.12,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "素材库内置（OFL）"
+    },
+    {
+      "id": "zcool-qingke-huangyou",
+      "pkg": "zcool-qingke-huangyou",
+      "name": "站酷庆科黄油体 (ZCOOL QingKe HuangYou)",
+      "family": "ZCOOL QingKe HuangYou",
+      "category": "chinese_creative",
+      "license": "OFL 1.1 (免费商用)",
+      "tags": [
+        "复古粗黑",
+        "烘焙奶香",
+        "招牌手绘",
+        "厚重吸睛"
+      ],
+      "bestFor": "甜品烘焙、咖啡轻食、集市探店、复古招贴",
+      "files": [
+        {
+          "file": "ZCOOLQingKeHuangYou_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        }
+      ],
+      "primaryFile": "ZCOOLQingKeHuangYou_400Regular.ttf",
+      "primaryRelPath": "materials/fonts/zcool-qingke-huangyou/ZCOOLQingKeHuangYou_400Regular.ttf",
+      "totalFiles": 1,
+      "glyphCount": 9432,
+      "audit": {
+        "level": "cn-full",
+        "pathOk": true,
+        "cnCoverage": 100,
+        "cnMissing": 0,
+        "cnMissingSample": "",
+        "latinCoverage": 98.48,
+        "unitsPerEm": 1000,
+        "ascender": 0.88,
+        "descender": -0.12,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "素材库内置（OFL）"
+    },
+    {
+      "id": "zcool-xiaowei",
+      "pkg": "zcool-xiaowei",
+      "name": "站酷小薇体 (ZCOOL XiaoWei)",
+      "family": "ZCOOL XiaoWei",
+      "category": "chinese_creative",
+      "license": "OFL 1.1 (免费商用)",
+      "tags": [
+        "纤细文艺",
+        "清秀雅致",
+        "静谧格调",
+        "设计感"
+      ],
+      "bestFor": "独立书店、设计师品牌、香氛花艺、生活美学",
+      "files": [
+        {
+          "file": "ZCOOLXiaoWei_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        }
+      ],
+      "primaryFile": "ZCOOLXiaoWei_400Regular.ttf",
+      "primaryRelPath": "materials/fonts/zcool-xiaowei/ZCOOLXiaoWei_400Regular.ttf",
+      "totalFiles": 1,
+      "glyphCount": 7019,
+      "audit": {
+        "level": "cn-full",
+        "pathOk": true,
+        "cnCoverage": 100,
+        "cnMissing": 0,
+        "cnMissingSample": "",
+        "latinCoverage": 98.48,
+        "unitsPerEm": 1000,
+        "ascender": 0.88,
+        "descender": -0.12,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "素材库内置（OFL）"
+    },
+    {
+      "id": "jost",
+      "pkg": "jost",
+      "name": "Jost（Futura 开源复刻）",
+      "family": "Jost",
+      "category": "modern_sans",
+      "license": "OFL 1.1（免费商用）",
+      "tags": [
+        "几何无衬线",
+        "包豪斯",
+        "宽字距全大写",
+        "仅拉丁"
+      ],
+      "bestFor": "英文小标、编号、品牌名（JANSEE.CN），不能用于中文",
+      "files": [
+        {
+          "file": "Jost_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        },
+        {
+          "file": "Jost_500Medium.ttf",
+          "weight": 500,
+          "style": "normal"
+        }
+      ],
+      "primaryRelPath": "materials/fonts/jost/Jost_400Regular.ttf",
+      "glyphCount": 535,
+      "audit": {
+        "level": "latin-only",
+        "pathOk": true,
+        "cnCoverage": 0,
+        "cnMissing": 3755,
+        "cnMissingSample": "啊阿埃挨哎唉哀皑癌蔼矮艾碍爱隘鞍氨安俺按暗岸胺案",
+        "latinCoverage": 100,
+        "unitsPerEm": 1000,
+        "ascender": 1.07,
+        "descender": -0.375,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "npm @expo-google-fonts/jost@0.4.2",
+      "primaryFile": "Jost_400Regular.ttf",
+      "totalFiles": 2,
+      "note": "替代系统 Futura。Futura 是 Windows 自带字体、不可商用，Jost 是它的开源克隆，观感几乎一致。"
+    },
+    {
+      "id": "noto-sans-sc",
+      "pkg": "noto-sans-sc",
+      "name": "思源黑体 (Noto Sans SC)",
+      "family": "Noto Sans SC",
+      "category": "modern_sans",
+      "license": "OFL 1.1（免费商用）",
+      "tags": [
+        "中文无衬线",
+        "现代极简",
+        "瑞士网格",
+        "两字重"
+      ],
+      "bestFor": "数码、设计、连锁品牌、任何需要\"干净现代\"的品类",
+      "files": [
+        {
+          "file": "NotoSansSC_300Light.ttf",
+          "weight": 300,
+          "style": "normal"
+        },
+        {
+          "file": "NotoSansSC_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        }
+      ],
+      "primaryRelPath": "materials/fonts/noto-sans-sc/NotoSansSC_300Light.ttf",
+      "glyphCount": 30898,
+      "audit": {
+        "level": "cn-full",
+        "pathOk": true,
+        "cnCoverage": 100,
+        "cnMissing": 0,
+        "cnMissingSample": "",
+        "latinCoverage": 100,
+        "unitsPerEm": 1000,
+        "ascender": 1.16,
+        "descender": -0.288,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "npm @expo-google-fonts/noto-sans-sc@0.4.4",
+      "primaryFile": "NotoSansSC_300Light.ttf",
+      "totalFiles": 2,
+      "note": "80px 以上大标题的唯一安全解。300 字重的笔画在 1080 画幅上刚好，400 会显粗。"
+    },
+    {
+      "id": "noto-serif-sc",
+      "pkg": "noto-serif-sc",
+      "name": "思源宋体 (Noto Serif SC)",
+      "family": "Noto Serif SC",
+      "category": "luxury_serif",
+      "license": "OFL 1.1（免费商用）",
+      "tags": [
+        "中文衬线",
+        "宋体",
+        "高级典雅",
+        "出版物",
+        "三字重"
+      ],
+      "bestFor": "高客单餐饮、设计品牌、文创、需要\"印刷品感\"的任何品类",
+      "files": [
+        {
+          "file": "NotoSerifSC_300Light.ttf",
+          "weight": 300,
+          "style": "normal"
+        },
+        {
+          "file": "NotoSerifSC_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        },
+        {
+          "file": "NotoSerifSC_700Bold.ttf",
+          "weight": 700,
+          "style": "normal"
+        }
+      ],
+      "primaryRelPath": "materials/fonts/noto-serif-sc/NotoSerifSC_400Regular.ttf",
+      "glyphCount": 30920,
+      "audit": {
+        "level": "cn-full",
+        "pathOk": true,
+        "cnCoverage": 100,
+        "cnMissing": 0,
+        "cnMissingSample": "",
+        "latinCoverage": 100,
+        "unitsPerEm": 1000,
+        "ascender": 1.151,
+        "descender": -0.286,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "npm @expo-google-fonts/noto-serif-sc@0.4.4",
+      "primaryFile": "NotoSerifSC_400Regular.ttf",
+      "totalFiles": 3,
+      "note": "中文衬线的唯一正确解。日文明朝体虽然更好看但缺 11 个常用简体字，已在规格里否掉。"
+    },
+    {
+      "id": "playfair-display",
+      "pkg": "playfair-display",
+      "name": "Playfair Display",
+      "family": "Playfair Display",
+      "category": "luxury_serif",
+      "license": "OFL 1.1（免费商用）",
+      "tags": [
+        "高对比衬线",
+        "时装杂志",
+        "仅拉丁"
+      ],
+      "bestFor": "英文小标、时装/美妆/珠宝的高对比副标，不能用于中文",
+      "files": [
+        {
+          "file": "PlayfairDisplay_400Regular.ttf",
+          "weight": 400,
+          "style": "normal"
+        },
+        {
+          "file": "PlayfairDisplay_700Bold.ttf",
+          "weight": 700,
+          "style": "normal"
+        }
+      ],
+      "primaryRelPath": "materials/fonts/playfair-display/PlayfairDisplay_400Regular.ttf",
+      "glyphCount": 1101,
+      "audit": {
+        "level": "latin-only",
+        "pathOk": true,
+        "cnCoverage": 0,
+        "cnMissing": 3755,
+        "cnMissingSample": "啊阿埃挨哎唉哀皑癌蔼矮艾碍爱隘鞍氨安俺按暗岸胺案",
+        "latinCoverage": 100,
+        "unitsPerEm": 1000,
+        "ascender": 1.082,
+        "descender": -0.251,
+        "checkedAt": "2026-10-23"
+      },
+      "source": "npm @expo-google-fonts/playfair-display@0.4.2",
+      "primaryFile": "PlayfairDisplay_400Regular.ttf",
+      "totalFiles": 2,
+      "note": "替代系统 Bodoni。Bodoni Bk BT 是 Windows 自带字体、不可商用。"
+    }
+  ],
+  "roles": {
+    "_note": "每个角色声明 minPx/maxPx，抽取时按实际字号过滤；latinOnly 的角色只接受拉丁字体。",
+    "display_cn": {
+      "label": "中文大标题 80px+",
+      "minPx": 80,
+      "maxPx": 150,
+      "pool": [
+        "noto-sans-sc",
+        "zcool-xiaowei",
+        "zcool-qingke-huangyou",
+        "zcool-kuaile"
+      ]
+    },
+    "title_cn": {
+      "label": "中文中标题 55-75px",
+      "minPx": 55,
+      "maxPx": 75,
+      "pool": [
+        "noto-serif-sc",
+        "zcool-xiaowei",
+        "noto-sans-sc",
+        "zcool-qingke-huangyou"
+      ]
+    },
+    "micro_cn": {
+      "label": "中文说明行 20px 以下",
+      "minPx": 14,
+      "maxPx": 22,
+      "pool": [
+        "noto-sans-sc",
+        "noto-serif-sc",
+        "zcool-xiaowei"
+      ]
+    },
+    "vertical_cn": {
+      "label": "中文竖排",
+      "minPx": 30,
+      "maxPx": 60,
+      "pool": [
+        "ma-shan-zheng",
+        "zcool-xiaowei",
+        "noto-serif-sc"
+      ]
+    },
+    "label_latin": {
+      "label": "拉丁小标（全大写字距）",
+      "minPx": 9,
+      "maxPx": 24,
+      "latinOnly": true,
+      "pool": [
+        "jost",
+        "playfair-display"
+      ]
+    },
+    "num_latin": {
+      "label": "拉丁编号 / 数字",
+      "minPx": 9,
+      "maxPx": 120,
+      "latinOnly": true,
+      "pool": [
+        "jost",
+        "playfair-display",
+        "noto-serif-sc"
+      ]
+    }
+  },
+  "pairings": [
+    {
+      "id": "modern-editorial",
+      "name": "现代编辑",
+      "display": "noto-sans-sc",
+      "displayWeight": 300,
+      "latin": "playfair-display",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "咖啡",
+        "烘焙",
+        "服装",
+        "美妆",
+        "买手店"
+      ],
+      "mood": "克制、留白大、高级"
+    },
+    {
+      "id": "classic-serif",
+      "name": "经典衬线",
+      "display": "noto-serif-sc",
+      "displayWeight": 400,
+      "latin": "jost",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "茶室",
+        "中餐厅",
+        "文创",
+        "书店"
+      ],
+      "mood": "温润、印刷品感"
+    },
+    {
+      "id": "swiss-grid",
+      "name": "瑞士网格",
+      "display": "noto-sans-sc",
+      "displayWeight": 300,
+      "latin": "jost",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "数码",
+        "设计工作室",
+        "健身",
+        "连锁"
+      ],
+      "mood": "绝对秩序、零装饰"
+    },
+    {
+      "id": "gallery-catalog",
+      "name": "画册图录",
+      "display": "noto-serif-sc",
+      "displayWeight": 300,
+      "latin": "playfair-display",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "艺术展",
+        "香氛",
+        "花艺",
+        "高端餐饮"
+      ],
+      "mood": "典雅、编号感、细密"
+    },
+    {
+      "id": "oriental-vertical",
+      "name": "东方竖排",
+      "display": "ma-shan-zheng",
+      "displayWeight": 400,
+      "latin": "playfair-display",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "茶",
+        "中式餐饮",
+        "国潮",
+        "中医"
+      ],
+      "mood": "毛笔、书脊、大留白"
+    },
+    {
+      "id": "retro-signboard",
+      "name": "复古招牌",
+      "display": "zcool-qingke-huangyou",
+      "displayWeight": 400,
+      "latin": "jost",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "甜品",
+        "炸物",
+        "烧烤",
+        "集市摊"
+      ],
+      "mood": "厚重、手绘招牌、吸睛"
+    },
+    {
+      "id": "literary-light",
+      "name": "文艺清秀",
+      "display": "zcool-xiaowei",
+      "displayWeight": 400,
+      "latin": "playfair-display",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "独立书店",
+        "设计师品牌",
+        "花店",
+        "手作"
+      ],
+      "mood": "纤细、静谧、格调"
+    },
+    {
+      "id": "playful-round",
+      "name": "亲和圆润",
+      "display": "zcool-kuaile",
+      "displayWeight": 400,
+      "latin": "jost",
+      "micro": "noto-sans-sc",
+      "fit": [
+        "母婴",
+        "宠物",
+        "零食",
+        "少儿"
+      ],
+      "mood": "圆润、活泼、亲和"
+    }
+  ],
+  "bannedSystemFonts": {
+    "_note": "仅可用于本地打样，禁止进入生产随机池。五套版式需全部迁移到本索引内的 OFL 字体。",
+    "list": [
+      {
+        "file": "simfang.ttf",
+        "name": "仿宋",
+        "reason": "Windows 自带，宋体族版权"
+      },
+      {
+        "file": "simkai.ttf",
+        "name": "楷体",
+        "reason": "Windows 自带，中易字库版权"
+      },
+      {
+        "file": "Dengl.ttf",
+        "name": "等线 Light",
+        "reason": "Windows 自带，微软版权"
+      },
+      {
+        "file": "Bodoni Bk BT Book.ttf",
+        "name": "Bodoni",
+        "reason": "商业字库，随 Windows 授权不含商用分发"
+      },
+      {
+        "file": "Futura Bk BT Book.ttf",
+        "name": "Futura",
+        "reason": "商业字库，同上"
+      }
+    ],
+    "replacements": {
+      "simfang.ttf": "noto-serif-sc",
+      "simkai.ttf": "ma-shan-zheng 或 noto-serif-sc",
+      "Dengl.ttf": "noto-sans-sc（300）",
+      "Bodoni Bk BT Book.ttf": "playfair-display",
+      "Futura Bk BT Book.ttf": "jost"
+    }
+  },
+  "roleCount": 6,
+  "pairingCount": 8
+}

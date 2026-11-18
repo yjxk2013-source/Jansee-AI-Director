@@ -1,0 +1,29 @@
+{
+  "id": "/",
+  "name": "简兮 JANSEE AI 智能导演",
+  "short_name": "简兮",
+  "description": "把素材交给导演，把好作品带给世界。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f7f8fa",
+  "theme_color": "#f7f8fa",
+  "categories": ["business", "productivity", "video"],
+  "icons": [
+    {
+      "src": "/assets/jansee-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/jansee-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

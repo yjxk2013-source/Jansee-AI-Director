@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "template_product_window_green",
+      "version": 1,
+      "status": "approved",
+      "name": "经典绿幕展台开窗模板",
+      "background": {
+        "file": "backgrounds/product_stage_green.jpg",
+        "width": 1080,
+        "height": 1920
+      },
+      "window": {
+        "x": 0.08,
+        "y": 0.15,
+        "width": 0.84,
+        "height": 0.6
+      },
+      "padColor": "#ffffff",
+      "review": {
+        "reviewedBy": "JANSEE Architecture & Design Team",
+        "reviewedAt": "2026-10-21",
+        "notes": "1080x1920 居中商品展示窗口，用于图片成片轮播合成"
+      }
+    }
+  ]
+}

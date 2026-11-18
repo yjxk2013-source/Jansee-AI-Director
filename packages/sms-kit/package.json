@@ -1,0 +1,11 @@
+{
+  "name": "@jansee/sms-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "简兮 (JANSEE) 短信服务套件（阿里云号码认证 Dypnsapi 通道与 Mock 支持）",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@jansee/video-creator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JANSEE V4 video production module: storyboard composition, fixed-duration slicing, speech-aware editing and local ASR.",
+  "type": "module",
+  "main": "video/index.js",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "opencc-js": "^1.0.5",
+    "@jansee/audio-kit": "*",
+    "@jansee/ffmpeg-kit": "*",
+    "@jansee/intro-kit": "*",
+    "@jansee/shared": "*",
+    "@jansee/subtitle-kit": "*",
+    "@jansee/tts-kit": "*"
+  },
+  "exports": {
+    ".": "./video/index.js",
+    "./video/*": "./video/*",
+    "./asr/*": "./asr/*",
+    "./audio/*": "./audio/*"
+  }
+}

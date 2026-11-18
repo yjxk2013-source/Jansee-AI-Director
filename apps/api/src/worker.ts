@@ -1,0 +1,691 @@
+import type { Pool } from "pg";
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
+import type { LocalObjectStorage } from "./storage-local.js";
+import type { MediaRenderer, RenderResult } from "./renderer.js";
+import type { JobStore, GenerationJobRecord } from "./jobs.js";
+import type { AssetStore, AssetRecord } from "./assets.js";
+import type { OutputStore } from "./outputs.js";
+import type { BillingStore } from "./billing.js";
+import { DirectorPlanSchema, isDirectorPlanCompatible, type DirectorPlanner } from "./director.js";
+import { resolveDirectorRoute } from "./prompt-assembly.js";
+import type { ProductionEngineRegistry } from "./engine-registry.js";
+import { packagingEnabled } from "./engine-adapters.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { stat } from "node:fs/promises";
+import path from "node:path";
+// @ts-expect-error video-creator exports its mature JavaScript slicer
+import { prepareSlicer, composeSlicer, videoDurationSec } from "@jansee/video-creator/video/slicer.js";
+// @ts-expect-error ffmpeg-kit exposes media probing helpers
+import { probeVideoSize, hasAudioStream } from "@jansee/ffmpeg-kit/probe.mjs";
+// @ts-expect-error Auto-QC is a JavaScript workspace package
+import { performAutoQc } from "@jansee/ffmpeg-kit/autoQc.mjs";
+// @ts-expect-error publish-kit is a JavaScript workspace package
+import { sanitizePublish } from "@jansee/publish-kit";
+
+const WORKER_ID = (hostname() + ":" + process.pid + ":" + randomUUID()).slice(0, 120);
+const WORKER_LEASE_SECONDS = 120;
+const WORKER_HEARTBEAT_MS = 30_000;
+const WORKER_MAX_ATTEMPTS = 3;
+
+function estimateDirectorCostYuan(telemetry: Record<string, unknown>): number | null {
+  const model = typeof telemetry.selectedModel === "string" ? telemetry.selectedModel : "";
+  if (!model || telemetry.costUsageAvailable !== true) return null;
+  const raw = process.env.DIRECTOR_MODEL_PRICING_JSON;
+  if (!raw) return null;
+  try {
+    const pricing = JSON.parse(raw) as Record<string, { inputPerMillionYuan?: number; outputPerMillionYuan?: number }>;
+    const price = pricing[model] ?? pricing[String(telemetry.requestedModel ?? "")];
+    if (!price) return null;
+    const input = Number(price.inputPerMillionYuan);
+    const output = Number(price.outputPerMillionYuan);
+    const promptTokens = Number(telemetry.promptTokens ?? 0);
+    const completionTokens = Number(telemetry.completionTokens ?? 0);
+    if (![input, output, promptTokens, completionTokens].every((value) => Number.isFinite(value) && value >= 0)) return null;
+    return Number(((promptTokens * input + completionTokens * output) / 1_000_000).toFixed(6));
+  } catch {
+    return null;
+  }
+}
+
+export interface WorkerContext {
+  pool?: Pool;
+  workerId?: string;
+  storage: LocalObjectStorage;
+  renderer: MediaRenderer;
+  jobStore: JobStore;
+  assetStore: AssetStore;
+  outputStore: OutputStore;
+  billingStore?: BillingStore | undefined;
+  directorPlanner?: DirectorPlanner | undefined;
+  engineRegistry?: ProductionEngineRegistry | undefined;
+  /** Production Auto-QC is injected so unit tests can use deterministic media fixtures. */
+  qualityChecker?: typeof performAutoQc | undefined;
+}
+
+export async function processJob(
+  job: GenerationJobRecord,
+  context: WorkerContext,
+): Promise<boolean> {
+  const { jobStore, assetStore, storage, renderer, outputStore } = context;
+  const stagedStorageKeys: string[] = [];
+  let outputsPublished = false;
+  let leaseLost = false;
+  let heartbeatTimer: NodeJS.Timeout | undefined;
+  let activeJob = job;
+  let llmDurationMs = 0;
+  let rendererDurationMs = 0;
+  let ffmpegDurationMs = 0;
+  let ttsDurationMs = 0;
+  let ttsChars = 0;
+  let providerTelemetry: Record<string, unknown> = {};
+  let qcSummaries: Array<{ grade: string; metrics: Record<string, unknown>; warnings: string[] }> = [];
+  if (context.workerId && jobStore.heartbeatJob) {
+    const heartbeat = async () => {
+      try {
+        const owned = await jobStore.heartbeatJob!(job.userId, job.id, context.workerId!, WORKER_LEASE_SECONDS);
+        if (!owned) leaseLost = true;
+      } catch (error) {
+        leaseLost = true;
+        throw error;
+      }
+    };
+    void heartbeat().catch(() => { leaseLost = true; });
+    heartbeatTimer = setInterval(() => { void heartbeat().catch(() => { leaseLost = true; }); }, WORKER_HEARTBEAT_MS);
+    heartbeatTimer.unref?.();
+  }
+  const ensureLease = () => {
+    if (leaseLost) throw new Error("WORKER_LEASE_LOST");
+  };
+
+  try {
+    // 1. inspecting (20%): queued workers may already have atomically claimed this job.
+    if (job.status !== "inspecting") {
+      await jobStore.updateJobStatus?.(job.userId, job.id, "inspecting", 20, undefined, context.workerId);
+    }
+
+    let assets: AssetRecord[] = [];
+    if (assetStore.findUserAssets) {
+      assets = await assetStore.findUserAssets(job.userId, job.assetIds);
+    }
+    if (assets.length === 0) {
+      throw new Error("No valid assets found for this job");
+    }
+
+    // 2. planning (40%): run the same director used by the planning API and persist its decision.
+    await jobStore.updateJobStatus?.(job.userId, job.id, "planning", 40, undefined, context.workerId);
+    if (typeof activeJob.directorPlan?.narration === "string") {
+      ttsChars = Array.from(activeJob.directorPlan.narration).length;
+    }
+    const isServerValidatedSpeechCut =
+      activeJob.directorPlan?.operation === "speech-cut" &&
+      activeJob.directorPlan?._serverValidatedSpeechCut === true &&
+      Boolean(activeJob.directorPlan?.speechCut);
+    // 规划 API 已服务端生成并经过校验的方案直接复用（一条成片只调用一次 LLM，对齐 V2）；
+    // 仅当任务未携带有效方案时，worker 才补跑一次 LLM 规划。
+    const clientPlanRaw = activeJob.directorPlan ? { ...activeJob.directorPlan } : null;
+    const clientProviderTelemetry = clientPlanRaw?._providerTelemetry;
+    if (clientPlanRaw) {
+      delete clientPlanRaw["_providerTelemetry"];
+      delete clientPlanRaw["_telemetry"];
+    }
+    const clientPlanParse = clientPlanRaw ? DirectorPlanSchema.safeParse(clientPlanRaw) : null;
+    const hasValidClientPlan = Boolean(clientPlanParse?.success && isDirectorPlanCompatible({
+      mode: job.mode,
+      prompt: job.prompt,
+      aspectRatio: job.aspectRatio,
+      assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
+      ...(typeof activeJob.requestPayload?.variantOverride === "string" ? { variantOverride: activeJob.requestPayload.variantOverride } : {}),
+    }, clientPlanParse!.data));
+    if (hasValidClientPlan) {
+      const plan = clientPlanParse!.data!;
+      const planningInput = {
+        mode: job.mode, prompt: job.prompt, aspectRatio: job.aspectRatio,
+        assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
+        ...(typeof activeJob.requestPayload?.variantOverride === "string" ? { variantOverride: activeJob.requestPayload.variantOverride } : {}),
+      };
+      const route = resolveDirectorRoute(planningInput);
+      const anchorHit = isDirectorPlanCompatible(planningInput, plan);
+      const sourceTelemetry = clientProviderTelemetry && typeof clientProviderTelemetry === "object"
+        ? clientProviderTelemetry as Record<string, unknown> : {};
+      const planningDurationMs = Array.isArray(sourceTelemetry.modelAttempts)
+        ? sourceTelemetry.modelAttempts.reduce<number>((total, attempt) => {
+            if (!attempt || typeof attempt !== "object") return total;
+            const duration = Number((attempt as Record<string, unknown>).durationMs ?? 0);
+            return total + (Number.isFinite(duration) && duration > 0 ? duration : 0);
+          }, 0)
+        : 0;
+      providerTelemetry = {
+        ...sourceTelemetry, scene: route.creationScene, sceneSource: route.sceneSource, anchorHit,
+        variantMatched: route.decidedVariant ? plan.variant_type === route.decidedVariant : null,
+        voiceId: plan.voice_id, voiceType: plan.voice_id,
+        providerMode: sourceTelemetry.providerMode ?? "unreported",
+        selectedModel: sourceTelemetry.selectedModel ?? null,
+        fallbackUsed: sourceTelemetry.fallbackUsed === true,
+      };
+      const directorPlan = {
+        ...plan,
+        _telemetry: {
+          llmDurationMs: planningDurationMs, ffmpegDurationMs: 0, rendererDurationMs: 0, e2eDurationMs: 0, ttsDurationMs: 0,
+          ttsChars: typeof plan.narration === "string" ? Array.from(plan.narration).length : 0,
+          providerMode: providerTelemetry.providerMode, requestedModel: providerTelemetry.requestedModel ?? null,
+          selectedModel: providerTelemetry.selectedModel ?? null, modelsAttempted: providerTelemetry.modelsAttempted ?? [],
+          fallbackUsed: providerTelemetry.fallbackUsed, promptTokens: providerTelemetry.promptTokens ?? 0,
+          completionTokens: providerTelemetry.completionTokens ?? 0, tokensUsed: providerTelemetry.totalTokens ?? 0,
+          tokenUsageAvailable: providerTelemetry.usageAvailable === true,
+          costEstimateYuan: estimateDirectorCostYuan(providerTelemetry),
+          costSource: providerTelemetry.usageAvailable !== true ? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? "unconfigured" : "director_model_pricing",
+          providerFailureReason: providerTelemetry.failureReason ?? null,
+          scene: route.creationScene, sceneSource: route.sceneSource, lockedVariant: providerTelemetry.lockedVariant ?? null,
+          anchorHit, variantMatched: route.decidedVariant ? plan.variant_type === route.decidedVariant : null,
+          modelAttempts: providerTelemetry.modelAttempts ?? [], variantType: plan.variant_type ?? null, anchor: plan.anchor,
+          voiceId: plan.voice_id, voiceType: plan.voice_id, voiceCandidateIds: providerTelemetry.voiceCandidateIds ?? [],
+          speechSpeed: plan.speech_speed ?? 1,
+        },
+      };
+      await jobStore.updateDirectorPlan?.(job.userId, job.id, directorPlan, context.workerId);
+      activeJob = { ...job, directorPlan };
+      ttsChars = typeof plan.narration === "string" ? Array.from(plan.narration).length : 0;
+      console.info(`[jansee-director] plan reused job=${job.id} scene=${route.creationScene}/${route.sceneSource} providerMode=${String(providerTelemetry.providerMode)} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic/unreported")} fallbackUsed=${providerTelemetry.fallbackUsed === true} anchor=${plan.anchor} anchorHit=${anchorHit} variant=${String(plan.variant_type ?? "none")} voiceType=${plan.voice_id} candidates=${JSON.stringify(providerTelemetry.voiceCandidateIds ?? [])} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
+    } else if (context.directorPlanner && !isServerValidatedSpeechCut) {
+      const planStartedAt = Date.now();
+      // 批量赛马：v2..N 的 requestPayload 携带服务端排定的 variantOverride，补跑 LLM 时锁定各自变体。
+      const batchVariantOverride = typeof activeJob.requestPayload?.variantOverride === "string"
+        ? activeJob.requestPayload.variantOverride
+        : undefined;
+      const plan = await context.directorPlanner.createPlan({
+        mode: job.mode,
+        prompt: job.prompt,
+        aspectRatio: job.aspectRatio,
+        assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
+        ...(batchVariantOverride ? { variantOverride: batchVariantOverride } : {}),
+      });
+      llmDurationMs = Date.now() - planStartedAt;
+      providerTelemetry = (plan as typeof plan & { _providerTelemetry?: Record<string, unknown> })._providerTelemetry ?? {};
+      ttsChars = typeof plan.narration === "string" ? Array.from(plan.narration).length : 0;
+      const cleanPlan = { ...plan } as Record<string, unknown>;
+      delete cleanPlan["_providerTelemetry"];
+      const directorPlan = {
+        ...cleanPlan,
+        _telemetry: {
+          llmDurationMs,
+          ffmpegDurationMs: 0,
+          rendererDurationMs: 0,
+          e2eDurationMs: 0,
+          ttsDurationMs: 0,
+          ttsChars,
+          providerMode: providerTelemetry.providerMode ?? "unreported",
+          requestedModel: providerTelemetry.requestedModel ?? null,
+          selectedModel: providerTelemetry.selectedModel ?? null,
+          modelsAttempted: providerTelemetry.modelsAttempted ?? [],
+          fallbackUsed: providerTelemetry.fallbackUsed ?? false,
+          promptTokens: providerTelemetry.promptTokens ?? 0,
+          completionTokens: providerTelemetry.completionTokens ?? 0,
+          tokensUsed: providerTelemetry.totalTokens ?? 0,
+          tokenUsageAvailable: providerTelemetry.usageAvailable === true,
+          costEstimateYuan: estimateDirectorCostYuan(providerTelemetry),
+          costSource: providerTelemetry.usageAvailable !== true ? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? "unconfigured" : "director_model_pricing",
+          providerFailureReason: providerTelemetry.failureReason ?? null,
+          scene: providerTelemetry.scene ?? null,
+          sceneSource: providerTelemetry.sceneSource ?? null,
+          lockedVariant: providerTelemetry.lockedVariant ?? null,
+          anchorHit: providerTelemetry.anchorHit === true,
+          variantMatched: typeof providerTelemetry.variantMatched === "boolean" ? providerTelemetry.variantMatched : null,
+          modelAttempts: Array.isArray(providerTelemetry.modelAttempts) ? providerTelemetry.modelAttempts : [],
+          variantType: plan.variant_type ?? null,
+          anchor: plan.anchor,
+          voiceId: plan.voice_id,
+          voiceType: plan.voice_id,
+          speechSpeed: plan.speech_speed ?? 1,
+        },
+      };
+      await jobStore.updateDirectorPlan?.(job.userId, job.id, directorPlan, context.workerId);
+      activeJob = { ...job, directorPlan };
+      console.info(`[jansee-director] plan ready job=${job.id} mode=${job.mode} scene=${String(providerTelemetry.scene ?? "unreported")}/${String(providerTelemetry.sceneSource ?? "unreported")} providerMode=${String(providerTelemetry.providerMode ?? "unreported")} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic")} fallbackUsed=${providerTelemetry.fallbackUsed === true} llmMs=${llmDurationMs} tokens=${Number(providerTelemetry.totalTokens ?? 0)} anchor=${plan.anchor} anchorHit=${providerTelemetry.anchorHit === true} variant=${String(plan.variant_type ?? "none")} lockedVariant=${String(providerTelemetry.lockedVariant ?? "none")} variantMatched=${providerTelemetry.variantMatched === true} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
+    }
+
+    // 3. rendering (70%)
+    await jobStore.updateJobStatus?.(job.userId, job.id, "rendering", 70, undefined, context.workerId);
+    const renderStartedAt = Date.now();
+    let renderResult: RenderResult | undefined;
+    let renderResults: RenderResult[] = [];
+    const directorOperation = String(activeJob.directorPlan?.operation ?? "standard");
+    if (directorOperation === "video-slice" && job.mode === "video-dub") {
+      if (assets.length !== 1 || assets[0]!.mediaType !== "video") throw new Error("VIDEO_SLICE_REQUIRES_ONE_VIDEO");
+      const taskDir = await mkdtemp(join(tmpdir(), `jansee-slicer-${job.id}-`));
+      try {
+        const sourcePath = await storage.getFilePath(assets[0]!.storageKey);
+        const sourceDuration = videoDurationSec(sourcePath);
+        if (!Number.isFinite(sourceDuration) || sourceDuration <= 0 || sourceDuration > 20 * 60) throw new Error("VIDEO_SLICE_DURATION_UNSUPPORTED: source video must be between 0 and 20 minutes");
+        const segmentSeconds = Number(activeJob.directorPlan?.sliceSeconds ?? 20);
+        if (!Number.isInteger(segmentSeconds) || segmentSeconds < 5 || segmentSeconds > 120) throw new Error("VIDEO_SLICE_INTERVAL_INVALID: segment interval must be 5 to 120 seconds");
+        if (Math.ceil(sourceDuration / segmentSeconds) > 20) throw new Error("VIDEO_SLICE_TOO_MANY: maximum 20 segments per job; increase the segment interval");
+        const plan = (activeJob.directorPlan ?? {}) as Record<string, unknown>;
+        const packaging = plan.packaging && typeof plan.packaging === "object" ? plan.packaging as Record<string, unknown> : {};
+        const subtitlesEnabled = packagingEnabled(packaging.subtitles, job.prompt, "字幕");
+        const bgmEnabled = packagingEnabled(packaging.bgm, job.prompt, "背景音乐|BGM|配乐|音乐");
+        const prepared = await prepareSlicer({ taskDir, videoFile: sourcePath, segSec: segmentSeconds, transcribe: subtitlesEnabled });
+        const composed = await composeSlicer({
+          taskDir,
+          bgmEnabled,
+          subtitlesEnabled,
+          segments: prepared.segments.map((segment: Record<string, unknown>) => ({ ...segment, final_text: segment.text ?? "", deleted: [] })),
+        });
+        const uploadedSliceKeys: string[] = [];
+        try {
+            for (const slice of composed.slices) {
+            const outputPath = path.join(taskDir, "slices", slice.name);
+            const fileStat = await stat(outputPath);
+            if (!fileStat.size) throw new Error(`VIDEO_SLICE_EMPTY: ${slice.name}`);
+            const storageKey = `users/${job.userId}/outputs/${job.id}_slice_${String(slice.index).padStart(3, "0")}`;
+            const stored = await storage.putFile(storageKey, outputPath);
+            uploadedSliceKeys.push(storageKey);
+            stagedStorageKeys.push(storageKey);
+            const dimensions = probeVideoSize(outputPath);
+            renderResults.push({ storageKey, mimeType: "video/mp4", sizeBytes: stored.sizeBytes, durationMs: Math.round(slice.durationSec * 1000), width: dimensions?.width ?? 1080, height: dimensions?.height ?? 1920 });
+        }
+        } catch (error) {
+          await Promise.all(uploadedSliceKeys.map((key) => storage.deleteObject(key).catch(() => undefined)));
+          throw error;
+        }
+        if (!renderResults.length) throw new Error("VIDEO_SLICE_NO_OUTPUT");
+        renderResult = renderResults[0];
+      } finally {
+        await rm(taskDir, { recursive: true, force: true });
+      }
+    } else if (context.engineRegistry) {
+      const taskDir = await mkdtemp(join(tmpdir(), `jansee-engine-${job.id}-`));
+      try {
+        const plan = (activeJob.directorPlan ?? {}) as Record<string, unknown>;
+        const engineMode = (directorOperation === "keep-original" || directorOperation === "speech-cut") && job.mode === "video-dub" ? "storyboard" : job.mode;
+        const engine = context.engineRegistry.resolve(engineMode);
+        const engineResult = await engine.execute({
+          jobId: job.id,
+          userId: job.userId,
+          mode: job.mode,
+          prompt: job.prompt,
+          aspectRatio: job.aspectRatio,
+          assetIds: job.assetIds,
+          assets,
+          storage,
+          taskDir,
+          directorPlan: plan,
+          job: activeJob,
+          renderer,
+        });
+        const storageKey = engineResult.storageKey ?? `users/${job.userId}/outputs/${job.id}`;
+        const stored = engineResult.storageKey
+          ? { sizeBytes: engineResult.sizeBytes ?? 0 }
+          : await storage.putFile(storageKey, engineResult.outputPath!);
+        if (!stored.sizeBytes) throw new Error("ENGINE_OUTPUT_EMPTY");
+        stagedStorageKeys.push(storageKey);
+        renderResult = {
+          storageKey,
+          mimeType: engineResult.mimeType ?? "video/mp4",
+          sizeBytes: stored.sizeBytes,
+          durationMs: engineResult.durationMs,
+          width: engineResult.width ?? 1080,
+          height: engineResult.height ?? 1920,
+          ...(engineResult.ttsDurationMs !== undefined ? { ttsDurationMs: engineResult.ttsDurationMs } : {}),
+          ...(engineResult.ffmpegDurationMs !== undefined ? { ffmpegDurationMs: engineResult.ffmpegDurationMs } : {}),
+          ...(engineResult.subtitleTimeline ? { subtitleTimeline: engineResult.subtitleTimeline } : {}),
+        };
+        renderResults = [renderResult!];
+      } finally {
+        await rm(taskDir, { recursive: true, force: true });
+      }
+    } else {
+      renderResult = await renderer.render(activeJob, assets);
+      stagedStorageKeys.push(renderResult.storageKey);
+      renderResults = [renderResult];
+    }
+    ensureLease();
+    if (!renderResult) throw new Error("RENDER_NO_OUTPUT");
+    rendererDurationMs = Date.now() - renderStartedAt;
+    ffmpegDurationMs = renderResult.ffmpegDurationMs ?? 0;
+    ttsDurationMs = renderResult.ttsDurationMs ?? 0;
+
+    // 4. quality-check (90%)
+    await jobStore.updateJobStatus?.(job.userId, job.id, "quality-check", 90, undefined, context.workerId);
+    if (!renderResult.sizeBytes || renderResult.sizeBytes <= 0) {
+      throw new Error("Rendered video file is empty");
+    }
+
+    // Validate every deliverable before it becomes visible in the user's works library.
+    // Images/video-dub always require audio (TTS); storyboard/slices require it when BGM
+    // is enabled or any source video contains an original audio stream.
+    if (context.qualityChecker) {
+      const plan = (activeJob.directorPlan ?? {}) as Record<string, unknown>;
+      const packaging = plan.packaging && typeof plan.packaging === "object"
+        ? plan.packaging as Record<string, unknown>
+        : {};
+      const bgmEnabled = packagingEnabled(packaging.bgm, job.prompt, "背景音乐|BGM|配乐|音乐");
+      let sourceHasAudio = false;
+      if (job.mode !== "image-film") {
+        for (const asset of assets.filter((item) => item.mediaType === "video")) {
+          try {
+            if (hasAudioStream(await storage.getFilePath(asset.storageKey))) {
+              sourceHasAudio = true;
+              break;
+            }
+          } catch {
+            // The output QC remains authoritative; a missing source audio stream is not itself fatal.
+          }
+        }
+      }
+      const isSpeechOrImageMode = job.mode === "image-film" || (job.mode === "video-dub" && directorOperation !== "video-slice");
+      const requireAudio = isSpeechOrImageMode || bgmEnabled || sourceHasAudio;
+      for (const output of renderResults.length ? renderResults : [renderResult]) {
+        const outputPath = await storage.getFilePath(output.storageKey);
+        const qc = await context.qualityChecker(outputPath, { requireAudio, requireUdtaAigc: true, requireContinuousSpeech: directorOperation === 'speech-cut', ...(output.subtitleTimeline ? { subtitleTimeline: output.subtitleTimeline } : {}) });
+        qcSummaries.push({
+          grade: qc.grade,
+          metrics: qc.metrics as Record<string, unknown>,
+          warnings: qc.warnings,
+        });
+        if (!qc.passed) {
+          throw new Error("AUTO_QC_REJECTED: generated media failed integrity checks");
+        }
+      }
+    }
+
+    ensureLease();
+    // Output records are about to become user-visible; after this point preserve their backing objects on later failures.
+    outputsPublished = true;
+    // 5. completed (100%)
+    for (const output of renderResults.length ? renderResults : [renderResult]) {
+      await outputStore.createOutput({
+        jobId: job.id,
+        userId: job.userId,
+        storageKey: output.storageKey,
+        mimeType: output.mimeType,
+        sizeBytes: output.sizeBytes,
+        durationMs: output.durationMs,
+        width: output.width,
+        height: output.height,
+        ...(context.workerId ? { workerId: context.workerId } : {}),
+      });
+    }
+
+    if (activeJob.directorPlan) {
+      const plan = activeJob.directorPlan;
+      const promptText = job.prompt;
+      const scene = /\u95e8\u5e97|\u9910\u996e|\u5b9e\u4f53|\u5230\u5e97|\u7ebf\u4e0b|\u5e97\u94fa|\u672c\u5730\u751f\u6d3b/.test(promptText) ? "local" : /\u4e2a\u4eba|\u53e3\u64ad|\u81ea\u5a92\u4f53|\u535a\u4e3b|\u521b\u4f5c\u8005|\u4e2a\u4eba\u54c1\u724c/.test(promptText) ? "personal" : "sell";
+      const publish = sanitizePublish((plan.publish as Record<string, unknown> | undefined) ?? null, {
+        scene,
+        title: String(plan.title ?? "").trim().slice(0, 24),
+        subtitle: String(plan.subtitle ?? "").trim().slice(0, 16),
+        coverTitleRequired: job.mode !== "image-film",
+      });
+      const publishDeliverables = { caption: publish.caption, cover_title: publish.cover_title, pinned_comment: publish.pinned_comment, post_time: publish.post_time };
+      const previousTelemetry = (plan._telemetry as Record<string, unknown> | undefined) ?? {};
+      await jobStore.updateDirectorPlan?.(job.userId, job.id, {
+        ...plan,
+        publish: publishDeliverables,
+        _telemetry: {
+          ...previousTelemetry,
+          qualityChecks: qcSummaries,
+          llmDurationMs,
+          ffmpegDurationMs,
+          ttsDurationMs,
+          rendererDurationMs,
+          e2eDurationMs: Date.now() - job.queuedAt.getTime(),
+          ttsChars,
+          providerMode: providerTelemetry.providerMode ?? previousTelemetry.providerMode ?? "unreported",
+          requestedModel: providerTelemetry.requestedModel ?? previousTelemetry.requestedModel ?? null,
+          selectedModel: providerTelemetry.selectedModel ?? previousTelemetry.selectedModel ?? null,
+          modelsAttempted: providerTelemetry.modelsAttempted ?? previousTelemetry.modelsAttempted ?? [],
+          fallbackUsed: providerTelemetry.fallbackUsed ?? previousTelemetry.fallbackUsed ?? false,
+          promptTokens: providerTelemetry.promptTokens ?? previousTelemetry.promptTokens ?? 0,
+          completionTokens: providerTelemetry.completionTokens ?? previousTelemetry.completionTokens ?? 0,
+          tokensUsed: providerTelemetry.totalTokens ?? previousTelemetry.tokensUsed ?? 0,
+          tokenUsageAvailable: providerTelemetry.usageAvailable ?? previousTelemetry.tokenUsageAvailable ?? false,
+          costEstimateYuan: estimateDirectorCostYuan(providerTelemetry) ?? previousTelemetry.costEstimateYuan ?? null,
+          costSource: providerTelemetry.usageAvailable !== true ? previousTelemetry.costSource ?? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? previousTelemetry.costSource ?? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? previousTelemetry.costSource ?? "unconfigured" : "director_model_pricing",
+          qualityPassed: qcSummaries.length > 0,
+          qualityCheckCount: qcSummaries.length,
+          finishedAt: new Date().toISOString(),
+        },
+      }, context.workerId);
+    }
+    // Production PostgreSQL settles the hold and completes the job in one transaction.
+    // This prevents a completed job with frozen credits, or a failed job whose credits were already charged.
+    if (context.billingStore?.completeJobAndSettle && context.workerId) {
+      await context.billingStore.completeJobAndSettle(job.userId, job.id, context.workerId);
+    } else {
+      await context.billingStore?.settleCredits(job.userId, job.id);
+      await jobStore.updateJobStatus?.(job.userId, job.id, "completed", 100, undefined, context.workerId);
+    }
+    return true;
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (leaseLost || error.message === "WORKER_LEASE_LOST") return false;
+    if (activeJob.directorPlan && jobStore.updateDirectorPlan) {
+      const previousTelemetry = (activeJob.directorPlan._telemetry as Record<string, unknown> | undefined) ?? {};
+      try {
+      await jobStore.updateDirectorPlan(job.userId, job.id, {
+        ...activeJob.directorPlan,
+        _telemetry: {
+          ...previousTelemetry,
+          llmDurationMs,
+          rendererDurationMs,
+          ffmpegDurationMs,
+          ttsDurationMs,
+          ttsChars,
+          e2eDurationMs: Date.now() - job.queuedAt.getTime(),
+          providerMode: providerTelemetry.providerMode ?? previousTelemetry.providerMode ?? "unreported",
+          requestedModel: providerTelemetry.requestedModel ?? previousTelemetry.requestedModel ?? null,
+          selectedModel: providerTelemetry.selectedModel ?? previousTelemetry.selectedModel ?? null,
+          modelsAttempted: providerTelemetry.modelsAttempted ?? previousTelemetry.modelsAttempted ?? [],
+          fallbackUsed: providerTelemetry.fallbackUsed ?? previousTelemetry.fallbackUsed ?? false,
+          promptTokens: providerTelemetry.promptTokens ?? previousTelemetry.promptTokens ?? 0,
+          completionTokens: providerTelemetry.completionTokens ?? previousTelemetry.completionTokens ?? 0,
+          tokensUsed: providerTelemetry.totalTokens ?? previousTelemetry.tokensUsed ?? 0,
+          tokenUsageAvailable: providerTelemetry.usageAvailable ?? previousTelemetry.tokenUsageAvailable ?? false,
+          costEstimateYuan: estimateDirectorCostYuan(providerTelemetry) ?? previousTelemetry.costEstimateYuan ?? null,
+          costSource: providerTelemetry.usageAvailable !== true ? previousTelemetry.costSource ?? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? previousTelemetry.costSource ?? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? previousTelemetry.costSource ?? "unconfigured" : "director_model_pricing",
+          qualityPassed: qcSummaries.length > 0 ? false : previousTelemetry.qualityPassed ?? false,
+          qualityCheckCount: qcSummaries.length,
+          providerFailureReason: providerTelemetry.failureReason ?? previousTelemetry.providerFailureReason ?? null,
+          qualityChecks: qcSummaries,
+          failureStage: error.message.includes("AUTO_QC_REJECTED") ? "quality-check" : error.message.includes("ENGINE") || error.message.includes("RENDER") ? "rendering" : "processing",
+          failedAt: new Date().toISOString(),
+        },
+      }, context.workerId);
+      } catch {
+        // Telemetry persistence must never prevent failure settlement and credit refunds.
+      }
+    }
+    try {
+      await jobStore.updateJobStatus?.(job.userId, job.id, "failed", undefined, {
+        code: "RENDER_FAILED",
+        message: error.message.slice(0, 500),
+      }, context.workerId);
+    } catch (statusError) {
+      if (statusError instanceof Error && statusError.message === "WORKER_LEASE_LOST") return false;
+      throw statusError;
+    }
+    if (!outputsPublished && stagedStorageKeys.length) {
+      await Promise.allSettled(stagedStorageKeys.map((key) => storage.deleteObject(key)));
+    }
+    // 渲染失败，自动秒级解冻返还预留的 200 积分
+    await context.billingStore?.refundCredits(job.userId, job.id);
+    return false;
+  } finally {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+  }
+}
+
+export function buildJobClaimSql(maxAttempts = WORKER_MAX_ATTEMPTS): string {
+  return `WITH candidate AS (
+    SELECT id
+    FROM generation_jobs
+    WHERE (
+      (status = 'queued' AND attempt_count < ${maxAttempts})
+      OR (status IN ('inspecting', 'planning', 'rendering', 'quality-check')
+          AND lease_expires_at IS NOT NULL AND lease_expires_at < now() AND attempt_count < ${maxAttempts})
+    )
+      AND EXISTS (SELECT 1 FROM billing_ledger ledger WHERE ledger.job_id = generation_jobs.id AND ledger.type = 'hold')
+    ORDER BY
+      (COALESCE((
+        SELECT CASE membership.tier_id
+          WHEN 'ultra' THEN 0
+          WHEN 'pro' THEN 1
+          WHEN 'plus' THEN 2
+          WHEN 'lite' THEN 3
+          ELSE 4
+        END
+        FROM user_memberships membership
+        WHERE membership.user_id = generation_jobs.user_id
+          AND membership.expires_at > now()
+      ), 4) - FLOOR(EXTRACT(EPOCH FROM (now() - queued_at)) / 21600)),
+      queued_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE generation_jobs AS job
+  SET status = 'inspecting',
+      progress = 20,
+      worker_id = $1,
+      lease_expires_at = now() + interval '120 seconds',
+      last_heartbeat_at = now(),
+      attempt_count = job.attempt_count + 1,
+      error_code = NULL,
+      error_message = NULL,
+      started_at = COALESCE(job.started_at, NOW()),
+      updated_at = NOW()
+  FROM candidate
+  WHERE job.id = candidate.id
+  RETURNING job.id, job.user_id`;
+}
+
+export async function processNextQueuedJob(context: WorkerContext): Promise<boolean> {
+  if (!context.pool) return false;
+  const workerId = context.workerId ?? WORKER_ID;
+  const workerContext = context.workerId ? context : { ...context, workerId };
+
+  const client = await context.pool.connect();
+  let candidateJobId: string | null = null;
+  let candidateUserId: string | null = null;
+  let exhaustedJobs: Array<{ id: string; user_id: string }> = [];
+  try {
+    await client.query("BEGIN");
+    const exhausted = await client.query<{ id: string; user_id: string }>(
+      `UPDATE generation_jobs
+       SET status = 'failed',
+           error_code = 'WORKER_ATTEMPTS_EXHAUSTED',
+           error_message = '任务执行租约多次过期，已达到最大重试次数',
+           finished_at = COALESCE(finished_at, now()),
+           worker_id = NULL,
+           lease_expires_at = NULL,
+           updated_at = now()
+       WHERE status IN ('inspecting', 'planning', 'rendering', 'quality-check')
+         AND lease_expires_at IS NOT NULL
+         AND lease_expires_at < now()
+         AND attempt_count >= ${WORKER_MAX_ATTEMPTS}
+       RETURNING id, user_id`,
+    );
+    const refundRetries = await client.query<{ id: string; user_id: string }>(
+      `SELECT job.id, job.user_id
+       FROM generation_jobs job
+       WHERE job.status = 'failed'
+         AND job.error_code = 'WORKER_ATTEMPTS_EXHAUSTED'
+         AND EXISTS (
+           SELECT 1 FROM billing_ledger hold
+           WHERE hold.job_id = job.id AND hold.user_id = job.user_id AND hold.type = 'hold'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM billing_ledger refunded
+           WHERE refunded.job_id = job.id AND refunded.user_id = job.user_id AND refunded.type = 'refund'
+         )
+       ORDER BY job.updated_at ASC
+       LIMIT 100
+       FOR UPDATE SKIP LOCKED`,
+    );
+    exhaustedJobs = [...new Map([...exhausted.rows, ...refundRetries.rows].map((job) => [job.id, job])).values()];
+    const res = await client.query<{ id: string; user_id: string }>(buildJobClaimSql(), [workerId]);
+    if (res.rows[0]) {
+      candidateJobId = res.rows[0].id;
+      candidateUserId = res.rows[0].user_id;
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch { /* preserve the original claim error */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  for (const expired of exhaustedJobs) {
+    if (!workerContext.billingStore) continue;
+    try {
+      // The recovery transaction has already moved this job to failed; only the
+      // idempotent credit refund remains here.
+      await workerContext.billingStore.refundCredits(expired.user_id, expired.id);
+    } catch (error) {
+      console.error("Failed to refund an exhausted worker lease; it will be retried", expired.id, error);
+    }
+  }
+  if (!candidateJobId || !candidateUserId) return exhaustedJobs.length > 0;
+
+  const job = await workerContext.jobStore.findJobById(candidateUserId, candidateJobId);
+  if (!job || job.status !== "inspecting") return false;
+  return await processJob(job, workerContext);
+}
+
+export function startJobWorkerLoop(
+  context: WorkerContext,
+  pollIntervalMs = 2_000,
+  requestedConcurrency = Number(process.env.WORKER_CONCURRENCY ?? 2),
+): { stop(): void } {
+  // V2 的实测基线：重型媒体任务最多同时执行 2 个。
+  // V4 单机 4C4G 不允许通过环境变量突破该上限；资源紧张时可降为 1。
+  const concurrency = Number.isFinite(requestedConcurrency)
+    ? Math.max(1, Math.min(2, Math.floor(requestedConcurrency)))
+    : 2;
+  const baseWorkerId = context.workerId ?? WORKER_ID;
+  let running = true;
+  const timers = new Set<NodeJS.Timeout>();
+
+  function schedule(workerContext: WorkerContext, delayMs: number) {
+    if (!running) return;
+    const timer = setTimeout(async () => {
+      timers.delete(timer);
+      if (!running) return;
+      try {
+        await processNextQueuedJob(workerContext);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("[jansee-worker] worker cycle failed", {
+          workerId: workerContext.workerId,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          message: detail.slice(0, 500),
+        });
+      } finally {
+        if (running) schedule(workerContext, pollIntervalMs);
+      }
+    }, delayMs);
+    timers.add(timer);
+    timer.unref?.();
+  }
+
+  // 每个槽位使用独立 workerId，数据库 lease/heartbeat 所有权互不覆盖。
+  for (let slot = 0; slot < concurrency; slot += 1) {
+    const workerContext = {
+      ...context,
+      workerId: `${baseWorkerId}:slot-${slot + 1}`.slice(0, 120),
+    };
+    schedule(workerContext, 100 + slot * 25);
+  }
+
+  return {
+    stop() {
+      running = false;
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    },
+  };
+}
+
