@@ -74,13 +74,22 @@ function createLegacyFaqPublicationRecord(item) {
 async function synchronizeVisibleFaqSchema() {
   const path = resolve(publicRoot, "faq.html");
   let html = await readFile(path, "utf8");
-  const entries = [...html.matchAll(/<section class="qa">\s*<h2>([\s\S]*?)<\/h2>\s*<p>([\s\S]*?)<\/p>\s*<\/section>/g)]
+  let entries = [...html.matchAll(/<section class="qa">\s*<h2>([\s\S]*?)<\/h2>\s*<p>([\s\S]*?)<\/p>\s*<\/section>/g)]
     .map((match) => ({
       name: decodeHtml(match[1].replace(/<[^>]+>/g, "")).replace(/^\d+\.\s*/, "").trim(),
       text: decodeHtml(match[2].replace(/<[^>]+>/g, "")).trim()
     }))
     .filter((entry) => entry.name && entry.text)
     .slice(0, 15);
+  if (entries.length === 0) {
+    entries = [...html.matchAll(/<article class="content-item"><h3>([\s\S]*?)<\/h3><p>([\s\S]*?)<\/p><\/article>/g)]
+      .map((match) => ({
+        name: decodeHtml(match[1].replace(/<[^>]+>/g, "")).replace(/^\d+\.\s*/, "").trim(),
+        text: decodeHtml(match[2].replace(/<[^>]+>/g, "")).trim()
+      }))
+      .filter((entry) => entry.name && entry.text)
+      .slice(0, 15);
+  }
   if (entries.length !== 15) throw new Error("Expected exactly 15 visible FAQ entries, got " + entries.length);
   const schema = {
     "@context": "https://schema.org",
