@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideVariantLocal } from "../apps/api/prompts/index.js";
+import { decideVariantLocal } from "../apps/api/src/variant-rules.ts";
 import { rankAnchors, HOST_LIBRARY } from "@jansee/anchor-kit";
 import { buildDuckFilter, normalizeBgmEmotion } from "@jansee/audio-kit";
 import { BGM, XFADE } from "@jansee/domain";

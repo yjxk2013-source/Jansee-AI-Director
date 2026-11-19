@@ -4,8 +4,7 @@ import type { CreationMode } from "@jansee/contracts";
 // @ts-expect-error anchor-kit has no bundled type declarations
 import { rankAnchors, HOST_LIBRARY, LOCAL_ROLES, LOCAL_ROLE_COMPAT, compatAnchors } from "@jansee/anchor-kit";
 import { TENCENT_VOICE_CANDIDATES, detectUserVoiceIntent, getAvailableTencentVoiceCandidates, isTencentVoiceAvailable, mapVoiceFor } from "@jansee/tts-kit";
-// @ts-expect-error prompts/index.js is plain JS module
-import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "../prompts/index.js";
+import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "./variant-rules.js";
 import { buildDirectorSystemPrompt, buildDirectorUserPrompt, resolveDirectorRoute, type DirectorRouteResolution } from "./prompt-assembly.js";
 
 export const AssetInputSchema = z.object({

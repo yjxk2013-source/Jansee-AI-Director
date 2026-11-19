@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import type { CreationMode } from "@jansee/contracts";
-// @ts-expect-error prompts/index.js is plain JS module
-import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "../prompts/index.js";
+import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "./variant-rules.js";
 import { detectCreationScene } from "./prompt-assembly.js";
 
 /** 多版成片（批量赛马）单次上限：对齐 V2 BATCH_VERSION_LIMIT。 */

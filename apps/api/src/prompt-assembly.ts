@@ -1,55 +1,51 @@
-import fs from "node:fs";
-import path from "node:path";
 import { randomInt } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import type { CreationMode } from "@jansee/contracts";
 // @ts-expect-error anchor-kit has no bundled type declarations
 import { rankAnchors, HOST_LIBRARY, LOCAL_ROLES, LOCAL_ROLE_COMPAT, getAnchor, getDna, compatAnchors, SELL_VARIANTS, ANCHOR_REDLINE_MD } from "@jansee/anchor-kit";
 import { detectUserVoiceIntent, CANTONESE_DIALECT, ENGLISH_VOICES, getAvailableTencentVoiceCandidates } from "@jansee/tts-kit";
-// @ts-expect-error prompts/index.js is plain JS module
-import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "../prompts/index.js";
+import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "./variant-rules.js";
 import type { DirectorPlanResolvedInput } from "./director.ts";
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
+export { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES };
 
-function resolvePromptsDir(): string {
-  const candidates = [
-    path.resolve(currentDir, "../prompts"),
-    path.resolve(process.cwd(), "apps/api/prompts"),
-    path.resolve(currentDir, "../../apps/api/prompts"),
-  ];
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, "constitution.md"))) {
-      return candidate;
-    }
-  }
-  return candidates[0]!;
-}
+// V4 原生全局宪法原则与真实性红线
+const CONSTITUTION_RULES = [
+  "2. 真实性红线：严禁编造未提及的商品/门店参数、价格或认证；严禁主动出现「左下角」「小黄车」「点击链接」等词汇。",
+  "4. 视听与声音：配音跟随用户指定性别或由你自主匹配最契合文字情绪的合法音色 Key；BGM 按 bgm_emotion 情绪选曲。",
+  "6. 发布方案铁律：publish 四件套（caption / cover_title / pinned_comment / post_time）是给商家的发布交付物，与旁白台词互补不重复；caption 是对外公开发布的广告文案，严禁极限词与虚假承诺。",
+].join("\n");
 
-const PROMPT_DIR = resolvePromptsDir();
+// V4 分镜解说专属规则
+const STORYBOARD_CORE_RULES = [
+  "===== 分镜镜头与字数硬约束 =====",
+  "1. 镜头数量绝对一致：输入有 N 个分镜素材，全局 narration 旁白必须且恰好由 N 句精炼台词组成（用标点隔开，按顺序严格对应第 1 到第 N 个分镜镜头），不多不少；scenes 数组包含对应的 N 个镜头节奏安排。",
+  "2. 时长与语速红线：中文标准播音语速约为 3.5 ~ 4.0 字/秒；每个分镜台词字数上限 = 镜头实测秒数 × 3.8（向下取整），绝对不能超出该镜头的物理时长。",
+  "3. 纯文本原话：narration 中的每一句必须为主播口播台词原话，不得带运镜指示、动作提示或括号注释（如“（镜头拉近）”或“（微笑）”一律禁止）。",
+].join("\n");
 
-function safeReadFile(filename: string): string {
-  try {
-    const fullPath = path.join(PROMPT_DIR, filename);
-    if (fs.existsSync(fullPath)) {
-      return fs.readFileSync(fullPath, "utf-8");
-    }
-  } catch {
-    // fallback below
-  }
-  return "";
-}
+// V4 电商带货专属人设与变体规则
+const SELL_PERSONA_RULES = [
+  "【带货主播人设】：千万级商业短视频导演兼成交型主播，深谙用户心理，擅长制造转化。台词口吻以「主播风格层」DNA 细则为准绳，你的台词就是观众听到的原话，严禁输出任何创作说明指令。",
+  "【变体类型】：从 A-痛点直击型、B-反差对比型、C-福利低价型、D-场景代入型、E-证言型、F-紧迫逼单型、G-结果先行型、H-情感共鸣型、I-权威专业型、J-反转型/避坑型、K-教程演示型、L-信任测评型、M-数字冲击型、N-保障安心型 中选 1 种最契合的填入 variant_type。",
+  "【变体选择逻辑】：高客单/需背书优先 I/N；低价秒杀引流优先 C/F；数字量化优先 M；避坑干货优先 J；效果明显优先 B；家居/穿搭优先 D；教程/步骤一律 K；送礼/女性向一律 H；功能解决痛点才选 A。",
+].join("\n");
 
-// 缓存各提示词文档资产
-const CONSTITUTION_MD = safeReadFile("constitution.md");
-const SELL_PERSONA_MD = safeReadFile("director-sell.md");
-const LOCAL_PERSONA_MD = safeReadFile("director-local.md");
-const STORYBOARD_DIRECTOR_MD = safeReadFile("storyboard-director.md");
-const PUBLISH_RULES_MD = safeReadFile("publish-rules.md");
-// Keep global constitution principles, excluding its legacy JSON schema (V4 owns the output contract).
-const CONSTITUTION_RULES_MD = CONSTITUTION_MD.split(/^# ==================== 2\..*$/m)[0]!.split(/\r?\n/).filter((line) => !/^[1357]\./.test(line.trim())).join("\n").trim();
-// Add storyboard constraints without the legacy output schema.
-const STORYBOARD_CORE_MD = STORYBOARD_DIRECTOR_MD.split(/^# ==================== 3\..*$/m)[0]!.trim();
+// V4 本地探店专属人设与变体规则
+const LOCAL_PERSONA_RULES = [
+  "【同城探店人设】：深耕同城实体经济、懂得挖掘街头巷尾烟火气的本地导演。核心任务是为线下实体门店吸引同城顾客到店消费。语气真诚、实在、生活气息浓厚。",
+  "【变体类型】：从 A-宝藏发现型、B-性价比种草型、C-环境氛围型、D-硬核测评型、E-避坑提醒型、F-限时活动型、G-信任背书型、H-高客单沉稳型 中选 1 种最契合的填入 variant_type。",
+  "【探店选择逻辑】：高客单沉稳优先 H；老字号/熟客优先 G；平价实惠团购优先 B；环境拍照出片优先 C；限时活动优先 F；硬核用料优先 D；避雷提醒优先 E；小众新开优先 A。",
+  "【绝对禁止电商网购与物流词汇】：严禁出现「现货直发、全国包邮、整箱发货、顺丰、拍下、下单、快递、小黄车、左下角」等任何电商词汇！必须引导同城顾客到店尝鲜与同城到店体验，提升收藏率与到店核销率。",
+].join("\n");
+
+// V4 宣发方案生成规则
+const PUBLISH_RULES_CONTENT = [
+  "【发布方案生成规范】：",
+  "1. caption（发布正文）：给「刷到但还没看视频」的人的黄金吸睛钩子，严禁复述旁白台词（重复即扣分，信息互补），口语化、有网感，≤150字。结尾必须带 3-5 个垂直长尾话题标签（如 #打工人救星 #私藏宝藏好物）。",
+  "2. cover_title（爆款发布标题）：10~25字，给抖音/小红书/视频号填写的引流标题，直击痛点与利益点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」。",
+  "3. pinned_comment（置顶评论）：高转化与互动钩子（≤50字），抛出让观众极有欲望站队、讨论的互动问句或客观到店指引。",
+  "4. post_time（发布时机建议）：一句话黄金时段建议（如「晚间 19:30-21:30 黄金流量档」）。",
+].join("\n");
 
 const COMMERCE_REGEX = /(保暖|打底|衣服|裤|裙|鞋|包|手表|机械表|数码|手机|电脑|美妆|护肤|面霜|精华|防晒|口红|耳机|音响|水杯|保温杯|炒锅|收纳|零食|特产|材质|做工|尺码|面料|版型|修身|显瘦|加厚|防风|防水|透气|现货|性价比|包邮|秒杀|福利|活动价|特惠|买一赠|拍下|下单|到手价|正品|专柜|带货|同款|推荐买|值得入|神器|好物)/i;
 const LOCAL_REGEX = /(老店|老字号|餐馆|火锅|烤鸭|烧烤|烤肉|咖啡|小酒馆|奶茶|甜品|门店|门头|档口|招牌菜|堂食|包间|人均|位置|同城|探店|打卡|免预约|地址|商圈|步行街|地铁站|营业时间|聚餐|约会|排队|环境好|到店|附近)/i;
@@ -211,7 +207,7 @@ const CANDIDATE_EMOTIONS = [
  */
 export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): string {
   const { creationScene, scene, isPersonal, decidedVariant } = resolveDirectorRoute(input);
-  const personaMd = creationScene === "physical-store" ? LOCAL_PERSONA_MD : creationScene === "online-ecommerce" ? SELL_PERSONA_MD : "";
+  const personaRules = creationScene === "physical-store" ? LOCAL_PERSONA_RULES : creationScene === "online-ecommerce" ? SELL_PERSONA_RULES : "";
   const anchorBlock = isPersonal
     ? ["===== Personal creative direction =====", "Focus on the creator's own voice, knowledge, lifestyle or personal IP; do not use ecommerce host or store-tour personas."]
     : buildAnchorBlock(scene, input.prompt, decidedVariant ?? undefined);
@@ -224,8 +220,8 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "2. 时长与呼吸气口铁律：各分镜物理时长由台词人声实测与镜间呼吸停顿驱动，严禁凭空估算虚假时长；成片 durationSeconds 代表全片预计总时长（6~60秒）；",
     "3. 真实性绝对红线：只提炼用户明确给出的客观事实，严禁编造参数、价格、功效或权威背书；严禁出现「左下角」「小黄车」「点击链接」等虚构导流；",
     "4. 视听高级感铁律：死守无损物理安全区与 0 Emoji 规范；标题极简克制，副标留白点睛，正文旁白自然松弛。",
-    CONSTITUTION_RULES_MD,
-    input.mode === "storyboard" ? STORYBOARD_CORE_MD : "",
+    CONSTITUTION_RULES,
+    input.mode === "storyboard" ? STORYBOARD_CORE_RULES : "",
     creationScene === "online-ecommerce" ? "[ROUTE] Ecommerce: use 14 ecommerce variants + ecommerce hosts only." : "",
     creationScene === "physical-store" ? "[ROUTE] Local: use 8 local variants + store-tour hosts only." : "",
     creationScene === "personal-creation" ? "[ROUTE] Personal creator path: Constitution Director directs knowledge, lifestyle, personal expression or personal IP. Do not use commercial variants or hosts." : "",
@@ -247,7 +243,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点与运镜节奏安排。",
     "",
     "===== 场景人设与变体规则 =====",
-    isPersonal ? "【个人创作导演】围绕创作者本人表达、知识分享、生活记录或个人 IP 创作；不加入商品成交或门店引流话术。" : personaMd || (scene === "local" ? "【同城探店人设】：主打真实探店、烟火气、同城到店体验，绝对禁止电商网购与物流词汇！" : "【带货人设】：主打消费心理洞察、痛点共情、真实体验促单，明确变体类型与主播风格！"),
+    isPersonal ? "【个人创作导演】围绕创作者本人表达、知识分享、生活记录或个人 IP 创作；不加入商品成交或门店引流话术。" : personaRules || (scene === "local" ? "【同城探店人设】：主打真实探店、烟火气、同城到店体验，绝对禁止电商网购与物流词汇！" : "【带货人设】：主打消费心理洞察、痛点共情、真实体验促单，明确变体类型与主播风格！"),
     decidedVariant ? `【系统强信号锁定】：根据用户输入，系统已锁定变体类型为「${decidedVariant}」，请严格以此风格创作。` : "",
     "",
     ...anchorBlock,
