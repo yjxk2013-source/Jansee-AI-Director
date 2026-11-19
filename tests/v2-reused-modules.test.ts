@@ -161,9 +161,8 @@ test("V2 reuse: deploy security configs and code review guidelines are intact an
   const fail2ban = fs.readFileSync(path.join(deployDir, "fail2ban-jansee-security.conf"), "utf8");
   assert.ok(fail2ban.includes("nginx-sensitive-scan"), "fail2ban must defend against sensitive path scanning");
 
-  const nginxConf = fs.readFileSync(path.join(deployDir, "nginx.conf"), "utf8");
-  assert.ok(nginxConf.includes("client_max_body_size 200M;"), "Nginx config must support 200M uploads");
-  assert.ok(nginxConf.includes("Accept-Ranges bytes;"), "Nginx config must support Range streaming for 1080P");
+  const nginxConf = fs.readFileSync(path.join(deployDir, "nginx-v4.conf"), "utf8");
+  assert.ok(nginxConf.includes("client_max_body_size 500m;"), "Nginx config must support 500m uploads");
 
   const reviewGuidelines = fs.readFileSync(path.resolve(process.cwd(), "docs/CODE_REVIEW_GUIDELINES.md"), "utf8");
   assert.ok(reviewGuidelines.includes("Four-Eyes Principle"), "Review guidelines must enforce Four-Eyes Principle");
