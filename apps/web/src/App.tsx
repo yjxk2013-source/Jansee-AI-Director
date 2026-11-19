@@ -10,11 +10,33 @@ type Attachment = {
   assetId?: string;
 };
 
+export type WorkItem = {
+  id: string;
+  jobId: string;
+  mimeType: string;
+  sizeBytes: number;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+  publish?: {
+    caption?: string;
+    cover_title?: string;
+    pinned_comment?: string;
+    post_time?: string;
+    tags?: string[];
+  };
+  directorPlan?: Record<string, unknown>;
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "director";
   speaker?: string;
   text: string;
+  createdAt?: number;
   jobStage?: string;
   creationScene?: "online-ecommerce" | "physical-store" | "personal-creation";
   creationMode?: CreationMode;
@@ -34,6 +56,37 @@ type ChatMessage = {
   jobWorkId?: string;
 };
 
+function TypewriterText({ text, messageId, isNew }: { text: string; messageId: string; isNew: boolean }) {
+  const [displayedLength, setDisplayedLength] = useState(() => (isNew ? 0 : text.length));
+
+  useEffect(() => {
+    if (!isNew) {
+      setDisplayedLength(text.length);
+      return;
+    }
+    setDisplayedLength(0);
+    let current = 0;
+    const speed = Math.max(12, Math.min(26, Math.floor(1000 / (text.length || 1))));
+    const timer = setInterval(() => {
+      current += 1;
+      setDisplayedLength(current);
+      if (current >= text.length) {
+        clearInterval(timer);
+      }
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, isNew]);
+
+  const isTyping = isNew && displayedLength < text.length;
+
+  return (
+    <span>
+      {text.slice(0, displayedLength)}
+      {isTyping && <span className="typewriter-cursor" aria-hidden="true" />}
+    </span>
+  );
+}
+
 type SpeechResult = { 0: { transcript: string }; isFinal: boolean };
 type SpeechRecognitionLike = {
   lang: string;
@@ -51,16 +104,16 @@ type SpeechWindow = Window & {
 };
 
 const JOB_PROGRESS_LOGS: Record<string, Array<{ speaker: string; text: string }>> = {
-  queued: [{ speaker: "简兮导演", text: "已接到你的创作需求（准备中 10%），正在统筹排期与算力调度。" }],
-  inspecting: [{ speaker: "简兮美术师", text: "素材已收齐并完成画质校验（分析完成 25%），画面无损，准备进入分镜设计。" }],
-  planning: [{ speaker: "简兮导演", text: "分镜脚本与台词已规划定稿（方案进度 40%），已正式交给制作流水线。" }],
+  queued: [{ speaker: "简兮导演", text: "收到你的创作意图啦，正在为你调配算力与分镜资源，马上开始构思～" }],
+  inspecting: [{ speaker: "简兮美术师", text: "画面素材全部收齐、画质校验无损，色调与构图很棒，准备为你设计视觉节奏！" }],
+  planning: [{ speaker: "简兮导演", text: "分镜脚本与台词方案已经打磨完毕，这就正式交付制作流水线全面推进。" }],
   rendering: [
-    { speaker: "简兮剪辑师", text: "正在根据分镜编排运镜与柔和叠画转场（制作进度 55%），让画面衔接自然、节奏清晰。" },
-    { speaker: "简兮音效师", text: "正在合成超自然大模型配音与人声避让混音（制作进度 75%），声画多轨调校中。" },
-    { speaker: "简兮包装师", text: "正在整合发丝级字幕、封面与片尾细节（制作进度 88%），成片封装就绪。" },
+    { speaker: "简兮剪辑师", text: "正在顺着分镜细细编排运镜与柔和叠画，让每一帧画面的转换都自然流动。" },
+    { speaker: "简兮音效师", text: "正在渲染超自然人声配音与多轨避让混音，给画面铺上最有感染力的听觉氛围。" },
+    { speaker: "简兮包装师", text: "发丝级字幕、呼吸感版面与专属片尾正在细致压制，成片很快就能和你见面啦！" },
   ],
-  "quality-check": [{ speaker: "简兮质检师", text: "成片已生成（质检中 95%），正在逐项核验文件完整性、音轨平衡与交付合规信息。" }],
-  completed: [{ speaker: "简兮导演", text: "成片已全流程通过质检（制作完成 100%），已为你送达，请直接点击预览。" }],
+  "quality-check": [{ speaker: "简兮质检师", text: "全片合成完毕，正在做最后的画质平衡、音频平滑与合规细节核验，确保最佳呈现。" }],
+  completed: [{ speaker: "简兮导演", text: "成片已制作完成！每个镜头的节奏与质感都已就绪，快点击播放看看效果吧～" }],
 };
 
 function makeId() {
@@ -88,13 +141,48 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const messages = conversations.find((conversation) => conversation.id === activeConversationId)?.messages ?? [];
   const [draft, setDraft] = useState("");
-  const [creationScene, setCreationScene] = useState<"online-ecommerce" | "physical-store" | "personal-creation" | "">("online-ecommerce");
-  const scenePlaceholders: Record<typeof creationScene, string> = {
-    "online-ecommerce": "说说产品亮点，和想打动的人",
-    "physical-store": "聊聊店铺特色，和想吸引的客人",
-    "personal-creation": "描述素材故事，和期待的画面",
-    "": "说说你想创作什么"
+  const [creationScene, setCreationScene] = useState<"online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut">("online-ecommerce");
+  const scenePlaceholderCandidates: Record<typeof creationScene, string[]> = {
+    "online-ecommerce": [
+      "说说产品卖点，想打动谁",
+      "如'突出核心功能，适合年轻上班族'",
+      "如'主打高性价比与日常实用场景'",
+      "如'突出爆款特质，节奏明快紧凑'",
+    ],
+    "physical-store": [
+      "聊聊店铺特色、招牌与目标客人",
+      "如'突出招牌美食与舒适用餐环境'",
+      "如'同城探店风格，引导周末打卡'",
+      "如'突出新店开业福利与门店位置'",
+    ],
+    "personal-creation": [
+      "描述素材故事、心情与期待画面",
+      "如'记录旅途美好瞬间，舒缓治愈感'",
+      "如'生活日常vlog，温暖有电影质感'",
+      "如'快节奏卡点，展现活力与热情'",
+      "如'记录萌宠日常互动，温馨轻快'",
+      "如'个人成长随笔，旁白深情有力量'",
+    ],
+    "quick-cut": [
+      "如'截取3-12秒与18-32秒并合并'",
+      "如'只保留3-15秒，其余删掉'",
+      "如'切出前10秒和最后20秒并合成一段'",
+      "如'每隔15秒切成一段，批量输出'",
+      "如'多个视频直接拼接，保留原声'",
+      "如'口播消语气词：呃、嗯、那个、就是'",
+      "如'智能检测长停顿，消除空白卡顿'",
+      "如'剔除连续重复词句，口播表达更紧凑'",
+      "如'剪掉停顿与废话，保留原声'",
+      "如'原声直出，本地识别并烧录字幕'",
+      "如'不用AI配音，用原片自己的声音'",
+      "如'保留我的口播声音，微调BGM人声避让'",
+    ],
   };
+  const [placeholderIndex, setPlaceholderIndex] = useState(() => Math.floor(Math.random() * 4));
+  const activePlaceholder = useMemo(() => {
+    const list = scenePlaceholderCandidates[creationScene] ?? [];
+    return list[placeholderIndex % list.length] || "告诉简兮你想创作什么";
+  }, [creationScene, placeholderIndex]);
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const uploadPromisesRef = useRef<Map<string, Promise<string>>>(new Map());
@@ -150,6 +238,8 @@ export default function App() {
     }
     return null;
   });
+  const [highlightWorkId, setHighlightWorkId] = useState<string | null>(null);
+  const [inlinePreviewWorkIds, setInlinePreviewWorkIds] = useState<Record<string, boolean>>({});
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authResolved, setAuthResolved] = useState(false);
   const [conversationsOwnerId, setConversationsOwnerId] = useState<string | null>(null);
@@ -283,6 +373,7 @@ export default function App() {
   useEffect(() => {
     if (!authResolved) return;
     let active = true;
+    uploadPromisesRef.current.clear();
     setConversationsOwnerId(null);
     setConversations([]);
     setActiveConversationId(null);
@@ -328,6 +419,13 @@ export default function App() {
     if (!authResolved || authUser || conversationsOwnerId) return;
     persistSavedConversations(conversations);
   }, [authResolved, authUser, conversationsOwnerId, conversations]);
+
+  useEffect(() => {
+    if (authUser && authUser.id !== "local-preview-user" && files.length > 0) {
+      const missing = files.filter((file) => !uploadPromisesRef.current.has(fileKey(file)));
+      if (missing.length > 0) startUploads(missing);
+    }
+  }, [authUser]);
 
   useEffect(() => {
     const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId);
@@ -442,8 +540,8 @@ export default function App() {
           if (message.jobStatus === "completed") {
             // Completed before the output id was attached (e.g. reload); recover it.
             const completionLog = conversations.flatMap((conversation) => conversation.messages)
-              .find((item) => item.id === `job-log-${jobId}-completed`);
-            attachWorkOutput(jobId, completionLog?.id ?? `job-log-${jobId}-completed`);
+              .find((item) => item.jobId === jobId);
+            attachWorkOutput(jobId, completionLog?.id ?? message.id);
             return;
           }
           const response = await fetch(`/api/v1/jobs/${encodeURIComponent(jobId)}`, { credentials: "include" });
@@ -451,11 +549,13 @@ export default function App() {
           const payload = await response.json() as { job?: { status?: string; progress?: number; errorMessage?: string | null; directorPlan?: Record<string, unknown> | null } };
           if (!active || !payload.job) return;
           const job = payload.job;
+          let matchedAnchorId: string | undefined;
           setConversations((current) => {
             const conversationIndex = current.findIndex((conversation) => conversation.messages.some((item) => item.jobId === jobId));
             if (conversationIndex < 0) return current;
             const conversation = current[conversationIndex]!;
             const anchor = conversation.messages.find((item) => item.jobId === jobId);
+            matchedAnchorId = anchor?.id;
             const nextStatus = job.status ?? anchor?.jobStatus;
             const nextProgress = typeof job.progress === "number" ? job.progress : anchor?.jobProgress;
             const nextError = job.errorMessage ?? undefined;
@@ -466,15 +566,8 @@ export default function App() {
               && anchor.jobError === nextError
               && JSON.stringify(anchor.jobDirectorPlan ?? null) === JSON.stringify(nextPlan ?? null);
             if (!nextStatus) return current;
-            const stageLogs = nextStatus === "failed"
-              ? [{ speaker: "简兮导演", text: "这次制作遇到了问题：" + (nextError || "未知原因") + "。制作消耗的积分已经原路退回。" }]
-              : (JOB_PROGRESS_LOGS[nextStatus] ?? []);
-            const logIds = stageLogs.map((_, index) => index === 0
-              ? `job-log-${jobId}-${nextStatus}`
-              : `job-log-${jobId}-${nextStatus}-${index + 1}`);
-            const loggedIds = new Set(conversation.messages.filter((item) => logIds.includes(item.id)).map((item) => item.id));
-            if (unchanged && loggedIds.size === logIds.length) return current;
-            const logIndexes = new Map(logIds.map((logId, index) => [logId, index]));
+
+            // 升级：采用单卡片片场分镜手稿原地演进，不再向消息流中重复追加碎屑气泡 log
             const messages = conversation.messages.map((item) => {
               if (item.jobId === jobId) return {
                 ...item,
@@ -483,42 +576,30 @@ export default function App() {
                 ...(nextError !== undefined ? { jobError: nextError } : {}),
                 ...(nextPlan !== undefined ? { jobDirectorPlan: nextPlan } : {}),
               };
-              if (logIndexes.has(item.id)) return {
-                ...item,
-                jobStatus: nextStatus,
-                ...(nextProgress !== undefined ? { jobProgress: nextProgress } : {}),
-              };
               return item;
             });
-            stageLogs.forEach((stageLog, index) => {
-              const logId = logIds[index]!;
-              if (loggedIds.has(logId)) return;
-              messages.push({
-                id: logId,
-                role: "director",
-                speaker: stageLog.speaker,
-                text: stageLog.text,
-                jobStage: nextStatus,
-                jobStatus: nextStatus,
-                ...(nextProgress !== undefined ? { jobProgress: nextProgress } : {}),
-                ...(nextStatus === "completed" && nextPlan ? { jobDirectorPlan: nextPlan } : {}),
-              });
-            });
+
+            if (unchanged) return current;
             const nextConversation = { ...conversation, updatedAt: Date.now(), messages };
             const next = [...current];
             next[conversationIndex] = nextConversation;
             return next;
           });
-          if (job.status === "completed") attachWorkOutput(jobId, `job-log-${jobId}-completed`);
+          if (job.status === "completed") attachWorkOutput(jobId, matchedAnchorId || message.id);
         } catch {
           // A temporary network failure must not erase the accepted job or its last known progress.
         }
       }));
     };
     void refreshJobs();
-    const timer = window.setInterval(() => { void refreshJobs(); }, 2_000);
+    // 动态智能自适应轮询：当有任务处于渲染冲刺阶段（rendering / quality-check）时，将轮询频率从 2000ms 提高到 600ms，消除成片展示延迟
+    const hasRenderingJob = pending.some((m) => m.jobStatus === "rendering" || m.jobStatus === "quality-check" || (typeof m.jobProgress === "number" && m.jobProgress >= 70));
+    const pollInterval = hasRenderingJob ? 600 : 2_000;
+    const timer = window.setInterval(() => { void refreshJobs(); }, pollInterval);
     return () => { active = false; window.clearInterval(timer); };
-  }, [conversations]);
+  }, [conversations.map((conversation) => conversation.messages
+    .filter((message) => message.jobId && (!['completed', 'failed', 'cancelled'].includes(message.jobStatus ?? '') || (message.jobStatus === 'completed' && !message.jobWorkId)))
+    .map((message) => `${message.jobId}:${message.jobStatus ?? ''}:${message.jobWorkId ?? ''}`).join('|'))]);
 
   // Speech-cut analysis is persisted server-side; this poll only refreshes the inline chat review.
   useEffect(() => {
@@ -531,11 +612,13 @@ export default function App() {
         try {
           const response = await fetch(`/api/v1/speech-cut/${encodeURIComponent(message.speechCutSessionId!)}`, { credentials: "include" });
           if (!response.ok) return;
-          const payload = await response.json() as { session?: {
-            status: ChatMessage["speechCutStatus"];
-            suggestions?: NonNullable<ChatMessage["speechCutSuggestions"]>;
-            errorMessage?: string | null;
-          } };
+          const payload = await response.json() as {
+            session?: {
+              status: ChatMessage["speechCutStatus"];
+              suggestions?: NonNullable<ChatMessage["speechCutSuggestions"]>;
+              errorMessage?: string | null;
+            }
+          };
           if (!active || !payload.session) return;
           const session = payload.session;
           setConversations((current) => current.map((conversation) => ({
@@ -567,7 +650,9 @@ export default function App() {
     void refreshSpeechCuts();
     const timer = window.setInterval(() => { void refreshSpeechCuts(); }, 2_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [conversations]);
+  }, [conversations.map((conversation) => conversation.messages
+    .filter((message) => message.speechCutSessionId && message.speechCutStatus === 'analyzing')
+    .map((message) => message.speechCutSessionId).join('|'))]);
 
   function addFiles(fileList: FileList | File[]) {
     const incoming = Array.from(fileList);
@@ -763,12 +848,11 @@ export default function App() {
     if (isDirectorThinking) return;
     if (!files.length) { setFileError("请先上传图片或视频素材，导演才能结合实际素材制定方案。"); return; }
     if (!trimmed) { setFileError("请告诉导演你希望这支视频呈现什么内容或效果。"); return; }
-    if (!creationScene) { setFileError("请先选择创作场景：带货视频、实体店或个人。"); return; }
     if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; setIsListening(false); }
     const firstFile = files[0]; if (!firstFile) return;
     const kind = mediaKind(firstFile); if (!kind) return;
     const mode: CreationMode = kind === "image" ? "image-film" : files.length === 1 ? "video-dub" : "storyboard";
-    const directorPrompt = `[User-selected creation scene: ${creationScene}. Treat this scene as authoritative; never reclassify it from keywords or filenames. If the request conflicts with the selected scene, ask for clarification.]\n${trimmed}`;
+    const directorPrompt = trimmed;
     if (mode === "storyboard" && files.length < 2) { setFileError("分镜成片至少需要两个视频素材。"); return; }
     if (!authUser) {
       setFileError("\u8bf7\u5148\u767b\u5f55\u6216\u6ce8\u518c\uff0c\u518d\u4e0a\u4f20\u7d20\u6750\u5e76\u5f00\u59cb\u521b\u4f5c\u3002");
@@ -779,16 +863,19 @@ export default function App() {
       setFileError("正在读取账号历史对话，请稍后再提交，避免覆盖未加载的记录。");
       return;
     }
-    const pendingAssetUploads = files.map((file) => uploadPromisesRef.current.get(fileKey(file)));
+    const submittingFiles = [...files];
+    const submittingDraft = trimmed;
+    const submittingMode = mode;
+    const submittingScene = creationScene;
+    const submittingPrompt = directorPrompt;
     setIsDirectorThinking(true); setFileError("");
     const conversationId = activeConversationId ?? (authUser.id !== "local-preview-user" ? crypto.randomUUID() : makeId());
     const userMessage: ChatMessage = {
       id: makeId(),
       role: "user",
-      text: trimmed,
-      creationScene,
-      creationMode: mode,
-      attachments: files.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
+      text: submittingDraft,
+      creationMode: submittingMode,
+      attachments: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
     };
     const baseMessages = [...messages, userMessage];
     const baseConversation: SavedConversation = {
@@ -815,15 +902,18 @@ export default function App() {
       messages: messagesWithAck,
     };
     setConversations((current) => [conversationWithAck, ...current.filter((conversation) => conversation.id !== conversationId)].slice(0, MAX_SAVED_CONVERSATIONS));
-    // Move the request into the conversation immediately; keep upload promises locally while clearing the composer.
+    // 立即清空输入框并释放交互锁，让用户 0.1 秒内感受到系统响应；后续规划与入队全部在后台异步完成。
     setDraft("");
-    setCreationScene("");
     setFiles([]);
-    uploadPromisesRef.current.clear();
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+    // 提前释放输入锁：输入区已清空、素材已清空，不存在重复提交风险；
+    // 后台规划/入队期间，底部思考动效由 intermediateTimer 和 job status 驱动，无需 isDirectorThinking。
+    setIsDirectorThinking(false);
 
-    let intermediateFinished = false;
-    const intermediateTimer1 = window.setTimeout(() => {
+    // 仅在调用 LLM 导演（三大生成场景）时展示多角色思考过程；纯一句话剪辑直通本地数控，无需漫长思考
+    const isPureCut = submittingScene === "quick-cut";
+    let intermediateFinished = isPureCut;
+    const intermediateTimer1 = isPureCut ? 0 : window.setTimeout(() => {
       if (intermediateFinished) return;
       setConversations((current) => current.map((c) => {
         if (c.id !== conversationId) return c;
@@ -836,9 +926,9 @@ export default function App() {
         };
         return { ...c, messages: [...c.messages, msg] };
       }));
-    }, 1200);
+    }, 800);
 
-    const intermediateTimer2 = window.setTimeout(() => {
+    const intermediateTimer2 = isPureCut ? 0 : window.setTimeout(() => {
       if (intermediateFinished) return;
       setConversations((current) => current.map((c) => {
         if (c.id !== conversationId) return c;
@@ -851,25 +941,32 @@ export default function App() {
         };
         return { ...c, messages: [...c.messages, msg] };
       }));
-    }, 2600);
+    }, 1800);
 
     try {
       if (authUser.id !== "local-preview-user") {
-        try {
-          await saveAccountConversation(conversationWithAck);
-        } catch {
-          throw new Error("创作需求未能保存到账号数据库，请检查网络后重试。");
-        }
+        void saveAccountConversation(conversationWithAck).catch((err) => {
+          console.warn("[conversation-save] 创作需求静默存盘失败，已本地兜底，不阻断出片:", err);
+        });
+        const ensureUploads = async (filesToUpload: File[]) => {
+          const missing = filesToUpload.filter((file) => !uploadPromisesRef.current.has(fileKey(file)));
+          if (missing.length > 0) {
+            startUploads(missing);
+          }
+          return await Promise.all(filesToUpload.map(async (file) => {
+            const pending = uploadPromisesRef.current.get(fileKey(file));
+            if (!pending) throw new Error("素材上传未就绪，请重新选择文件。");
+            return await pending;
+          }));
+        };
+
         let assetIds: string[];
         try {
-          assetIds = await Promise.all(pendingAssetUploads.map((pending) => {
-            if (!pending) throw new Error("素材还未上传完成，请稍候再试。");
-            return pending;
-          }));
-        } catch {
-          throw new Error("素材上传还没有完成，请在输入框确认素材状态后重新发送。");
+          assetIds = await ensureUploads(submittingFiles);
+        } catch (uploadErr) {
+          throw new Error(uploadErr instanceof Error ? uploadErr.message : "素材上传还没有完成，请在输入框确认素材状态后重新发送。");
         }
-        const attachments: Attachment[] = files.map((file, index) => ({
+        let attachments: Attachment[] = submittingFiles.map((file, index) => ({
           name: file.name,
           kind: mediaKind(file)!,
           size: file.size,
@@ -880,15 +977,27 @@ export default function App() {
           ? { ...conversation, updatedAt: Date.now(), messages: baseMessagesWithAssets }
           : conversation));
 
-        if (mode === "video-dub" && isSpeechCutIntent(trimmed)) {
-          const speechResponse = await fetch("/api/v1/speech-cut/analyze", {
+        if (submittingMode === "video-dub" && isSpeechCutIntent(submittingDraft)) {
+          let speechResponse = await fetch("/api/v1/speech-cut/analyze", {
             method: "POST",
             credentials: "include",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ assetId: assetIds[0] }),
           });
-          const speechPayload = await speechResponse.json() as { session?: { id: string; status: string }; error?: { message?: string } };
+          let speechPayload = await speechResponse.json() as { session?: { id: string; status: string }; error?: { code?: string; message?: string } };
+          if (!speechResponse.ok && speechPayload.error?.code === "ASSET_NOT_FOUND") {
+            submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
+            assetIds = await ensureUploads(submittingFiles);
+            speechResponse = await fetch("/api/v1/speech-cut/analyze", {
+              method: "POST",
+              credentials: "include",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ assetId: assetIds[0] }),
+            });
+            speechPayload = await speechResponse.json();
+          }
           if (!speechResponse.ok || !speechPayload.session) throw new Error(speechPayload.error?.message || "语音分析任务创建失败，请稍后重试。");
+          submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
           const directorMessage: ChatMessage = {
             id: makeId(),
             role: "director",
@@ -902,25 +1011,23 @@ export default function App() {
             ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
             : conversation));
           setDraft("");
-          setCreationScene("");
           setFiles([]);
           if (textareaRef.current) textareaRef.current.style.height = "auto";
           return;
         }
 
-        const response = await fetch("/api/v1/director/plan", {
+        let response = await fetch("/api/v1/director/plan", {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            mode,
-            prompt: directorPrompt,
+            mode: submittingMode,
+            prompt: submittingPrompt,
             aspectRatio: "9:16",
             assetIds,
-            assets: attachments.map(({ name, kind, size }) => ({ name, kind, size })),
           }),
         });
-        const payload = await response.json() as {
+        let payload = await response.json() as {
           plan?: {
             title: string;
             concept: string;
@@ -933,20 +1040,44 @@ export default function App() {
             bgm_emotion?: string;
           };
           batch?: { total?: number };
-          error?: { message?: string };
+          error?: { code?: string; message?: string };
         };
+
+        if (!response.ok && payload.error?.code === "ASSET_NOT_FOUND") {
+          submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
+          assetIds = await ensureUploads(submittingFiles);
+          attachments = submittingFiles.map((file, index) => ({
+            name: file.name,
+            kind: mediaKind(file)!,
+            size: file.size,
+            assetId: assetIds[index]!,
+          }));
+          response = await fetch("/api/v1/director/plan", {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              mode: submittingMode,
+              prompt: submittingPrompt,
+              aspectRatio: "9:16",
+              assetIds,
+            }),
+          });
+          payload = await response.json();
+        }
+
         if (!response.ok || !payload.plan) throw new Error(payload.error?.message || "导演服务暂时不可用，请稍后重试。");
         const plan = payload.plan;
         // 多版成片（批量赛马）：版数来自服务端对用户文字/语音输入的解析，非滑动条
         const batchTotal = Math.max(1, Math.min(10, Math.floor(payload.batch?.total ?? 1)));
         // 方案确认环节已下线：方案生成后直接创建制作任务，进度像聊天一样逐条汇报。
-        const jobResponse = await fetch("/api/v1/jobs", {
+        let jobResponse = await fetch("/api/v1/jobs", {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            mode,
-            prompt: directorPrompt,
+            mode: submittingMode,
+            prompt: submittingPrompt,
             aspectRatio: "9:16",
             assetIds,
             directorPlan: plan as Record<string, unknown>,
@@ -955,34 +1086,58 @@ export default function App() {
           }),
         });
         type CreatedJob = { id: string; status: string; progress: number };
-        const jobData = await jobResponse.json() as { job?: CreatedJob; jobs?: CreatedJob[]; batch?: { total?: number }; error?: { message?: string } };
+        let jobData = await jobResponse.json() as { job?: CreatedJob; jobs?: CreatedJob[]; batch?: { total?: number }; error?: { code?: string; message?: string } };
+
+        if (!jobResponse.ok && jobData.error?.code === "ASSET_NOT_FOUND") {
+          submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
+          assetIds = await ensureUploads(submittingFiles);
+          jobResponse = await fetch("/api/v1/jobs", {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              mode: submittingMode,
+              prompt: submittingPrompt,
+              aspectRatio: "9:16",
+              assetIds,
+              directorPlan: plan as Record<string, unknown>,
+              idempotencyKey: crypto.randomUUID(),
+              ...(batchTotal > 1 ? { versions: batchTotal } : {}),
+            }),
+          });
+          jobData = await jobResponse.json();
+        }
+
         const createdJobs: CreatedJob[] = jobData.jobs ?? (jobData.job ? [jobData.job] : []);
         if (!jobResponse.ok || createdJobs.length === 0) throw new Error(jobData.error?.message || "创建制作任务失败，请稍后重试。");
+        submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
         refreshWallet();
-        const directorRoleLine = creationScene === "online-ecommerce"
-          ? "推荐主播：" + (plan.anchor || "未指定") + "（音色气质：" + (plan.voice_id || "温暖亲切") + "）"
-          : creationScene === "physical-store"
-            ? "推荐实体角色：" + (plan.anchor || "未指定") + "（音色气质：" + (plan.voice_id || "温暖亲切") + "）"
-            : null;
+        const directorRoleLine = plan.voice_id
+          ? "导演选定音色：" + plan.voice_id
+          : null;
+        const planSite = (plan as Record<string, unknown>).site;
         const planList = [
-          ...plan.scenes.map((scene) => "镜头 " + scene.order + "（" + scene.durationSeconds + " 秒）：" + scene.description),
+          ...plan.scenes.map((scene) => "镜头 " + scene.order + "（" + scene.durationSeconds + " 秒" + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "）：" + scene.description),
+          ...(typeof planSite === "string" && planSite.trim() ? ["高奢英文署名：" + planSite.trim()] : []),
           "整体风格：" + plan.style,
           "配乐方向：" + plan.soundtrack,
           ...(directorRoleLine ? [directorRoleLine] : []),
           "BGM 情绪：" + (plan.bgm_emotion || "温和垫底") + "（两段式音量 0.10/0.22 避让人声）",
           "转场效果：0.7 秒柔和叠画（宪法级过渡）",
-          "建议成片时长：" + plan.durationSeconds + " 秒",
+          "总导演规划全片时长：" + plan.durationSeconds + " 秒",
         ];
         if (batchTotal > 1 && createdJobs.length > 1) {
           // 批量赛马：方案一条 + 每版独立进度卡片（每条各自轮询各自的 jobId）。
           const planMessage: ChatMessage = {
             id: makeId(), role: "director",
-            text: "方案排好了：" + plan.title + "。" + plan.concept + " 我会按这条方案产出 " + createdJobs.length + " 版差异化成片（每版走不同的风格路线），合计消耗 " + createdJobs.length * 200 + " 积分，先做完的版本先给你看。",
+            text: "构思完成啦！为你规划了《" + plan.title + "》：" + plan.concept + " 接下来我会为你制作 " + createdJobs.length + " 版不同风格取向的成片（合计消耗 " + createdJobs.length * 200 + " 积分），哪个版本最先做好就第一时间发给你～",
+            createdAt: Date.now(),
             plan: planList,
           };
           const versionMessages: ChatMessage[] = createdJobs.map((job, index) => ({
             id: makeId(), role: "director",
-            text: "第 " + (index + 1) + "/" + createdJobs.length + " 版开始制作，做好了直接发给你。",
+            text: "第 " + (index + 1) + "/" + createdJobs.length + " 版已开工，做好了直接发给你。",
+            createdAt: Date.now(),
             jobId: job.id,
             jobStatus: job.status,
             jobProgress: job.progress,
@@ -995,7 +1150,8 @@ export default function App() {
         } else {
           const directorMessage: ChatMessage = {
             id: makeId(), role: "director",
-            text: "方案排好了：" + plan.title + "。" + plan.concept + " 我现在就开始制作，做好了直接发给你（本次制作消耗 200 积分）。",
+            text: "构思完成啦！为你规划了《" + plan.title + "》：" + plan.concept + " 我现在就带领团队全力制作，做好了直接发在对话里（本次制作消耗 200 积分）～",
+            createdAt: Date.now(),
             plan: planList,
             jobId: createdJobs[0]!.id,
             jobStatus: createdJobs[0]!.status,
@@ -1013,10 +1169,10 @@ export default function App() {
           credentials: "include",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            mode,
-            prompt: directorPrompt,
+            mode: submittingMode,
+            prompt: submittingPrompt,
             aspectRatio: "9:16",
-            assets: files.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
+            assets: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
           }),
         });
         const payload = await response.json() as {
@@ -1032,14 +1188,17 @@ export default function App() {
         };
         if (!response.ok || !payload.plan) throw new Error(payload.error?.message || "导演服务暂时不可用，请稍后重试。");
         const plan = payload.plan;
+        const previewSite = (plan as Record<string, unknown>).site;
         const directorMessage: ChatMessage = {
           id: makeId(), role: "director",
-          text: "方案排好了：" + plan.title + "。" + plan.concept + " 这是预览方案；登录后我就能正式开始制作。",
+          text: "初步构思好啦！这版方案命名为《" + plan.title + "》：" + plan.concept + " 这是为你量身规划的预览方案；登录后就可以正式进入成片流水线制作啦～",
+          createdAt: Date.now(),
           plan: [
-            ...plan.scenes.map((scene) => "镜头 " + scene.order + "（" + scene.durationSeconds + " 秒）：" + scene.description),
+            ...plan.scenes.map((scene) => "镜头 " + scene.order + "（" + scene.durationSeconds + " 秒" + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "）：" + scene.description),
+            ...(typeof previewSite === "string" && previewSite.trim() ? ["高奢英文署名：" + previewSite.trim()] : []),
             "整体风格：" + plan.style,
             "配乐方向：" + plan.soundtrack,
-            "建议成片时长：" + plan.durationSeconds + " 秒",
+            "总导演规划全片时长：" + plan.durationSeconds + " 秒",
           ],
         };
         const nextMessages = [...messagesWithAck, directorMessage];
@@ -1047,8 +1206,7 @@ export default function App() {
           ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
           : conversation));
       }
-      setDraft(""); setCreationScene(""); setFiles([]);
-      uploadPromisesRef.current.clear();
+      setDraft(""); setFiles([]);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     } catch (error) {
       const reason = error instanceof Error ? error.message : "创作过程中遇到问题，请稍后重试。";
@@ -1253,14 +1411,7 @@ export default function App() {
           <div className="welcome-panel">
             <p className="welcome-eyebrow"><span>JANSEE</span><i />AI 智能导演</p>
             <h1>简于形<br /><span>胜于效</span></h1>
-            <div className="welcome-workflows" aria-label="简兮的两种视频创作方式">
-              <p className="welcome-workflow">
-                <span>出片流 · 自动创作</span><small>上传图片视频素材｜自动生成完整成片</small>
-              </p>
-              <p className="welcome-workflow">
-                <span>剪辑流 · 一句话剪辑</span><small>一句话描述剪辑效果｜自动完成视频剪辑</small>
-              </p>
-            </div>
+            <p className="welcome-copy">行至简处，见光影，见山海，见简兮。</p>
           </div>
         ) : (
           <div className="message-thread" aria-live="polite">
@@ -1269,10 +1420,105 @@ export default function App() {
                 <div className="message-content">
                   <div className="message-author">{message.role === "user" ? "你" : (message.speaker || "简兮导演")}</div>
                   <div className="message-bubble">
-                    <p>{message.text}</p>
+                    <p>
+                      {message.role === "user" ? (
+                        message.text
+                      ) : (
+                        <TypewriterText
+                          text={message.text}
+                          messageId={message.id}
+                          isNew={Boolean(message.createdAt && Date.now() - message.createdAt < 30_000)}
+                        />
+                      )}
+                    </p>
 
 
-                    {message.jobWorkId && (
+                    {/* 片场分镜手稿 / 胶片冲洗走带流 (Live Director Filmstrip) */}
+                    {message.jobId && !message.jobWorkId && message.jobStatus !== "failed" && (
+                      <div className="director-filmstrip-panel" aria-label="片场分镜手稿与冲洗监视舱">
+                        <div className="filmstrip-header">
+                          <div className="filmstrip-live-badge">
+                            <span className="filmstrip-rec-dot" />
+                            <span className="filmstrip-rec-text">REC 35MM · DIRECTING</span>
+                          </div>
+                          <div className="filmstrip-meta-status">
+                            {message.jobStatus === "queued" && "排队调度中 · 准备算力"}
+                            {message.jobStatus === "inspecting" && "素材底片校验 · 构图分析"}
+                            {message.jobStatus === "planning" && "导演分镜执笔 · 台词显影"}
+                            {message.jobStatus === "rendering" && `多轨避让混音与转场压制 · ${Math.round(message.jobProgress ?? 45)}%`}
+                            {message.jobStatus === "quality-check" && "画质与音频合规复验 · 即将成片"}
+                          </div>
+                        </div>
+
+                        {/* 电影胶卷轨道 (Film Reel Strip) - 支持 1~9 镜头原生横滑走带 */}
+                        <div className="filmstrip-track-wrapper">
+                          <div className="filmstrip-track">
+                            {(message.attachments && message.attachments.length > 0
+                              ? message.attachments
+                              : Array.from({ length: 4 }, (_, i) => ({ id: `stub-${i}`, name: `镜头 0${i + 1}`, kind: "image" as const }))
+                            ).map((att, idx) => {
+                              const planScenes = (message.jobDirectorPlan?.scenes as Array<Record<string, unknown>>) || [];
+                              const scene = planScenes[idx];
+                              const speechLine = typeof scene?.line === "string" ? scene.line : "";
+                              const motion = typeof scene?.motion === "string" ? scene.motion : (idx === 0 ? "0.7s叠化转场" : "微距慢推");
+
+                              const attObj = att as Record<string, unknown>;
+                              const frameKey = (attObj.id as string) || (attObj.assetId as string) || `frame-${idx}`;
+                              const previewUrl = (attObj.previewUrl as string) || (attObj.url as string) || (attObj.assetId ? `/api/assets/${attObj.assetId}/download` : "");
+
+                              return (
+                                <div className="filmstrip-frame" key={frameKey}>
+                                  <div className="filmstrip-frame-perforations-top">
+                                    <span /><span /><span /><span />
+                                  </div>
+                                  <div className="filmstrip-thumbnail-box">
+                                    {previewUrl ? (
+                                      <img src={previewUrl} alt={`第 ${idx + 1} 镜头素材`} className="filmstrip-img" />
+                                    ) : (
+                                      <div className="filmstrip-thumb-placeholder">
+                                        <span className="frame-num">0{idx + 1}</span>
+                                      </div>
+                                    )}
+                                    <span className="filmstrip-frame-tag">SCENE 0{idx + 1}</span>
+                                  </div>
+                                  <div className="filmstrip-frame-perforations-bottom">
+                                    <span /><span /><span /><span />
+                                  </div>
+
+                                  {/* 导演手稿台词与运镜批注 */}
+                                  <div className="filmstrip-script-notes">
+                                    <div className="filmstrip-motion-tag">{motion}</div>
+                                    <div className="filmstrip-script-text">
+                                      {speechLine ? (
+                                        <span>“{speechLine}”</span>
+                                      ) : (
+                                        <span className="filmstrip-script-placeholder">台词执笔构思中…</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 电影工业控制信息槽 (音色波形与 BGM 情绪) */}
+                        <div className="filmstrip-footer">
+                          <div className="filmstrip-sound-engine">
+                            <span className="sound-engine-dot" />
+                            <span className="sound-engine-label">
+                              VOICE: {String(message.jobDirectorPlan?.voice_id || "403011")}
+                              {message.jobDirectorPlan?.bgm_emotion ? ` · BGM [${String(message.jobDirectorPlan.bgm_emotion)}]` : " · 混音避让已就绪"}
+                            </span>
+                          </div>
+                          <div className="filmstrip-wave-bars" aria-hidden="true">
+                            <span /><span /><span /><span /><span />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {message.jobWorkId ? (
                       <div className="job-delivery">
                         <video
                           className="job-delivery-video"
@@ -1281,39 +1527,80 @@ export default function App() {
                           playsInline
                           preload="metadata"
                           onLoadedMetadata={(event) => { event.currentTarget.currentTime = 0.1; }}
-                          aria-label="简兮导演发来的成片，点击播放"
+                          aria-label="简兮成片视频播放器"
                         />
+                        <div className="job-delivery-notice-actions">
+                          <a
+                            className="job-delivery-action-primary"
+                            href={`/api/v1/works/${message.jobWorkId}/stream?download=1`}
+                            download={`jansee-${message.jobWorkId}.mp4`}
+                          >
+                            下载原片 MP4
+                          </a>
+                        </div>
                         {(() => {
                           const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
                           const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
-                          const fields = [["封面标题", publish.cover_title], ["置顶评论", publish.pinned_comment], ["建议发布时间", publish.post_time]].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
-                          if (!caption && !fields.length) return null;
+                          const coverTitle = typeof publish.cover_title === "string" && publish.cover_title.trim() ? publish.cover_title.trim() : "";
+                          const pinnedComment = typeof publish.pinned_comment === "string" && publish.pinned_comment.trim() ? publish.pinned_comment.trim() : "";
+                          const postTime = typeof publish.post_time === "string" && publish.post_time.trim() ? publish.post_time.trim() : "";
+                          if (!caption && !coverTitle) return null;
                           return (
                             <div className="job-publish">
+                              {coverTitle && (
+                                <div className="job-publish-fields">
+                                  <p><span>发布标题：</span><strong>{coverTitle}</strong></p>
+                                </div>
+                              )}
                               {caption && (
-                                <p className="job-publish-caption">
+                                <div className="job-publish-caption">
                                   <span>{caption}</span>
                                   <button
                                     type="button"
                                     className="job-publish-copy"
-                                    onClick={() => { if (!navigator.clipboard) { setFileError("当前浏览器不支持一键复制，请手动选择文案。"); return; } void navigator.clipboard.writeText(caption).then(() => setFileError("发布文案已复制。")).catch(() => setFileError("复制失败，请手动选择文案。")); }}
-                                  >复制</button>
-                                </p>
+                                    onClick={() => {
+                                      void navigator.clipboard.writeText(caption).then(() => {
+                                        alert("宣发文案已复制到剪贴板");
+                                      });
+                                    }}
+                                  >
+                                    复制文案
+                                  </button>
+                                </div>
                               )}
-                              {fields.length > 0 && (
+                              {(pinnedComment || postTime) && (
                                 <div className="job-publish-fields">
-                                  {fields.map(([label, value]) => <p key={label}><span>{label}</span>{value}</p>)}
+                                  {pinnedComment && <p><span>置顶评论：</span>{pinnedComment}</p>}
+                                  {postTime && <p><span>建议发布：</span>{postTime}</p>}
                                 </div>
                               )}
                             </div>
                           );
                         })()}
                       </div>
+                    ) : (
+                      (() => {
+                        const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
+                        const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
+                        if (!caption && !publish.cover_title) return null;
+                        if (message.jobStatus !== "failed" && message.jobStatus !== "cancelled") {
+                          return (
+                            <div className="job-delivery-notice-pending">
+                              <span>成片正在压制合成中，宣发方案已在后台生成…</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()
                     )}
 
                     {message.plan && (
                       <div className="director-plan">
-                        <div className="plan-heading">导演构思 · 创作方案</div>
+                        <div className="plan-heading">
+                          {(message.jobDirectorPlan as Record<string, any>)?._providerTelemetry?.selectedModel
+                            ? `AI 导演独家构思 · 《${String((message.jobDirectorPlan as Record<string, unknown>).title || "定制商业成片")}》`
+                            : "AI 导演独家构思 · 创作方案"}
+                        </div>
                         <ol>{message.plan.map((step) => <li key={step}>{step}</li>)}</ol>
                         {message.speechCutSessionId && !message.jobId && (
                           <div className="speech-cut-review" style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(0,0,0,0.10)" }}>
@@ -1390,6 +1677,58 @@ export default function App() {
       </section>
 
       <footer className="composer-dock">
+        <div className="creation-scene-picker" role="group" aria-label="选择创作场景">
+          <div className="creation-scene-options">
+            <button
+              type="button"
+              className={creationScene === "online-ecommerce" ? "is-selected" : ""}
+              aria-pressed={creationScene === "online-ecommerce"}
+              onClick={() => {
+                setCreationScene("online-ecommerce");
+                setPlaceholderIndex((prev) => prev + 1);
+                setFileError("");
+              }}
+            >
+              带货视频
+            </button>
+            <button
+              type="button"
+              className={creationScene === "physical-store" ? "is-selected" : ""}
+              aria-pressed={creationScene === "physical-store"}
+              onClick={() => {
+                setCreationScene("physical-store");
+                setPlaceholderIndex((prev) => prev + 1);
+                setFileError("");
+              }}
+            >
+              门店获客
+            </button>
+            <button
+              type="button"
+              className={creationScene === "personal-creation" ? "is-selected" : ""}
+              aria-pressed={creationScene === "personal-creation"}
+              onClick={() => {
+                setCreationScene("personal-creation");
+                setPlaceholderIndex((prev) => prev + 1);
+                setFileError("");
+              }}
+            >
+              个人创作
+            </button>
+            <button
+              type="button"
+              className={creationScene === "quick-cut" ? "is-selected" : ""}
+              aria-pressed={creationScene === "quick-cut"}
+              onClick={() => {
+                setCreationScene("quick-cut");
+                setPlaceholderIndex((prev) => prev + 1);
+                setFileError("");
+              }}
+            >
+              一句话剪辑
+            </button>
+          </div>
+        </div>
         <form className="composer" onSubmit={submitMessage}>
           <input
             ref={imageInputRef}
@@ -1491,14 +1830,6 @@ export default function App() {
             </div>
           )}
           {fileError && <p className="composer-error" role="alert">{fileError}</p>}
-          <div className="creation-scene-picker" role="group" aria-label={"\u9009\u62e9\u521b\u4f5c\u573a\u666f"}>
-
-            <div className="creation-scene-options">
-              <button type="button" className={creationScene === "online-ecommerce" ? "is-selected" : ""} aria-pressed={creationScene === "online-ecommerce"} onClick={() => { setCreationScene("online-ecommerce"); setFileError(""); }}>{"\u5e26\u8d27\u89c6\u9891"}</button>
-              <button type="button" className={creationScene === "physical-store" ? "is-selected" : ""} aria-pressed={creationScene === "physical-store"} onClick={() => { setCreationScene("physical-store"); setFileError(""); }}>{"\u95e8\u5e97\u83b7\u5ba2"}</button>
-              <button type="button" className={creationScene === "personal-creation" ? "is-selected" : ""} aria-pressed={creationScene === "personal-creation"} onClick={() => { setCreationScene("personal-creation"); setFileError(""); }}>{"\u4e2a\u4eba\u521b\u4f5c"}</button>
-            </div>
-          </div>
           <div className="composer-main">
             <div className="upload-menu-anchor">
               <button
@@ -1536,7 +1867,7 @@ export default function App() {
               value={draft}
               rows={1}
               maxLength={2000}
-              placeholder={scenePlaceholders[creationScene]}
+              placeholder={activePlaceholder}
               onChange={(event) => {
                 setDraft(event.target.value);
                 event.currentTarget.style.height = "auto";
@@ -1685,6 +2016,9 @@ export default function App() {
                 <WorksPanel
                   user={authUser}
                   onNew={() => { setActiveHeaderPanel(null); startNewConversation(); }}
+                  conversations={conversations}
+                  highlightWorkId={highlightWorkId}
+                  onClearHighlight={() => setHighlightWorkId(null)}
                 />
               ) : activeHeaderPanel === "recharge" ? (
                 <RechargePanel
@@ -1702,7 +2036,7 @@ export default function App() {
               ) : (
                 <AuthPanel
                   user={authUser}
-                  onSuccess={(user) => { setAuthUser(user); setActiveHeaderPanel(null); }}
+                  onSuccess={(user) => { setAuthUser(user); void refreshWallet(); setActiveHeaderPanel(null); }}
                   onProfileUpdated={(user) => setAuthUser(user)}
                   onLogout={() => { setAuthUser(null); setActiveHeaderPanel(null); }}
                   onWalletRefresh={refreshWallet}
@@ -2370,10 +2704,10 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
         <details className="growth-section growth-accordion" open={expandedGrowthSection === "checkin"}>
           <summary className="growth-accordion-trigger" onClick={(event) => { event.preventDefault(); setExpandedGrowthSection((current) => current === "checkin" ? null : "checkin"); }}>
             <div className="growth-section-heading-content">
-          <div className="growth-section-heading">
-            <div><span className="growth-kicker">DAILY CHECK-IN</span><h3>每日签到</h3></div>
-            <span className="growth-reward">+{growth.checkinRewardCredits} 积分</span>
-          </div>
+              <div className="growth-section-heading">
+                <div><span className="growth-kicker">DAILY CHECK-IN</span><h3>每日签到</h3></div>
+                <span className="growth-reward">+{growth.checkinRewardCredits} 积分</span>
+              </div>
             </div>
             <svg className="growth-accordion-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
           </summary>
@@ -2385,10 +2719,10 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
         <details className="growth-section growth-accordion" open={expandedGrowthSection === "invite"}>
           <summary className="growth-accordion-trigger" onClick={(event) => { event.preventDefault(); setExpandedGrowthSection((current) => current === "invite" ? null : "invite"); }}>
             <div className="growth-section-heading-content">
-          <div className="growth-section-heading">
-            <div><span className="growth-kicker">INVITE & GROW</span><h3>邀请推广</h3></div>
-            <span className="growth-reward">好友注册奖励 +{growth.referralRewardCredits} 积分</span>
-          </div>
+              <div className="growth-section-heading">
+                <div><span className="growth-kicker">INVITE & GROW</span><h3>邀请推广</h3></div>
+                <span className="growth-reward">好友注册奖励 +{growth.referralRewardCredits} 积分</span>
+              </div>
             </div>
             <svg className="growth-accordion-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
           </summary>
@@ -2423,10 +2757,10 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
         <details className="growth-section growth-accordion" open={expandedGrowthSection === "partner"}>
           <summary className="growth-accordion-trigger" onClick={(event) => { event.preventDefault(); setExpandedGrowthSection((current) => current === "partner" ? null : "partner"); }}>
             <div className="growth-section-heading-content">
-          <div className="growth-section-heading">
-            <div><span className="growth-kicker">CITY PARTNER PROGRAM</span><h3>城市合伙人</h3></div>
-            <span className="growth-status">{growth.partner.active ? "已开通" : "邀请进度中"}</span>
-          </div>
+              <div className="growth-section-heading">
+                <div><span className="growth-kicker">CITY PARTNER PROGRAM</span><h3>城市合伙人</h3></div>
+                <span className="growth-status">{growth.partner.active ? "已开通" : "邀请进度中"}</span>
+              </div>
             </div>
             <svg className="growth-accordion-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
           </summary>
@@ -2559,23 +2893,107 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
   </>;
 }
 
-type WorkItem = {
-  id: string;
-  jobId: string;
-  mimeType: string;
-  sizeBytes: number;
-  durationMs: number | null;
-  width: number | null;
-  height: number | null;
-  status: string;
-  createdAt: string;
-  expiresAt: string | null;
-};
+function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): {
+  caption?: string;
+  cover_title?: string;
+  pinned_comment?: string;
+  post_time?: string;
+} | null {
+  if (work.publish && (work.publish.caption || work.publish.cover_title || work.publish.pinned_comment)) {
+    return work.publish;
+  }
+  for (const conv of conversations) {
+    for (const msg of conv.messages) {
+      if (msg.jobWorkId === work.id || (msg.jobId && msg.jobId === work.jobId)) {
+        const p = msg.jobDirectorPlan?.publish as Record<string, unknown> | undefined;
+        if (p && (p.caption || p.cover_title || p.pinned_comment || p.post_time)) {
+          const res: NonNullable<WorkItem["publish"]> = {};
+          if (typeof p.caption === "string") res.caption = p.caption;
+          if (typeof p.cover_title === "string") res.cover_title = p.cover_title;
+          if (typeof p.pinned_comment === "string") res.pinned_comment = p.pinned_comment;
+          if (typeof p.post_time === "string") res.post_time = p.post_time;
+          return res;
+        }
+      }
+    }
+  }
+  return null;
+}
 
-function WorksPanel({ user, onNew }: { user: AuthUser | null; onNew: () => void }) {
+function WorksPanel({
+  user,
+  onNew,
+  conversations = [],
+  highlightWorkId,
+  onClearHighlight,
+}: {
+  user: AuthUser | null;
+  onNew: () => void;
+  conversations?: SavedConversation[];
+  highlightWorkId?: string | null;
+  onClearHighlight?: () => void;
+}) {
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string>("");
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const [coverDataUrls, setCoverDataUrls] = useState<Record<string, string>>({});
+
+  const captureFrameAsCover = (workId: string, showFeedback = true) => {
+    const video = videoRefs.current[workId];
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+      setCoverDataUrls((prev) => ({ ...prev, [workId]: dataUrl }));
+      if (showFeedback) {
+        setCopyFeedback("已将当前画面设为封面");
+        setTimeout(() => setCopyFeedback(""), 2000);
+      }
+    } catch {
+      // ignore cross-origin error if any
+    }
+  };
+
+  const downloadCover = (workId: string) => {
+    let dataUrl = coverDataUrls[workId];
+    const video = videoRefs.current[workId];
+    if (!dataUrl && video && video.videoWidth > 0 && video.videoHeight > 0) {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const generatedUrl = canvas.toDataURL("image/png");
+          dataUrl = generatedUrl;
+          setCoverDataUrls((prev) => ({ ...prev, [workId]: generatedUrl }));
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!dataUrl) {
+      setCopyFeedback("成片画面正在加载，请稍候再试");
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `jansee-cover-${workId}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setCopyFeedback("封面图片已开始下载");
+    setTimeout(() => setCopyFeedback(""), 2000);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -2590,40 +3008,246 @@ function WorksPanel({ user, onNew }: { user: AuthUser | null; onNew: () => void 
       .finally(() => setLoading(false));
   }, [user]);
 
+  useEffect(() => {
+    if (!highlightWorkId || works.length === 0) return;
+    const targetEl = document.getElementById(`work-card-${highlightWorkId}`);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightWorkId, works]);
+
+  const copyText = (key: string, text: string, label: string) => {
+    if (!navigator.clipboard) {
+      setCopyFeedback("当前浏览器不支持一键复制，请手动选中文案复制。");
+      return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setCopyFeedback(`${label}已复制到剪贴板`);
+      setTimeout(() => {
+        setCopiedKey((curr) => (curr === key ? null : curr));
+        setCopyFeedback("");
+      }, 2500);
+    }).catch(() => {
+      setCopyFeedback("复制失败，请手动选择复制。");
+    });
+  };
+
   if (!user) {
     return (
-      <>
+      <div className="works-panel">
         <div className="panel-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="M8 5v4m4-4v4m4-4v4M8 15h8" /></svg></div>
         <h2 id="header-panel-title">我的成片</h2>
-        <p className="header-panel-copy">请先登录，即可查看你生成的所有商业短视频成片。</p>
+        <p className="header-panel-copy">请先登录，即可查看你生成的所有商业短视频成片与宣发方案。</p>
         <button className="panel-primary-action" type="button" onClick={onNew}>开始创作</button>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="works-panel">
       <div className="panel-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="M8 5v4m4-4v4m4-4v4M8 15h8" /></svg></div>
       <h2 id="header-panel-title">我的成片</h2>
-      <p className="header-panel-copy">已制作完成的视频成片集中保存在这里（成片文件将保留 24 小时）。</p>
+      <p className="header-panel-copy">已制作完成的商业成片与配套宣发套件集中保存在这里（文件保留 24 小时）。</p>
       {error && <p className="composer-error" role="alert">{error}</p>}
+      {copyFeedback && <p className="works-copy-toast" role="status">{copyFeedback}</p>}
       {loading ? (
         <p style={{ textAlign: "center", color: "#666", padding: "24px 0" }}>正在加载作品库…</p>
       ) : works.length > 0 ? (
-        <div className="works-list" style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "360px", overflowY: "auto", margin: "16px 0" }}>
-          {works.map((work) => (
-            <article key={work.id} style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: "8px", padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <strong>{works.filter((item) => item.jobId === work.jobId).length > 1 ? `\u5207\u7247 ${works.filter((item) => item.jobId === work.jobId).findIndex((item) => item.id === work.id) + 1}/${works.filter((item) => item.jobId === work.jobId).length}` : "\u6210\u7247 MP4"}</strong>
-                <span style={{ fontSize: "12px", color: "#888" }}>{(work.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
-              </div>
-              <video src={`/api/v1/works/${work.id}/stream`} controls style={{ width: "100%", maxHeight: "200px", borderRadius: "4px", backgroundColor: "#000" }} preload="metadata" />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", color: "#666" }}>
-                <span>生成时间: {new Date(work.createdAt).toLocaleDateString()}</span>
-                <a href={`/api/v1/works/${work.id}/stream?download=1`} download={works.filter((item) => item.jobId === work.jobId).length > 1 ? `jansee-slice-${String(works.filter((item) => item.jobId === work.jobId).findIndex((item) => item.id === work.id) + 1).padStart(2, "0")}-of-${works.filter((item) => item.jobId === work.jobId).length}.mp4` : `jansee-${work.id}.mp4`} style={{ color: "#1a73e8", textDecoration: "none", fontWeight: 500 }}>下载成片</a>
-              </div>
-            </article>
-          ))}
+        <div className="works-list">
+          {works.map((work) => {
+            const isHighlighted = work.id === highlightWorkId;
+            const isMultiSlice = works.filter((item) => item.jobId === work.jobId).length > 1;
+            const sliceIndex = works.filter((item) => item.jobId === work.jobId).findIndex((item) => item.id === work.id) + 1;
+            const totalSlices = works.filter((item) => item.jobId === work.jobId).length;
+            const titleLabel = isMultiSlice ? `分镜切片 ${sliceIndex}/${totalSlices}` : "商业视频成片 (MP4)";
+            const filename = isMultiSlice
+              ? `jansee-slice-${String(sliceIndex).padStart(2, "0")}-of-${totalSlices}.mp4`
+              : `jansee-${work.id}.mp4`;
+            const publishKit = resolvePublishForWork(work, conversations);
+
+            return (
+              <article
+                key={work.id}
+                id={`work-card-${work.id}`}
+                className={`work-delivery-card${isHighlighted ? " is-highlighted" : ""}`}
+              >
+                <div className="work-card-header">
+                  <div className="work-card-header-left">
+                    <span className="work-card-title">{titleLabel}</span>
+                    <span className="work-card-badge">1080P</span>
+                    <span className="work-card-size">{(work.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
+                  </div>
+                  <div className="work-card-header-right">
+                    <span className="work-card-time">{new Date(work.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <div className="work-card-player">
+                  <video
+                    ref={(el) => { videoRefs.current[work.id] = el; }}
+                    src={`/api/v1/works/${work.id}/stream`}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={(event) => {
+                      event.currentTarget.currentTime = 0.1;
+                    }}
+                    onLoadedData={() => {
+                      if (!coverDataUrls[work.id]) {
+                        setTimeout(() => captureFrameAsCover(work.id, false), 150);
+                      }
+                    }}
+                    onSeeked={() => {
+                      if (!coverDataUrls[work.id]) {
+                        captureFrameAsCover(work.id, false);
+                      }
+                    }}
+                    aria-label={titleLabel}
+                  />
+                </div>
+
+                <div className="work-card-actions">
+                  <a
+                    className="work-btn-download"
+                    href={`/api/v1/works/${work.id}/stream?download=1`}
+                    download={filename}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                    下载原片 MP4
+                  </a>
+                </div>
+
+                {publishKit && (publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (
+                  <div className="work-publish-studio">
+                    <div className="work-publish-studio-top">
+                      <span className="work-publish-tag">短视频宣发套件</span>
+                      <button
+                        type="button"
+                        className="work-copy-btn work-copy-all-btn"
+                        onClick={() => {
+                          const blocks: string[] = [];
+                          if (publishKit.cover_title) blocks.push(`【建议封面标题】\n${publishKit.cover_title}`);
+                          if (publishKit.caption) blocks.push(`【发布文案与话题】\n${publishKit.caption}`);
+                          if (publishKit.pinned_comment) blocks.push(`【黄金置顶评论】\n${publishKit.pinned_comment}`);
+                          if (publishKit.post_time) blocks.push(`【建议发布时段】\n${publishKit.post_time}`);
+                          copyText(`all-${work.id}`, blocks.join("\n\n"), "完整宣发包");
+                        }}
+                      >
+                        {copiedKey === `all-${work.id}` ? "已复制全部" : "一键复制全部"}
+                      </button>
+                    </div>
+
+                    <div className="work-publish-cover-card">
+                      <div className="work-publish-cover-preview">
+                        {coverDataUrls[work.id] ? (
+                          <img
+                            src={coverDataUrls[work.id]}
+                            alt="建议视频封面"
+                            className="work-cover-thumbnail"
+                          />
+                        ) : (
+                          <div className="work-cover-placeholder">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <path d="m21 15-5-5L5 21" />
+                            </svg>
+                            <span>视频封面</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="work-publish-cover-detail">
+                        <div className="work-publish-label">建议封面与标题</div>
+                        {publishKit.cover_title ? (
+                          <div className="work-publish-cover-headline">
+                            <span className="work-publish-cover-title-text">{publishKit.cover_title}</span>
+                            <button
+                              type="button"
+                              className="work-copy-btn"
+                              onClick={() => copyText(`title-${work.id}`, publishKit.cover_title!, "封面标题")}
+                            >
+                              {copiedKey === `title-${work.id}` ? "已复制" : "复制标题"}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="work-publish-cover-headline">
+                            <span className="work-publish-cover-title-text">高清视频海报封面</span>
+                          </div>
+                        )}
+
+                        <div className="work-cover-actions">
+                          <button
+                            type="button"
+                            className="work-cover-btn-action"
+                            onClick={() => downloadCover(work.id)}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                            </svg>
+                            下载封面图
+                          </button>
+                          <button
+                            type="button"
+                            className="work-cover-btn-action"
+                            onClick={() => captureFrameAsCover(work.id, true)}
+                            title="暂停在满意的画面后点击，可替换为新封面"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <circle cx="12" cy="12" r="3" />
+                              <path d="M4 7h4l2-3h4l2 3h4a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2z" />
+                            </svg>
+                            截取当前播放帧
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {publishKit.caption && (
+                      <div className="work-publish-row">
+                        <div className="work-publish-label">发布文案与话题标签</div>
+                        <div className="work-publish-content">
+                          <p className="work-publish-caption-text">{publishKit.caption}</p>
+                          <button
+                            type="button"
+                            className="work-copy-btn"
+                            onClick={() => copyText(`caption-${work.id}`, publishKit.caption!, "发布文案")}
+                          >
+                            {copiedKey === `caption-${work.id}` ? "已复制" : "复制"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {publishKit.pinned_comment && (
+                      <div className="work-publish-row">
+                        <div className="work-publish-label">黄金置顶评论</div>
+                        <div className="work-publish-content">
+                          <span className="work-publish-text">{publishKit.pinned_comment}</span>
+                          <button
+                            type="button"
+                            className="work-copy-btn"
+                            onClick={() => copyText(`pinned-${work.id}`, publishKit.pinned_comment!, "置顶评论")}
+                          >
+                            {copiedKey === `pinned-${work.id}` ? "已复制" : "复制"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {publishKit.post_time && (
+                      <div className="work-publish-time-hint">
+                        <span>建议发布时间：{publishKit.post_time}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       ) : (
         <div className="panel-empty-state">
@@ -2633,7 +3257,7 @@ function WorksPanel({ user, onNew }: { user: AuthUser | null; onNew: () => void 
         </div>
       )}
       <button className="panel-primary-action" type="button" onClick={onNew}>开始新创作</button>
-    </>
+    </div>
   );
 }
 
@@ -2794,65 +3418,65 @@ function BillingHistoryPanel({ user, kind }: { user: AuthUser | null; kind: Bill
   return (
     <>
       <section className="billing-history">
-      <div className="billing-history-heading">
-        <strong id="header-panel-title">{kind === "orders" ? "订单记录" : "积分明细"}</strong>
-        <span>{kind === "orders" ? "仅展示当前账户创建的订单" : "按发生时间倒序展示账本记录"}</span>
-        <button type="button" className="billing-history-refresh" onClick={() => void load()}>刷新</button>
-      </div>
-      {error && <div className="billing-history-error" role="alert"><span>{error}</span><button type="button" onClick={() => void load()}>重试</button></div>}
-      {loading ? (
-        <div className="billing-history-state" role="status">正在读取记录…</div>
-      ) : rows.length === 0 && !error ? (
-        <div className="billing-history-state"><strong>{kind === "orders" ? "暂无订单" : "暂无积分记录"}</strong><span>{kind === "orders" ? "创建的订单会显示在这里。" : "积分赠送、冻结、扣除和返还记录会显示在这里。"}</span></div>
-      ) : (
-        <>
-          <div className="billing-history-list">
-            {kind === "orders"
-              ? (visibleRows as BillingOrder[]).map((order) => (
-                <article className="billing-history-row" key={order.id}>
-                  <div className="billing-history-main">
-                    <strong>{order.packageName}</strong>
-                    <span>{order.id}</span>
-                    <small>{new Date(order.createdAt).toLocaleString("zh-CN")}</small>
-                  </div>
-                  <div className="billing-history-value">
-                    <strong>¥{Number(order.amountYuan).toFixed(2)}</strong>
-                    <span className={"billing-status billing-status-" + (isOrderExpired(order) ? "closed" : order.status)}>{isOrderExpired(order) ? "已失效" : (orderStatus[order.status] || "状态未知")}</span>
-                    <small>{Number(order.credits).toLocaleString()} 积分</small>
-                    {order.status === "pending" && !isOrderExpired(order) && (
-                      <button
-                        type="button"
-                        className="billing-order-resume"
-                        disabled={resumingOrderId === order.id}
-                        onClick={() => void resumePayment(order.id)}
-                      >
-                        {resumingOrderId === order.id ? "正在发起付款…" : "继续付款"}
-                      </button>
-                    )}
-                    {isOrderExpired(order) && <small className="billing-order-expired">付款时间已结束，请重新创建订单</small>}
-                    {order.status === "paid" && <><small>如需退款或处理订单问题，请发送站内信联系简兮管理员，由人工核实处理。</small><button type="button" className="billing-order-resume" onClick={async () => { const message = window.prompt("请填写退款原因或订单问题"); if (!message?.trim()) return; try { const response = await fetch("/api/v1/support/messages", { method: "POST", credentials: "include", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ orderId: order.id, subject: "退款/订单处理申请", message: message.trim() }) }); const payload = await response.json().catch(() => ({})) as { error?: { message?: string } }; if (!response.ok) throw new Error(payload.error?.message || "站内信发送失败"); window.alert("站内信已发送，管理员核实后会处理。"); } catch (cause) { window.alert(cause instanceof Error ? cause.message : "站内信发送失败"); } }}>发送站内信</button></>}                    {order.status === "refund_requested" && <small className="billing-refund-window">购买积分已暂时预留，等待商户后台完成真实退款</small>}
-                  </div>
-                </article>
-              ))
-              : (visibleRows as BillingLedgerEntry[]).map((entry) => (
-                <article className="billing-history-row" key={entry.id}>
-                  <div className="billing-history-main">
-                    <strong>{ledgerSourceLabel(entry)}</strong>
-                    <span>{entry.description}</span>
-                    <small>{new Date(entry.createdAt).toLocaleString("zh-CN")}{entry.orderId ? ` · 订单 ${entry.orderId}` : ""}</small>
-                  </div>
-                  <div className="billing-history-value">
-                    <strong className={["hold", "settle"].includes(entry.type) || (entry.type === "refund" && Boolean(entry.orderId)) ? "billing-amount-negative" : "billing-amount-positive"}>{["hold", "settle"].includes(entry.type) || (entry.type === "refund" && Boolean(entry.orderId)) ? "−" : "+"}{Math.abs(Number(entry.amount)).toLocaleString()} 积分</strong>
-                  </div>
-                </article>
-              ))}
-          </div>
-          {rows.length > 3 && <div className="billing-history-pagination">
-            <span>{showAll ? `全部 ${rows.length} 条记录` : `显示最近 3 条，共 ${rows.length} 条`}</span>
-            <button type="button" onClick={() => setShowAll((value) => !value)}>{showAll ? "收起" : `更多（${rows.length - 3}）`}</button>
-          </div>}
-        </>
-      )}
+        <div className="billing-history-heading">
+          <strong id="header-panel-title">{kind === "orders" ? "订单记录" : "积分明细"}</strong>
+          <span>{kind === "orders" ? "仅展示当前账户创建的订单" : "按发生时间倒序展示账本记录"}</span>
+          <button type="button" className="billing-history-refresh" onClick={() => void load()}>刷新</button>
+        </div>
+        {error && <div className="billing-history-error" role="alert"><span>{error}</span><button type="button" onClick={() => void load()}>重试</button></div>}
+        {loading ? (
+          <div className="billing-history-state" role="status">正在读取记录…</div>
+        ) : rows.length === 0 && !error ? (
+          <div className="billing-history-state"><strong>{kind === "orders" ? "暂无订单" : "暂无积分记录"}</strong><span>{kind === "orders" ? "创建的订单会显示在这里。" : "积分赠送、冻结、扣除和返还记录会显示在这里。"}</span></div>
+        ) : (
+          <>
+            <div className="billing-history-list">
+              {kind === "orders"
+                ? (visibleRows as BillingOrder[]).map((order) => (
+                  <article className="billing-history-row" key={order.id}>
+                    <div className="billing-history-main">
+                      <strong>{order.packageName}</strong>
+                      <span>{order.id}</span>
+                      <small>{new Date(order.createdAt).toLocaleString("zh-CN")}</small>
+                    </div>
+                    <div className="billing-history-value">
+                      <strong>¥{Number(order.amountYuan).toFixed(2)}</strong>
+                      <span className={"billing-status billing-status-" + (isOrderExpired(order) ? "closed" : order.status)}>{isOrderExpired(order) ? "已失效" : (orderStatus[order.status] || "状态未知")}</span>
+                      <small>{Number(order.credits).toLocaleString()} 积分</small>
+                      {order.status === "pending" && !isOrderExpired(order) && (
+                        <button
+                          type="button"
+                          className="billing-order-resume"
+                          disabled={resumingOrderId === order.id}
+                          onClick={() => void resumePayment(order.id)}
+                        >
+                          {resumingOrderId === order.id ? "正在发起付款…" : "继续付款"}
+                        </button>
+                      )}
+                      {isOrderExpired(order) && <small className="billing-order-expired">付款时间已结束，请重新创建订单</small>}
+                      {order.status === "paid" && <><small>如需退款或处理订单问题，请发送站内信联系简兮管理员，由人工核实处理。</small><button type="button" className="billing-order-resume" onClick={async () => { const message = window.prompt("请填写退款原因或订单问题"); if (!message?.trim()) return; try { const response = await fetch("/api/v1/support/messages", { method: "POST", credentials: "include", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ orderId: order.id, subject: "退款/订单处理申请", message: message.trim() }) }); const payload = await response.json().catch(() => ({})) as { error?: { message?: string } }; if (!response.ok) throw new Error(payload.error?.message || "站内信发送失败"); window.alert("站内信已发送，管理员核实后会处理。"); } catch (cause) { window.alert(cause instanceof Error ? cause.message : "站内信发送失败"); } }}>发送站内信</button></>}                    {order.status === "refund_requested" && <small className="billing-refund-window">购买积分已暂时预留，等待商户后台完成真实退款</small>}
+                    </div>
+                  </article>
+                ))
+                : (visibleRows as BillingLedgerEntry[]).map((entry) => (
+                  <article className="billing-history-row" key={entry.id}>
+                    <div className="billing-history-main">
+                      <strong>{ledgerSourceLabel(entry)}</strong>
+                      <span>{entry.description}</span>
+                      <small>{new Date(entry.createdAt).toLocaleString("zh-CN")}{entry.orderId ? ` · 订单 ${entry.orderId}` : ""}</small>
+                    </div>
+                    <div className="billing-history-value">
+                      <strong className={["hold", "settle"].includes(entry.type) || (entry.type === "refund" && Boolean(entry.orderId)) ? "billing-amount-negative" : "billing-amount-positive"}>{["hold", "settle"].includes(entry.type) || (entry.type === "refund" && Boolean(entry.orderId)) ? "−" : "+"}{Math.abs(Number(entry.amount)).toLocaleString()} 积分</strong>
+                    </div>
+                  </article>
+                ))}
+            </div>
+            {rows.length > 3 && <div className="billing-history-pagination">
+              <span>{showAll ? `全部 ${rows.length} 条记录` : `显示最近 3 条，共 ${rows.length} 条`}</span>
+              <button type="button" onClick={() => setShowAll((value) => !value)}>{showAll ? "收起" : `更多（${rows.length - 3}）`}</button>
+            </div>}
+          </>
+        )}
       </section>
       {payment && (
         <div className="payment-dialog-overlay">
@@ -2896,7 +3520,7 @@ function RechargePanel({
       fetch("/api/v1/pricing", { cache: "no-store" }).then(async (response) => {
         if (!response.ok) return null;
         return await response.json() as { members?: { id: string; priceYuan: number; strikeYuan: string }[]; boostPacks?: { id: string; priceYuan: number; strikeYuan: string }[] };
-      }).then((data) => { if (active && data?.members && data?.boostPacks) setPricingCatalog(data as NonNullable<typeof pricingCatalog>); }).catch(() => {});
+      }).then((data) => { if (active && data?.members && data?.boostPacks) setPricingCatalog(data as NonNullable<typeof pricingCatalog>); }).catch(() => { });
     };
     refreshPricing();
     const timer = window.setInterval(refreshPricing, 30_000);
@@ -3001,74 +3625,74 @@ function RechargePanel({
   return (
     <>
       <>
-      <div className="credit-center-heading">
-        <h2 id="header-panel-title">算力积分</h2>
-        <p className="header-panel-copy">用于简兮 AI 导演生成与制作</p>
-      </div>
-      <div className="credit-balance">
-        <span>当前余额</span>
-        <strong>{credits !== null ? credits.toLocaleString() : "—"}</strong>
-        <span>积分</span>
-        <small>每生成 1 条成片消耗 200 积分</small>
-        {membership?.active && <small className="credit-membership-status">当前会员：{membership.tierId.toUpperCase()} · 到期 {new Date(membership.expiresAt).toLocaleDateString("zh-CN")}</small>}
-      </div>
+        <div className="credit-center-heading">
+          <h2 id="header-panel-title">算力积分</h2>
+          <p className="header-panel-copy">用于简兮 AI 导演生成与制作</p>
+        </div>
+        <div className="credit-balance">
+          <span>当前余额</span>
+          <strong>{credits !== null ? credits.toLocaleString() : "—"}</strong>
+          <span>积分</span>
+          <small>每生成 1 条成片消耗 200 积分</small>
+          {membership?.active && <small className="credit-membership-status">当前会员：{membership.tierId.toUpperCase()} · 到期 {new Date(membership.expiresAt).toLocaleDateString("zh-CN")}</small>}
+        </div>
 
-      {notice && <p className="credit-notice" role="status">{notice}</p>}
-      {error && <p className="auth-error" role="alert">{error}</p>}
+        {notice && <p className="credit-notice" role="status">{notice}</p>}
+        {error && <p className="auth-error" role="alert">{error}</p>}
 
-      <div className="credit-products">
-        <section className="credit-product-section">
-          <div className="credit-section-title">会员方案</div>
-          <div className="credit-plan-list">
-            {memberPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`credit-plan-card${plan.tag ? " is-featured" : ""}`}
-              >
-                <div>
-                  <div className="credit-plan-main">
-                    <strong>{plan.name}</strong>
-                    {plan.tag && <span className="credit-plan-tag">{plan.tag}</span>}
-                  </div>
-                  <div className="credit-plan-detail">
-                    <strong>+{plan.credits.toLocaleString()}</strong> 积分
-                    <span>{plan.clipsText}</span>
-                  </div>
-                  <div className="credit-plan-desc">{plan.desc}</div>
-                </div>
-                <button
-                  type="button"
-                  className="credit-buy-button"
-                  disabled={loading}
-                  onClick={() => handleBuy(plan.id)}
+        <div className="credit-products">
+          <section className="credit-product-section">
+            <div className="credit-section-title">会员方案</div>
+            <div className="credit-plan-list">
+              {memberPlans.map((plan) => (
+                <div
+                  key={plan.id}
+                  className={`credit-plan-card${plan.tag ? " is-featured" : ""}`}
                 >
-                  ¥{plan.price}
-                  <span className="credit-old-price">{plan.strike}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="credit-product-section">
-          <div className="credit-section-title">算力加油卡 <span>无需订阅</span></div>
-          <div className="credit-plan-card credit-topup-card">
-            <div>
-              <div className="credit-plan-main"><strong>{boostPack.name}</strong><span className="credit-plan-tag">{boostPack.tag}</span></div>
-              <div className="credit-plan-detail"><strong>+{boostPack.credits.toLocaleString()}</strong> 积分 <span>{boostPack.clipsText}</span></div>
-              <div className="credit-plan-desc">{boostPack.desc}</div>
+                  <div>
+                    <div className="credit-plan-main">
+                      <strong>{plan.name}</strong>
+                      {plan.tag && <span className="credit-plan-tag">{plan.tag}</span>}
+                    </div>
+                    <div className="credit-plan-detail">
+                      <strong>+{plan.credits.toLocaleString()}</strong> 积分
+                      <span>{plan.clipsText}</span>
+                    </div>
+                    <div className="credit-plan-desc">{plan.desc}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="credit-buy-button"
+                    disabled={loading}
+                    onClick={() => handleBuy(plan.id)}
+                  >
+                    ¥{plan.price}
+                    <span className="credit-old-price">{plan.strike}</span>
+                  </button>
+                </div>
+              ))}
             </div>
-            <button
-              type="button"
-              className="credit-buy-button"
-              disabled={loading}
-              onClick={() => handleBuy(boostPack.id)}
-            >
-              ¥{boostPack.price}
-              <span className="credit-old-price">{boostPack.strike}</span>
-            </button>
-          </div>
-        </section>
-      </div>
+          </section>
+          <section className="credit-product-section">
+            <div className="credit-section-title">算力加油卡 <span>无需订阅</span></div>
+            <div className="credit-plan-card credit-topup-card">
+              <div>
+                <div className="credit-plan-main"><strong>{boostPack.name}</strong><span className="credit-plan-tag">{boostPack.tag}</span></div>
+                <div className="credit-plan-detail"><strong>+{boostPack.credits.toLocaleString()}</strong> 积分 <span>{boostPack.clipsText}</span></div>
+                <div className="credit-plan-desc">{boostPack.desc}</div>
+              </div>
+              <button
+                type="button"
+                className="credit-buy-button"
+                disabled={loading}
+                onClick={() => handleBuy(boostPack.id)}
+              >
+                ¥{boostPack.price}
+                <span className="credit-old-price">{boostPack.strike}</span>
+              </button>
+            </div>
+          </section>
+        </div>
       </>
       {checkout && checkoutVisible && (
         <div className="payment-dialog-overlay">

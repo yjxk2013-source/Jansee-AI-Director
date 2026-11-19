@@ -44,13 +44,6 @@ if (-not (Test-Path (Join-Path $root "node_modules"))) {
 
 Write-Host "JANSEE V4 local startup" -ForegroundColor Cyan
 
-if (-not (Test-ListeningPort 5435)) {
-  Start-NodeService "PGlite database" @(".local/pglite/node_modules/@electric-sql/pglite-socket/dist/scripts/server.js", "--db=./.local/pglite/data-recovered-20261117", "--port=5435", "--host=127.0.0.1", "--max-connections=10") "database"
-  Wait-ForPort 5435 30 "PGlite database"
-} else {
-  Write-Host "PGlite already listening on 5435; reusing it."
-}
-
 if (-not (Test-ApiReady)) {
   if (Test-ListeningPort 4100) {
     throw "Port 4100 is occupied, but the listener is not a ready JANSEE V4 API. Stop the conflicting process and retry."
@@ -96,5 +89,4 @@ Write-Host "JANSEE V4 is ready for local testing." -ForegroundColor Green
 Write-Host "Web:      http://127.0.0.1:5173/"
 Write-Host "Admin:    http://127.0.0.1:5173/admin"
 Write-Host "API:      http://127.0.0.1:4100/health/ready"
-Write-Host "Database: 127.0.0.1:5435 (project-local PGlite)"
 Write-Host "Logs:     $logRoot"
