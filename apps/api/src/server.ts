@@ -23,6 +23,7 @@ import { createLocalObjectStorage } from "./storage-local.js";
 import { createTencentCosObjectStorage } from "./storage-cos-object.js";
 import { cleanupExpiredAssets } from "./assets.js";
 import { cleanupExpiredOutputs } from "./outputs.js";
+import { cleanupExpiredConversations } from "./conversations.js";
 import { createPgSpeechCutStore } from "./speech-cut-store.js";
 import { loadTencentVoiceHealth, runTencentVoiceHealthCheck } from "./tts-health.js";
 // @ts-ignore sms-kit is a JavaScript workspace package
@@ -270,7 +271,7 @@ if (growthStore) {
 }
 
 let cleanupTimer: NodeJS.Timeout | undefined;
-if ((assetStore || outputStore) && mediaStorage) {
+if ((assetStore || outputStore || databasePool) && mediaStorage) {
   cleanupTimer = setInterval(() => {
     if (assetStore) {
       cleanupExpiredAssets(assetStore, mediaStorage, new Date()).catch((err) => {
@@ -281,6 +282,11 @@ if ((assetStore || outputStore) && mediaStorage) {
       cleanupExpiredOutputs(outputStore, mediaStorage, new Date()).catch((err) => {
         app.log.error({ err }, "Periodic output cleanup failed");
       });
+    }
+    if (databasePool) {
+      cleanupExpiredConversations(databasePool, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).then((count) => {
+        if (count > 0) app.log.info({ count }, "Expired conversations removed");
+      }).catch((err) => app.log.error({ err }, "Periodic conversation cleanup failed"));
     }
   }, 60 * 60 * 1000);
   cleanupTimer.unref?.();

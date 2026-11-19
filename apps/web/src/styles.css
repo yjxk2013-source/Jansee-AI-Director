@@ -1066,6 +1066,13 @@ textarea:focus-visible {
   background: transparent;
 }
 
+.creation-scene-free-label {
+  color: #26734d;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 @media (max-width:760px) {
   .creation-scene-picker {
     padding: 0 4px 8px;
@@ -4417,6 +4424,41 @@ select:focus-visible {
   color: #34373b;
   background: #fff;
   box-shadow: none;
+}
+
+/* The current conversation surface is the workbench only. Legacy chat bubbles
+   remain in the data model for compatibility, but are not part of the UI. */
+.message-row:not(:has(.director-filmstrip-panel)):not(:has(.job-delivery)):not(:has(.speech-cut-review)) {
+  display: none;
+}
+
+.message-row:has(.director-filmstrip-panel) .message-content,
+.message-row:has(.job-delivery) .message-content,
+.message-row:has(.speech-cut-review) .message-content {
+  width: 100%;
+  max-width: none;
+}
+
+.message-row:has(.director-filmstrip-panel) .message-author,
+.message-row:has(.job-delivery) .message-author,
+.message-row:has(.speech-cut-review) .message-author,
+.message-row:has(.director-filmstrip-panel) .message-bubble > p,
+.message-row:has(.job-delivery) .message-bubble > p {
+  display: none;
+}
+
+.message-row:has(.director-filmstrip-panel) .message-bubble,
+.message-row:has(.job-delivery) .message-bubble,
+.message-row:has(.speech-cut-review) .message-bubble {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.message-thinking {
+  display: none;
 }
 
 .message-user .message-bubble {

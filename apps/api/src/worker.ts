@@ -71,6 +71,14 @@ export async function processJob(
   context: WorkerContext,
 ): Promise<boolean> {
   const { jobStore, assetStore, storage, renderer, outputStore } = context;
+  const deleteSourceAssets = async () => {
+    if (!assetStore.findUserAssets || !assetStore.deleteAsset) return;
+    const assets = await assetStore.findUserAssets(job.userId, job.assetIds);
+    await Promise.allSettled(assets.map(async (asset) => {
+      const deleted = await assetStore.deleteAsset!(job.userId, asset.id);
+      if (deleted) await storage.deleteObject(deleted.storageKey);
+    }));
+  };
   const stagedStorageKeys: string[] = [];
   let outputsPublished = false;
   let leaseLost = false;
@@ -475,6 +483,7 @@ export async function processJob(
       await context.billingStore?.settleCredits(job.userId, job.id);
       await jobStore.updateJobStatus?.(job.userId, job.id, "completed", 100, undefined, context.workerId);
     }
+    await deleteSourceAssets();
     return true;
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
@@ -524,6 +533,7 @@ export async function processJob(
       if (statusError instanceof Error && statusError.message === "WORKER_LEASE_LOST") return false;
       throw statusError;
     }
+    await deleteSourceAssets();
     if (!outputsPublished && stagedStorageKeys.length) {
       await Promise.allSettled(stagedStorageKeys.map((key) => storage.deleteObject(key)));
     }

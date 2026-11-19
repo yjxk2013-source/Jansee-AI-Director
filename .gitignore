@@ -46,4 +46,12 @@ test-results/
 .local/
 .trae/
 scratch/
+.tsbuild/
+
+# Release distribution archives & temporary package parts
+release-parts/
+*.tar.gz*
+*.zip
+*.7z
+
 

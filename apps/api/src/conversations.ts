@@ -10,6 +10,28 @@ export interface ConversationRoutesOptions {
   allowedOrigins: string[];
 }
 
+export async function cleanupExpiredConversations(pool: Pool, cutoff: Date, limit = 200): Promise<number> {
+  const result = await pool.query<{ id: string; user_id: string }>(
+    `SELECT id, user_id FROM conversations WHERE updated_at <= $1 ORDER BY updated_at ASC LIMIT $2`,
+    [cutoff, Math.max(1, Math.min(1000, Math.trunc(limit)))],
+  );
+  if (result.rows.length === 0) return 0;
+  const client = await withDatabaseRetry(() => pool.connect());
+  try {
+    await client.query("BEGIN");
+    for (const row of result.rows) {
+      await client.query("DELETE FROM conversations WHERE id = $1 AND user_id = $2 AND updated_at <= $3", [row.id, row.user_id, cutoff]);
+    }
+    await client.query("COMMIT");
+    return result.rows.length;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 type StoredMessage = {
   id: string;
   role: "user" | "director";

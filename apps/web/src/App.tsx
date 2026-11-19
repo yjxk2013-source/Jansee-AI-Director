@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type TouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type TouchEvent } from "react";
 import type { CreationMode } from "@jansee/contracts";
-import { AdminConsole } from "./AdminConsole";
 import QRCode from "qrcode";
+
+const AdminConsole = lazy(() => import("./AdminConsole").then((m) => ({ default: m.AdminConsole })));
 
 type Attachment = {
   name: string;
@@ -38,7 +39,7 @@ type ChatMessage = {
   text: string;
   createdAt?: number;
   jobStage?: string;
-  creationScene?: "online-ecommerce" | "physical-store" | "personal-creation";
+  creationScene?: "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut";
   creationMode?: CreationMode;
   attachments?: Attachment[];
   plan?: string[];
@@ -196,7 +197,7 @@ export default function App() {
       };
     }
     const activeJobMessage = [...messages].reverse().find(
-      (m) => m.jobId && !["completed", "failed", "cancelled"].includes(m.jobStatus ?? "")
+      (m) => m.jobId && m.jobStatus !== "preview" && !["completed", "failed", "cancelled"].includes(m.jobStatus ?? "")
     );
     if (activeJobMessage) {
       const status = activeJobMessage.jobStatus;
@@ -514,6 +515,7 @@ export default function App() {
   useEffect(() => {
     const pending = conversations.flatMap((conversation) => conversation.messages)
       .filter((message) => message.jobId && (
+        message.jobStatus !== "preview" &&
         !["completed", "failed", "cancelled"].includes(message.jobStatus ?? "")
         || (message.jobStatus === "completed" && !message.jobWorkId)
       ));
@@ -598,7 +600,7 @@ export default function App() {
     const timer = window.setInterval(() => { void refreshJobs(); }, pollInterval);
     return () => { active = false; window.clearInterval(timer); };
   }, [conversations.map((conversation) => conversation.messages
-    .filter((message) => message.jobId && (!['completed', 'failed', 'cancelled'].includes(message.jobStatus ?? '') || (message.jobStatus === 'completed' && !message.jobWorkId)))
+    .filter((message) => message.jobId && message.jobStatus !== 'preview' && (!['completed', 'failed', 'cancelled'].includes(message.jobStatus ?? '') || (message.jobStatus === 'completed' && !message.jobWorkId)))
     .map((message) => `${message.jobId}:${message.jobStatus ?? ''}:${message.jobWorkId ?? ''}`).join('|'))]);
 
   // Speech-cut analysis is persisted server-side; this poll only refreshes the inline chat review.
@@ -874,6 +876,7 @@ export default function App() {
       id: makeId(),
       role: "user",
       text: submittingDraft,
+      creationScene: submittingScene,
       creationMode: submittingMode,
       attachments: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
     };
@@ -895,7 +898,9 @@ export default function App() {
         ? "收到，我先整理你的需求，给你排一版导演方案。"
         : "素材我已经收下了。我先把你的需求排成制作方案，然后直接开始做，过程随时跟你汇报。",
     };
-    const messagesWithAck = [...baseMessages, ackMessage];
+    // The new workbench is the first execution surface; do not inject the legacy
+    // "先整理需求/排导演方案" acknowledgement into the conversation.
+    const messagesWithAck = baseMessages;
     const conversationWithAck: SavedConversation = {
       ...baseConversation,
       title: makeConversationTitle(messagesWithAck),
@@ -1142,6 +1147,7 @@ export default function App() {
             jobStatus: job.status,
             jobProgress: job.progress,
             jobDirectorPlan: plan as Record<string, unknown>,
+            creationScene: submittingScene,
           }));
           const nextMessages = [...baseMessagesWithAssets, planMessage, ...versionMessages];
           setConversations((current) => current.map((conversation) => conversation.id === conversationId
@@ -1157,6 +1163,7 @@ export default function App() {
             jobStatus: createdJobs[0]!.status,
             jobProgress: createdJobs[0]!.progress,
             jobDirectorPlan: plan as Record<string, unknown>,
+            creationScene: submittingScene,
           };
           const nextMessages = [...baseMessagesWithAssets, directorMessage];
           setConversations((current) => current.map((conversation) => conversation.id === conversationId
@@ -1164,6 +1171,54 @@ export default function App() {
             : conversation));
         }
       } else {
+        // Local mock mode keeps the director preview usable without a running API.
+        // It intentionally stops at a plan preview and never claims a rendered video exists.
+        const mockDurationSeconds = Math.max(12, submittingFiles.length * 3 + 6);
+        const mockScenes = submittingFiles.map((file, index) => ({
+          order: index + 1,
+          durationSeconds: 3,
+          description: `展示素材 ${index + 1}：${file.name}，突出主体、质感与价格信息。`,
+        }));
+        const mockPlan = {
+          title: "本地 Mock 导演预览",
+          concept: `围绕“${submittingPrompt}”组织 ${submittingFiles.length} 个镜头，先完成卖点建立，再收束到行动引导。`,
+          durationSeconds: mockDurationSeconds,
+          scenes: mockScenes,
+          style: "明亮、克制、突出商品质感",
+          soundtrack: "轻快、低存在感，避免压过人声",
+        };
+        const previewMessage: ChatMessage = {
+          id: makeId(), role: "director",
+          text: `本地 Mock 导演预览已完成：${mockPlan.title}。当前只验证导演意图与执行计划，尚未生成真实视频。`,
+          createdAt: Date.now(),
+          jobId: `mock-preview-${conversationId}`,
+          attachments: submittingFiles.map((file, index) => ({
+            id: `mock-frame-${index}`,
+            name: file.name,
+            kind: mediaKind(file)!,
+            size: file.size,
+            previewUrl: URL.createObjectURL(file),
+          })),
+          plan: [
+            ...mockPlan.scenes.map((scene) => `镜头 ${scene.order}：${scene.durationSeconds} 秒：${scene.description}`),
+            `整体风格：${mockPlan.style}`,
+            `配乐方向：${mockPlan.soundtrack}`,
+            `总导演规划时长：${mockPlan.durationSeconds} 秒`,
+          ],
+          jobStatus: "preview",
+          jobProgress: 100,
+          jobDirectorPlan: mockPlan,
+          creationScene: submittingScene,
+        };
+        const nextMessages = [...messagesWithAck, previewMessage];
+        setConversations((current) => current.map((conversation) => conversation.id === conversationId
+          ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
+          : conversation));
+        setDraft(""); setFiles([]);
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        return;
+      }
+        /* Legacy API-only preview branch is unreachable in local mock mode.
         const response = await fetch("/api/v1/director/plan", {
           method: "POST",
           credentials: "include",
@@ -1206,6 +1261,7 @@ export default function App() {
           ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
           : conversation));
       }
+      */
       setDraft(""); setFiles([]);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     } catch (error) {
@@ -1439,7 +1495,7 @@ export default function App() {
                         <div className="filmstrip-header">
                           <div className="filmstrip-live-badge">
                             <span className="filmstrip-rec-dot" />
-                            <span className="filmstrip-rec-text">REC 35MM · DIRECTING</span>
+                            <span className="filmstrip-rec-text">REC 35MM · DIRECTING · {(message.creationScene ?? creationScene) === "online-ecommerce" ? "带货视频" : (message.creationScene ?? creationScene) === "physical-store" ? "门店获客" : (message.creationScene ?? creationScene) === "personal-creation" ? "个人创作" : "一句话剪辑"}</span>
                           </div>
                           <div className="filmstrip-meta-status">
                             {message.jobStatus === "queued" && "排队调度中 · 准备算力"}
@@ -1594,7 +1650,7 @@ export default function App() {
                       })()
                     )}
 
-                    {message.plan && (
+                    {message.plan && message.speechCutSessionId && (
                       <div className="director-plan">
                         <div className="plan-heading">
                           {(message.jobDirectorPlan as Record<string, any>)?._providerTelemetry?.selectedModel
@@ -1725,7 +1781,7 @@ export default function App() {
                 setFileError("");
               }}
             >
-              一句话剪辑
+              一句话剪辑 <span className="creation-scene-free-label">（免费）</span>
             </button>
           </div>
         </div>
@@ -1999,7 +2055,9 @@ export default function App() {
         activeHeaderPanel === "admin-login" ? (
           <AdminLoginPanel onSuccess={(user) => { setAuthUser(user); setActiveHeaderPanel("admin"); }} />
         ) : activeHeaderPanel === "admin" ? (
-          <AdminConsole onClose={() => setActiveHeaderPanel(null)} />
+          <Suspense fallback={<div className="header-panel-layer"><div className="header-panel" style={{ padding: "40px", textAlign: "center", color: "var(--jansee-text-muted, #80868b)" }}>正在载入管理控制台...</div></div>}>
+            <AdminConsole onClose={() => setActiveHeaderPanel(null)} />
+          </Suspense>
         ) : (
           <div className="header-panel-layer">
             <button
