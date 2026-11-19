@@ -36,6 +36,7 @@ export interface AuthUser {
   phone?: string;
   displayName: string | null;
   createdAt: Date;
+  isGuest?: boolean;
 }
 export interface AuthStore {
   createUser(input: { email?: string; phone?: string; passwordHash?: string; displayName: string | null; inviteCode?: string | undefined; registerProvince?: string | undefined; registerCity?: string | undefined; registerRegion?: string | undefined }): Promise<AuthUser>;
@@ -245,7 +246,49 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthOptions): 
     if (!token) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
     const session = await options.store.findSession(hashToken(token));
     if (!session || session.expiresAt <= now()) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
-    return reply.header("cache-control", "no-store").send({ user: session.user });
+    return reply.header("cache-control", "no-store").send({
+      user: {
+        ...session.user,
+        isGuest: !session.user.phone && !session.user.email,
+      },
+    });
+  });
+
+  app.post("/api/v1/auth/guest", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    if (!originAllowed(request, options.allowedOrigins)) return reply.code(403).send({ error: { code: "ORIGIN_NOT_ALLOWED" } });
+    const currentSession = await authenticatedSession(request, options.store);
+    if (currentSession) {
+      return reply.send({
+        user: {
+          ...currentSession.user,
+          isGuest: !currentSession.user.phone && !currentSession.user.email,
+        },
+      });
+    }
+    const forwardedIp = request.headers["x-real-ip"];
+    const registrationIp = typeof forwardedIp === "string" ? forwardedIp.split(",")[0]?.trim() || request.ip : request.ip;
+    const region = resolveRegistrationRegion(registrationIp);
+    const guestUser = await options.store.createUser({
+      displayName: "访客体验用户",
+      registerProvince: region.province ?? undefined,
+      registerCity: region.city ?? undefined,
+      registerRegion: region.label,
+    });
+    const token = randomBytes(32).toString("base64url");
+    await options.store.createSession({
+      userId: guestUser.id,
+      tokenHash: hashToken(token),
+      userAgent: request.headers["user-agent"]?.slice(0, 500) ?? null,
+      ipHash: createHash("sha256").update(request.ip).digest("hex"),
+      expiresAt: new Date(now().getTime() + SESSION_TTL_SECONDS * 1000),
+    });
+    reply.header("set-cookie", setSessionCookie(token, options.production));
+    return reply.code(201).send({
+      user: {
+        ...guestUser,
+        isGuest: true,
+      },
+    });
   });
 
   app.put("/api/v1/auth/password", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {

@@ -242,6 +242,7 @@ export default function App() {
   const [highlightWorkId, setHighlightWorkId] = useState<string | null>(null);
   const [inlinePreviewWorkIds, setInlinePreviewWorkIds] = useState<Record<string, boolean>>({});
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [pendingDownloadWork, setPendingDownloadWork] = useState<{ id: string; filename: string } | null>(null);
   const [authResolved, setAuthResolved] = useState(false);
   const [conversationsOwnerId, setConversationsOwnerId] = useState<string | null>(null);
   const [walletCredits, setWalletCredits] = useState<number | null>(null);
@@ -357,7 +358,13 @@ export default function App() {
 
     let active = true;
     fetch("/api/v1/auth/me", { credentials: "include" })
-      .then(async (response) => response.ok ? await response.json() as { user: AuthUser } : null)
+      .then(async (response) => {
+        if (response.ok) return await response.json() as { user: AuthUser };
+        // 如果未登录，自动初始化访客身份，支持无需登录直接出片
+        const guestRes = await fetch("/api/v1/auth/guest", { method: "POST", credentials: "include" }).catch(() => null);
+        if (guestRes && guestRes.ok) return await guestRes.json() as { user: AuthUser };
+        return null;
+      })
       .then((payload) => {
         if (active && payload?.user) {
           setAuthUser(payload.user);
@@ -735,6 +742,25 @@ export default function App() {
     });
   }
 
+  function triggerDownloadFile(workId: string, filename: string) {
+    const a = document.createElement("a");
+    a.href = `/api/v1/works/${encodeURIComponent(workId)}/stream?download=1`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function handleWorkDownload(workId: string, filename: string) {
+    if (!authUser || authUser.isGuest) {
+      setPendingDownloadWork({ id: workId, filename });
+      setFileError("视频制作完成！请登录或注册账号后保存并下载高清原片。");
+      setActiveHeaderPanel("login");
+      return;
+    }
+    triggerDownloadFile(workId, filename);
+  }
+
   function removeFile(index: number) {
     const removed = files[index];
     if (removed) {
@@ -856,13 +882,26 @@ export default function App() {
     const mode: CreationMode = kind === "image" ? "image-film" : files.length === 1 ? "video-dub" : "storyboard";
     const directorPrompt = trimmed;
     if (mode === "storyboard" && files.length < 2) { setFileError("分镜成片至少需要两个视频素材。"); return; }
-    if (!authUser) {
-      setFileError("\u8bf7\u5148\u767b\u5f55\u6216\u6ce8\u518c\uff0c\u518d\u4e0a\u4f20\u7d20\u6750\u5e76\u5f00\u59cb\u521b\u4f5c\u3002");
-      setActiveHeaderPanel("login");
+    let currentAuthUser = authUser;
+    if (!currentAuthUser) {
+      try {
+        const guestRes = await fetch("/api/v1/auth/guest", { method: "POST", credentials: "include" });
+        if (guestRes.ok) {
+          const payload = await guestRes.json() as { user: AuthUser };
+          currentAuthUser = payload.user;
+          setAuthUser(payload.user);
+          void refreshWallet();
+        }
+      } catch {
+        // 网络异常降级处理
+      }
+    }
+    if (!currentAuthUser) {
+      setFileError("网络连接异常，请刷新后重试。");
       return;
     }
-    if (authUser.id !== "local-preview-user" && conversationsOwnerId !== authUser.id) {
-      setFileError("正在读取账号历史对话，请稍后再提交，避免覆盖未加载的记录。");
+    if (currentAuthUser.id !== "local-preview-user" && conversationsOwnerId && conversationsOwnerId !== currentAuthUser.id) {
+      setFileError("正在读取历史对话，请稍后再提交，避免覆盖未加载的记录。");
       return;
     }
     const submittingFiles = [...files];
@@ -871,7 +910,7 @@ export default function App() {
     const submittingScene = creationScene;
     const submittingPrompt = directorPrompt;
     setIsDirectorThinking(true); setFileError("");
-    const conversationId = activeConversationId ?? (authUser.id !== "local-preview-user" ? crypto.randomUUID() : makeId());
+    const conversationId = activeConversationId ?? (currentAuthUser.id !== "local-preview-user" ? crypto.randomUUID() : makeId());
     const userMessage: ChatMessage = {
       id: makeId(),
       role: "user",
@@ -894,7 +933,7 @@ export default function App() {
     const ackMessage: ChatMessage = {
       id: makeId(),
       role: "director",
-      text: authUser.id === "local-preview-user"
+      text: currentAuthUser.id === "local-preview-user"
         ? "收到，我先整理你的需求，给你排一版导演方案。"
         : "素材我已经收下了。我先把你的需求排成制作方案，然后直接开始做，过程随时跟你汇报。",
     };
@@ -949,7 +988,7 @@ export default function App() {
     }, 1800);
 
     try {
-      if (authUser.id !== "local-preview-user") {
+      if (currentAuthUser.id !== "local-preview-user") {
         void saveAccountConversation(conversationWithAck).catch((err) => {
           console.warn("[conversation-save] 创作需求静默存盘失败，已本地兜底，不阻断出片:", err);
         });
@@ -1586,13 +1625,13 @@ export default function App() {
                           aria-label="简兮成片视频播放器"
                         />
                         <div className="job-delivery-notice-actions">
-                          <a
+                          <button
+                            type="button"
                             className="job-delivery-action-primary"
-                            href={`/api/v1/works/${message.jobWorkId}/stream?download=1`}
-                            download={`jansee-${message.jobWorkId}.mp4`}
+                            onClick={() => handleWorkDownload(message.jobWorkId!, `jansee-${message.jobWorkId}.mp4`)}
                           >
                             下载原片 MP4
-                          </a>
+                          </button>
                         </div>
                         {(() => {
                           const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
@@ -2077,6 +2116,7 @@ export default function App() {
                   conversations={conversations}
                   highlightWorkId={highlightWorkId}
                   onClearHighlight={() => setHighlightWorkId(null)}
+                  onRequestDownload={handleWorkDownload}
                 />
               ) : activeHeaderPanel === "recharge" ? (
                 <RechargePanel
@@ -2094,7 +2134,15 @@ export default function App() {
               ) : (
                 <AuthPanel
                   user={authUser}
-                  onSuccess={(user) => { setAuthUser(user); void refreshWallet(); setActiveHeaderPanel(null); }}
+                  onSuccess={(user) => {
+                    setAuthUser(user);
+                    void refreshWallet();
+                    setActiveHeaderPanel(null);
+                    if (pendingDownloadWork) {
+                      triggerDownloadFile(pendingDownloadWork.id, pendingDownloadWork.filename);
+                      setPendingDownloadWork(null);
+                    }
+                  }}
                   onProfileUpdated={(user) => setAuthUser(user)}
                   onLogout={() => { setAuthUser(null); setActiveHeaderPanel(null); }}
                   onWalletRefresh={refreshWallet}
@@ -2230,7 +2278,7 @@ function makeConversationTitle(messages: ChatMessage[]) {
   return (firstUserMessage?.text || "新对话").replace(/\s+/g, " ").slice(0, 34);
 }
 
-type AuthUser = { id: string; email?: string; phone?: string; displayName: string | null; createdAt: string };
+type AuthUser = { id: string; email?: string; phone?: string; displayName: string | null; createdAt: string; isGuest?: boolean };
 
 const withdrawalStatusLabel: Record<string, string> = {
   pending: "待审核",
@@ -2732,7 +2780,7 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
     } catch { setError("退出登录失败，请检查网络后重试。"); }
   }
 
-  if (user) return <>
+  if (user && !user.isGuest) return <>
     <div className="panel-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg></div>
     <h2 id="header-panel-title">{"\u8d26\u6237\u4fe1\u606f"}</h2>
     <p className="header-panel-copy">{"\u7ba1\u7406\u4f60\u7684\u7b80\u516e\u8d26\u6237\u4e0e\u521b\u4f5c\u6743\u76ca\u3002"}</p>
@@ -2984,12 +3032,14 @@ function WorksPanel({
   conversations = [],
   highlightWorkId,
   onClearHighlight,
+  onRequestDownload,
 }: {
   user: AuthUser | null;
   onNew: () => void;
   conversations?: SavedConversation[];
   highlightWorkId?: string | null;
   onClearHighlight?: () => void;
+  onRequestDownload?: (workId: string, filename: string) => void;
 }) {
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -3021,6 +3071,12 @@ function WorksPanel({
   };
 
   const downloadCover = (workId: string) => {
+    if (!user || user.isGuest) {
+      if (onRequestDownload) {
+        onRequestDownload(workId, `jansee-cover-${workId}.png`);
+      }
+      return;
+    }
     let dataUrl = coverDataUrls[workId];
     const video = videoRefs.current[workId];
     if (!dataUrl && video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -3166,16 +3222,18 @@ function WorksPanel({
                 </div>
 
                 <div className="work-card-actions">
-                  <a
+                  <button
+                    type="button"
                     className="work-btn-download"
-                    href={`/api/v1/works/${work.id}/stream?download=1`}
-                    download={filename}
+                    onClick={() => {
+                      if (onRequestDownload) onRequestDownload(work.id, filename);
+                    }}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                     </svg>
                     下载原片 MP4
-                  </a>
+                  </button>
                 </div>
 
                 {publishKit && (publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (

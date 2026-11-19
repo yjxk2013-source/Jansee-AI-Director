@@ -109,6 +109,11 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
   app.get("/api/v1/works/:id/stream", async (request, reply) => {
     const user = await authenticatedUser(request, options.authStore);
     if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+    const isDownload = (request.query as { download?: string }).download === "1";
+    const isGuest = !user.phone && !user.email;
+    if (isDownload && isGuest) {
+      return reply.code(401).send({ error: { code: "AUTH_REQUIRED_FOR_DOWNLOAD", message: "请先登录或注册账号后再下载原片作品" } });
+    }
     const { id } = request.params as { id: string };
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
       return reply.code(400).send({ error: { code: "INVALID_OUTPUT_ID" } });
