@@ -144,7 +144,7 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
 
   const frameSource: Array<Record<string, unknown>> = attachments.length > 0
     ? attachments as Array<Record<string, unknown>>
-    : Array.from({ length: 4 }, (_, i) => ({ id: `stub-${i}`, name: `镜头 0${i + 1}`, kind: "image" as const }));
+    : Array.from({ length: total }, (_, i) => ({ id: `stub-${i}`, name: `镜头 0${i + 1}`, kind: "image" as const }));
 
   return (
     <div className={`director-filmstrip-panel${settled ? " is-settled" : ""}`} aria-label="片场分镜手稿与冲洗监视舱">

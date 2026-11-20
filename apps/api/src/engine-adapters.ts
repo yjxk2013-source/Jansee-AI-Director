@@ -56,10 +56,29 @@ const storyboardEngine: ProductionEngine = {
       throw new Error("STORYBOARD_ASPECT_RATIO_UNSUPPORTED");
     }
     const warnings: string[] = [];
-    const shots = await Promise.all(videoAssets.map(async (asset) => ({
+    const narration = typeof plan.narration === "string" ? plan.narration.trim() : "";
+    const isTtsMode = Boolean(narration && !keepOriginal);
+
+    let shotLines: string[] = [];
+    if (isTtsMode) {
+      const sentences = narration.split(/(?<=[。！？；，、])/).map((part) => part.trim()).filter(Boolean);
+      while (sentences.length < videoAssets.length) {
+        const longestIndex = sentences.reduce((best, part, index) => part.length > (sentences[best] || "").length ? index : best, 0);
+        const longest = sentences[longestIndex] || narration;
+        const splitAt = Math.max(1, Math.floor(longest.length / 2));
+        sentences.splice(longestIndex, 1, longest.slice(0, splitAt), longest.slice(splitAt));
+      }
+      shotLines = Array.from({ length: videoAssets.length }, (_, index) => {
+        const start = Math.floor(index * sentences.length / videoAssets.length);
+        const end = Math.floor((index + 1) * sentences.length / videoAssets.length);
+        return sentences.slice(start, Math.max(start + 1, end)).join("");
+      });
+    }
+
+    const shots = await Promise.all(videoAssets.map(async (asset, idx) => ({
       mediaType: "video" as const,
       file: await context.storage.getFilePath(asset.storageKey),
-      text: "",
+      text: shotLines[idx] || "",
     })));
 
     if (speechCut) {
@@ -192,13 +211,14 @@ const storyboardEngine: ProductionEngine = {
     const result = await composeStoryboard({
       taskDir: context.taskDir,
       shots,
-      autoMode: "asr",
+      autoMode: isTtsMode ? "tts" : "asr",
       voiceId,
       speed: speechSpeed,
       bgmPath,
       subtitles,
       introFile,
       aspectRatio: context.aspectRatio,
+      keepOriginalAudio: keepOriginal,
     });
 
     const tailed = await appendEndingTail({

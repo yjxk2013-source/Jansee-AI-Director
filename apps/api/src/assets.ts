@@ -1,14 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
 import { authenticatedSession, type AuthStore, type AuthUser } from "./auth.js";
 import type { LocalObjectStorage } from "./storage-local.js";
 import sharp from "sharp";
+
+const require = createRequire(import.meta.url);
+const bundledFfmpeg = require("ffmpeg-static") as string | null;
 const MAX_IMAGE_PIXELS = 40_000_000;
 const MAX_IMAGE_DIMENSION = 12_000;
 const IMAGE_LIMIT = 20 * 1024 * 1024, VIDEO_LIMIT = 200 * 1024 * 1024, REQUEST_LIMIT = 500 * 1024 * 1024, MAX_FILES = 9;
@@ -144,7 +149,7 @@ export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions
     });
   });
 
-  /** 工作台缩略图的长期来源：blob 预览刷新后失效，服务端素材是唯一可靠来源。 */
+  /** 工作台缩略图的长期来源：支持图片与视频素材首帧缩略图 */
   app.get("/api/v1/assets/:id/preview", async (request, reply) => {
     const user = await authenticatedUser(request, options.authStore);
     if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
@@ -153,21 +158,69 @@ export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions
     if (!options.assetStore.findUserAssets) return reply.code(501).send({ error: { code: "NOT_IMPLEMENTED" } });
 
     const [asset] = await options.assetStore.findUserAssets(user.id, [id]);
-    if (!asset || asset.mediaType !== "image" || !SERVABLE_IMAGE_MIME_RE.test(asset.mimeType)
+    if (!asset || (asset.mediaType !== "image" && asset.mediaType !== "video")
       || (asset.status && asset.status !== "uploaded" && asset.status !== "ready" && asset.status !== "processing")) {
       return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "素材不存在或无法预览" } });
     }
+
     try {
       const filePath = await options.storage.getFilePath(asset.storageKey);
-      const bytes = await readFile(filePath);
+
+      // 静态图片素材：直接读取返回
+      if (asset.mediaType === "image") {
+        if (!SERVABLE_IMAGE_MIME_RE.test(asset.mimeType)) {
+          return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "图片格式不支持预览" } });
+        }
+        const bytes = await readFile(filePath);
+        return reply
+          .header("content-type", asset.mimeType)
+          .header("content-length", bytes.length)
+          .header("cache-control", "private, max-age=3600")
+          .header("x-content-type-options", "nosniff")
+          .send(bytes);
+      }
+
+      // 视频素材：提取第 0.5s 或首帧作为缩略图并做轻量级本地缓存
+      const cacheDir = join(tmpdir(), "jansee-video-thumbs");
+      const thumbPath = join(cacheDir, `${asset.id}.jpg`);
+      if (!existsSync(thumbPath)) {
+        const handle = await import("node:fs/promises");
+        await handle.mkdir(cacheDir, { recursive: true });
+        const ffmpegBin = bundledFfmpeg || "ffmpeg";
+        try {
+          execFileSync(ffmpegBin, [
+            "-nostdin",
+            "-y",
+            "-ss", "0.5",
+            "-i", filePath,
+            "-vframes", "1",
+            "-vf", "scale='min(480,iw)':-2",
+            "-q:v", "3",
+            thumbPath,
+          ], { timeout: 8000, stdio: "ignore" });
+        } catch {
+          // 若 0.5s 抽帧失败（视频极短），降级从 0s 抽首帧
+          execFileSync(ffmpegBin, [
+            "-nostdin",
+            "-y",
+            "-i", filePath,
+            "-vframes", "1",
+            "-vf", "scale='min(480,iw)':-2",
+            "-q:v", "3",
+            thumbPath,
+          ], { timeout: 8000, stdio: "ignore" });
+        }
+      }
+
+      const thumbBytes = await readFile(thumbPath);
       return reply
-        .header("content-type", asset.mimeType)
-        .header("content-length", bytes.length)
+        .header("content-type", "image/jpeg")
+        .header("content-length", thumbBytes.length)
         .header("cache-control", "private, max-age=3600")
         .header("x-content-type-options", "nosniff")
-        .send(bytes);
+        .send(thumbBytes);
     } catch {
-      return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "素材文件不存在或已过期" } });
+      return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "素材文件不存在或无法生成缩略图" } });
     }
   });
 

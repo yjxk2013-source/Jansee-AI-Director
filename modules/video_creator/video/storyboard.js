@@ -266,7 +266,7 @@ async function composeShotWithSubs(cwd, baseVideo, baseDur, audioKind, audioFile
  *   subtitles   仅 asr 模式：逐镜校正后字幕分段 [{start,end,text}][]
  * @returns {Promise<{output, durationSec}>}
  */
-export async function composeStoryboard({ taskDir, shots, autoMode, voiceId, bgmPath, subtitles, onProgress, speed = 1, introFile, aspectRatio = '9:16' }) {
+export async function composeStoryboard({ taskDir, shots, autoMode, voiceId, bgmPath, subtitles, onProgress, speed = 1, introFile, aspectRatio = '9:16', keepOriginalAudio = false }) {
   const setp = (p, stage) => {
     if (typeof onProgress === 'function') onProgress(Math.max(0, Math.min(100, p)), stage);
   };
@@ -302,14 +302,14 @@ export async function composeStoryboard({ taskDir, shots, autoMode, voiceId, bgm
   // 并发拉取全部分镜的配音音频，避免逐镜串行网络 I/O 阻塞
   const ttsAudios = autoMode === 'tts'
     ? await Promise.all(
-        shots.map(async (s, i) => {
-          const text = String(s.text || '').trim();
-          if (!text) return null;
-          const shotTtsDir = path.join(taskDir, `tts_shot_${i}`);
-          await fsp.mkdir(shotTtsDir, { recursive: true });
-          return await buildTtsAudio(shotTtsDir, text, voiceId, { speed: ttsSpeed });
-        })
-      )
+      shots.map(async (s, i) => {
+        const text = String(s.text || '').trim();
+        if (!text) return null;
+        const shotTtsDir = path.join(taskDir, `tts_shot_${i}`);
+        await fsp.mkdir(shotTtsDir, { recursive: true });
+        return await buildTtsAudio(shotTtsDir, text, voiceId, { speed: ttsSpeed });
+      })
+    )
     : [];
 
   const shotFiles = [];
@@ -330,8 +330,8 @@ export async function composeStoryboard({ taskDir, shots, autoMode, voiceId, bgm
         cues = buildDubbedCuesFromText(text, al.dur);
         audioKind = 'tts';
       } else {
-        // 写了台词的分镜板里，某镜没写 → 保留原视频原声（如有），不叠新配音
-        audioKind = shots[i].mediaType === 'image' ? 'none' : 'original';
+        // 写了台词的分镜板里，某镜没写 → 根据 keepOriginalAudio 决定是否保留原音（默认去除原音静音垫底，保证成片纯净）
+        audioKind = (shots[i].mediaType === 'image' || !keepOriginalAudio) ? 'none' : 'original';
       }
     } else {
       // asr：字幕来自前端「核对字幕」窗的结果（ASR 词 + 删除集 + 用户改后文本），复用 buildSubtitleCues 重建；原声不动
