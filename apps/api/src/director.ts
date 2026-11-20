@@ -87,7 +87,7 @@ export const DirectorPlanSchema = z.object({
     // 运镜编排：LLM 必须从 DIRECTOR_MOTION_IDS 中选一个；strict 会拒绝自造运镜词。
     // 缺失时给合法默认（不让单个字段遗漏毁掉整份方案）；清单外的值仍会被拒绝。
     motion: z.enum(DIRECTOR_MOTION_IDS).default("sweep_lr"),
-  }).strict()).min(2).max(12),
+  }).strict()).min(1).max(12),
   style: z.string().trim().min(2).max(100),
   soundtrack: z.string().trim().min(2).max(100),
   voice_id: z.string().trim().regex(/^\d{4,9}$/, "voice_id 必须由导演明确选择腾讯云真实 VoiceType 数字 ID"),
