@@ -266,10 +266,11 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
         const outputKey = `users/${job.userId}/outputs/${job.id}`;
         try {
           const scene = renderScene;
-          const sentences = narration.split(/(?<=[。！？；，、\n])/).map((part) => part.trim()).filter(Boolean);
+          // 按完整标点切分句子（句号、感叹号、问号或换行），避免把逗号切碎导致停顿堆叠拖长总耗时
+          const sentences = narration.split(/(?<=[。！？\n])/).map((part) => part.trim()).filter(Boolean);
           const shots = sentences.length > 0
-            ? sentences.map((line) => ({ line, pause_after: 0.25 }))
-            : [{ line: narration, pause_after: 0.25 }];
+            ? sentences.map((line) => ({ line, pause_after: 0.15 }))
+            : [{ line: narration, pause_after: 0.15 }];
           const cut: Record<string, unknown> = {
             title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 30),
             intro_title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 30),

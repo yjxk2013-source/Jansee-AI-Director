@@ -224,7 +224,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     input.mode === "image-film"
       ? "1. 图片与分镜对齐律：输入 N 张图片素材，规划 N 个分镜镜头，按视觉叙事顺序编排；全局 narration 旁白必须由 N 句精炼台词组成（每句用标点隔开，严格对应第 1 到第 N 个分镜镜头），每句台词经 TTS 实测后的真实时长决定对应图片的画面展示时长；"
       : input.mode === "video-dub"
-        ? "1. 视频配音时长对齐律：视频画面有其原生真实时长，成片总时长由源视频决定；全局 narration 旁白必须根据视频原生时长创作完整、丰满、连贯的口播文案（包含黄金开场抓人、核心卖点阐述与行动引导），分句输出，字数严格匹配视频时长（口播语速约 3.5~4.5 字/秒），严禁只敷衍写一两句导致整片大段冷场空放BGM；"
+        ? "1. 视频配音时长与字数对齐律：视频画面有其原生真实时长，成片总时长由源视频决定，视频绝不会变长；全局 narration 旁白必须根据视频实际秒数严格控制字数（口播净语速约 2.8~3.2 字/秒，扣除开头与片尾各约 1.2 秒留白），确保在视频结束前从容念完并收声，严禁字数超标导致台词没说完视频就结束；"
         : "1. 多视频分镜对齐律：输入 N 个视频素材，规划 N 个分镜镜头；全局 narration 旁白按顺序严格对应各分镜视觉焦点，每句台词经 TTS 实测后决定该镜头的剪辑呼吸；",
     "2. 真实性绝对红线：只提炼用户明确给出的客观事实，严禁编造参数、价格、功效或权威背书；严禁出现「左下角」「小黄车」「点击链接」等虚构导流；",
     "3. 视听高级感铁律：死守无损物理安全区与 0 Emoji 规范；标题极简克制，副标留白点睛，正文旁白自然松弛。",
@@ -245,8 +245,8 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "===== 成片旁白与分镜节奏编排规范 =====",
     ...(input.mode === "video-dub"
       ? [
-          "1. 视频配音模式说明：本任务为单段已有视频配音，画面原生时长是固定的。narration 是全片主播口播台词，必须按自然表达断句（由标点符号清晰隔开），紧密围绕画面展现商业价值或探店亮点；",
-          "2. 台词体量与时长严格契合：按自然语速约 4 字/秒，台词总字数应充分铺满视频时长（留出开头与结尾各约 1 秒自然呼吸与 BGM 垫底），切忌只写一两句短语；",
+          "1. 视频配音模式说明：本任务为单段已有视频配音，画面原生时长是固定的。narration 是全片主播口播台词，由 2~4 句精炼台词组成（由句号、感叹号或问号隔开）；",
+          "2. 台词体量与时长严格契合：按自然净语速约 3 字/秒，台词总字数必须严格受控在视频时长对应的字数限额内，确保全片在画面结束前 1.5 秒从容收尾，切禁过长；",
           "3. scenes 数组输出 1 个主体镜头描述（order: 1, description: 针对全片核心画面的视觉呈现总结，motion: sweep_lr）。",
         ]
       : [
@@ -298,16 +298,20 @@ export function buildDirectorUserPrompt(input: DirectorPlanResolvedInput): strin
 
   if (isVideoDub) {
     if (videoDurationSec) {
-      const minChars = Math.max(30, Math.round(videoDurationSec * 3.2));
-      const maxChars = Math.min(600, Math.max(minChars + 20, Math.round(videoDurationSec * 4.2)));
+      // 中文自然口播语速约为 3.0~3.3 字/秒，且必须为片头留出约 1 秒淡入、为片尾留出约 1.5 秒收束空间。
+      // 可用口播净时长 = Math.max(3, videoDurationSec - 2.5) 秒
+      const voiceTimeSec = Math.max(3, videoDurationSec - 2.5);
+      const minChars = Math.max(15, Math.round(voiceTimeSec * 2.5));
+      const maxChars = Math.max(minChars + 10, Math.round(voiceTimeSec * 3.1));
       promptInstructions.push(
-        `【视频配音专属指令】：当前用户提供了一段实拍视频，视频真实时长约为 ${videoDurationSec} 秒。`,
-        `请为全片规划自然流畅、有呼吸感的完整口播解说，全局 narration 旁白推荐总字数约 ${minChars}~${maxChars} 字，分成若干句口播台词（用标点清晰隔开），紧密贴合 ${videoDurationSec} 秒的画面展现节奏。`,
-        "切忌只写一两句简短台词导致视频剩下大量冷场与纯BGM！台词需包含抓人的黄金3秒钩子、核心看点/卖点阐述与收尾行动引导。",
+        `【视频配音专属时长铁律】：当前用户提供了一段实拍视频，视频真实时长恰好为 ${videoDurationSec} 秒。`,
+        `【字数绝对上限】：成片视频总长不会变长。为了保证台词能在视频结束前从容念完并留出片尾余韵，全局 narration 口播台词总字数必须严格控制在 ${minChars}~${maxChars} 字以内（严禁超过 ${maxChars} 字，否则台词没念完视频画面就会结束）！`,
+        `请为全片规划自然流畅、有呼吸感且字数适中的精炼口播解说，分成 2~4 句简练台词（由句号、感叹号或问号隔开），节奏紧凑，精准贴合 ${videoDurationSec} 秒画面节奏。`,
+        "台词需包含抓人的黄金3秒钩子、核心看点/卖点阐述与收尾行动引导，去播音腔，字字珠玑，绝不臃肿赘述！",
       );
     } else {
       promptInstructions.push(
-        "【视频配音专属指令】：当前用户提供了一段实拍视频进行配音。请为整段视频创作完整、有起承转合的口播旁白，分句输出（用标点清晰隔开），字数适中（通常 50~120 字），切忌只写一两句简短台词。",
+        "【视频配音专属指令】：当前用户提供了一段实拍视频进行配音。请为整段视频创作完整精炼、有起承转合的口播旁白，分句输出（用标点清晰隔开），字数严格控制在 35~60 字以内，避免台词过长超出视频画面。",
       );
     }
   } else {
