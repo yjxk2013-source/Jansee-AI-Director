@@ -15,13 +15,15 @@ const apiPackage = JSON.parse(readFileSync(new URL("../apps/api/package.json", i
   dependencies?: Record<string, string>;
 };
 
-test("V4 Docker build installs production dependencies and compiles web and API in Linux build stage", () => {
+test("V4 Docker build compiles web and API in Linux build stage using host-installed dependencies", () => {
   assert.match(dockerfile, /FROM node:22-bookworm-slim AS build/);
-  assert.match(dockerfile, /RUN npm ci/);
+  // Dependencies are installed on the host (China mirror) and copied in, to avoid
+  // in-container npm postinstall (ffmpeg-static) stalling behind regional networks.
+  assert.match(dockerfile, /COPY node_modules \.\/node_modules/);
   assert.match(dockerfile, /RUN npm run build/);
-  assert.match(dockerfile, /RUN npm prune --omit=dev/);
   assert.match(dockerfile, /FROM node:22-bookworm-slim AS api/);
-  assert.match(dockerfile, /COPY --from=build \/app\/node_modules \.\/node_modules/);
+  // node_modules is bind-mounted from the host at runtime, not baked into the api image.
+  assert.doesNotMatch(dockerfile, /COPY --from=build \/app\/node_modules \.\/node_modules/);
   assert.ok(apiPackage.dependencies?.["ffmpeg-static"]);
 });
 
@@ -46,11 +48,13 @@ test("V4 deployment keeps runtime media persistent and provisions Linux Whisper 
   assert.match(compose, /condition: service_healthy/);
 });
 
-test("V4 Docker context excludes secrets, local dependencies and machine-specific Whisper binaries", () => {
+test("V4 Docker context excludes secrets and machine-specific assets but keeps host-installed node_modules", () => {
   assert.match(dockerignore, /^\.env$/m);
   assert.match(dockerignore, /^\.env\.\*$/m);
-  assert.match(dockerignore, /^node_modules$/m);
+  // node_modules is intentionally NOT ignored: the build stage COPYs host-installed deps in.
+  assert.doesNotMatch(dockerignore, /^node_modules$/m);
   assert.match(dockerignore, /^whisper\.cpp$/m);
+  assert.match(dockerignore, /^materials$/m);
   assert.match(dockerignore, /^\*\.pem$/m);
   assert.match(dockerignore, /^\*\.key$/m);
   assert.doesNotMatch(dockerfile, /COPY \.env/);

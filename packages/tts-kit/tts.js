@@ -33,11 +33,13 @@ function resolveVoice(_mood, voiceId) {
   return vid;
 }
 
-// 用 ffmpeg -i 解析音频时长（秒）；ffmpeg -i 无输出文件必然非零退出，需在 catch 里读 stderr
+// 用 ffmpeg -i 解析音频时长（秒）；ffmpeg -i 无输出文件必然非零退出，需在 catch 里读 stderr。
+// timeout 必须显式：execFileSync 会冻结整个 Node 事件循环（API+心跳+健康检查全挂），
+// ffmpeg 异常挂住时若无超时 = 整机假死起点（2026-11-20 事故根因之一）。
 export function audioDurationSec(file) {
   let out = '';
   try {
-    out = execFileSync(ffmpegStatic, ['-i', file], { encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
+    out = execFileSync(ffmpegStatic, ['-i', file], { encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'], timeout: 30_000, killSignal: 'SIGKILL' });
   } catch (e) {
     out = e?.stderr || out;
   }
@@ -181,7 +183,8 @@ export async function synthesizeLines(shots, voiceControl, taskDir) {
 // ffmpeg promise 封装（cwd 下执行，失败 reject 精简 stderr）
 function runFfmpeg(args, cwd) {
   return new Promise((resolve, reject) => {
-    execFile(ffmpegStatic, args, { cwd, maxBuffer: 200 * 1024 * 1024 }, (err, _stdout, stderr) => {
+    // timeout=120s：ffmpeg 异常挂住时自动 SIGKILL，防止 Promise 永久悬挂拖死 worker。
+    execFile(ffmpegStatic, args, { cwd, maxBuffer: 200 * 1024 * 1024, timeout: 120_000, killSignal: 'SIGKILL' }, (err, _stdout, stderr) => {
       if (err) {
         const tail = String(stderr || '')
           .split('\n')

@@ -14,7 +14,6 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/multipart": "^10.1.8",
     "@fastify/rate-limit": "^10.3.0",
-    "@jansee/anchor-kit": "*",
     "@jansee/audio-kit": "*",
     "@jansee/contracts": "*",
     "@jansee/domain": "*",

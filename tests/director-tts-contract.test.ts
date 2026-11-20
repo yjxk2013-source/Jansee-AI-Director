@@ -2,22 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DirectorPlanSchema } from "../apps/api/src/director.ts";
 import { buildDirectorSystemPrompt } from "../apps/api/src/prompt-assembly.ts";
-import { TENCENT_VOICE_CANDIDATES, applyTencentVoiceHealthSnapshot } from "../packages/tts-kit/voices.js";
+import { resolveShotDurations } from "../apps/api/src/renderer.ts";
+import { TENCENT_VOICE_CANDIDATES, applyTencentVoiceHealthSnapshot } from "@jansee/tts-kit";
 
 const healthySnapshot = [...new Map(TENCENT_VOICE_CANDIDATES.map((voice) => [voice.voiceType, { voiceType: voice.voiceType, status: "healthy" }])).values()];
 
 const minimalPlan = {
   title: "产品短片",
   concept: "通过真实素材表达产品的特点与使用场景。",
-  durationSeconds: 15,
-  narration: "让每一处细节都被认真呈现。",
+  narration: "让每一处细节都被认真呈现，让画面自己说话。",
   scenes: [
-    { order: 1, description: "展示素材主体", durationSeconds: 7 },
-    { order: 2, description: "呈现细节并收尾", durationSeconds: 8 },
+    { order: 1, description: "展示素材主体" },
+    { order: 2, description: "呈现细节并收尾" },
   ],
   style: "克制的商业电影感",
   soundtrack: "轻节奏配乐",
-  anchor: "yu-jie",
   voice_id: "403010",
   speech_speed: 1.0,
   variant_type: "H-情感共鸣型",
@@ -64,4 +63,42 @@ test("explicit Cantonese and English requests pass all healthy language-matched 
   const englishSection = (english.split("[真实腾讯 TTS 动态候选集]")[1] || "").split("[语速控制]")[0] || "";
   for (const id of [402000, 402002, 501008, 501009]) assert.match(englishSection, new RegExp(String(id)));
   assert.doesNotMatch(englishSection, /404000|101019|403010/);
+});
+
+test("director plan and prompt leave every duration to TTS", () => {
+  assert.equal("durationSeconds" in minimalPlan, false);
+  // 旧模型惯性多吐时长字段时仍能解析，但执行层不再消费它。
+  assert.equal(DirectorPlanSchema.safeParse({
+    ...minimalPlan,
+    durationSeconds: 15,
+    scenes: minimalPlan.scenes.map((scene) => ({ ...scene, durationSeconds: 5 })),
+  }).success, true);
+  applyTencentVoiceHealthSnapshot(healthySnapshot);
+  const prompt = buildDirectorSystemPrompt({
+    mode: "storyboard",
+    prompt: "做一个短片",
+    aspectRatio: "9:16",
+    assets: [{ name: "a.jpg", kind: "image", size: 1024 }],
+  });
+  assert.doesNotMatch(prompt, /durationSeconds/);
+  assert.doesNotMatch(prompt, /字数上限/);
+});
+
+test("shot durations come from measured TTS cues and the film ends exactly with the voice", () => {
+  const cues = [
+    { audioStart: 0, audioEnd: 3 },
+    { audioStart: 3.4, audioEnd: 7 },
+    { audioStart: 7.4, audioEnd: 9 },
+  ];
+  const fade = 0.7;
+  const voiceSec = 9.2;
+  const shots = resolveShotDurations({ shotCount: 3, cues, speechDurationSec: voiceSec, fadeDuration: fade, fallbackClipDuration: 5 });
+  const filmSec = shots.reduce((sum, value) => sum + value, 0) - fade * (shots.length - 1);
+  assert.ok(Math.abs(filmSec - voiceSec) < 0.001, `成片 ${filmSec}s 必须等于配音实测 ${voiceSec}s`);
+  let cursor = 0;
+  for (let i = 0; i < shots.length; i += 1) {
+    cursor += shots[i]! - (i > 0 ? fade : 0);
+    const expected = cues[i]!.audioEnd * (voiceSec / 9);
+    assert.ok(Math.abs(cursor - expected) < 0.01, `第 ${i + 1} 镜切换点 ${cursor}s 应对齐第 ${i + 1} 句配音结束 ${expected}s`);
+  }
 });

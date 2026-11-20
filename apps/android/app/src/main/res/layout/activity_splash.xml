@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 大厂风格启动页：白底 + logo 垂直居中 + slogan 单一沉底 -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- logo：宽约屏宽 30%，垂直居中；内含六芒星 + JANSEE 字标 -->
+    <ImageView
+        android:id="@+id/splash_logo"
+        android:layout_width="140dp"
+        android:layout_height="161dp"
+        android:layout_centerInParent="true"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:src="@drawable/splash_logo"
+        android:contentDescription="简兮" />
+
+    <!-- slogan：浅灰小字，沉到距屏幕底部 72dp -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="72dp"
+        android:gravity="center"
+        android:text="@string/splash_slogan"
+        android:textColor="#9AA0A6"
+        android:textSize="14sp"
+        android:letterSpacing="0.08" />
+</RelativeLayout>

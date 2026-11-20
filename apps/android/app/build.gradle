@@ -1,0 +1,42 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.jansee.app"
+    compileSdk 34
+    // 锁定本机已完整的 build-tools，避免 AGP 默认拉取 33.0.1（本机网络下会卡住）
+    buildToolsVersion "34.0.0"
+
+    defaultConfig {
+        applicationId "com.jansee.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "4.0.0"
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

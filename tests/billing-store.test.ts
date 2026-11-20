@@ -79,6 +79,104 @@ test("stale worker cannot settle credits or complete a reclaimed job", async () 
   assert.equal(queries.some((sql) => sql.startsWith("UPDATE generation_jobs")), false);
 });
 
+test("admin credit adjustment deducts the free pool first and refuses overdraft", async () => {
+  const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const baseWallet = {
+    user_id: userId,
+    available_credits: 400,
+    frozen_credits: 0,
+    total_spent_credits: 0,
+    paid_available_credits: 100,
+    free_available_credits: 300,
+    updated_at: new Date("2026-11-20T00:00:00.000Z"),
+  };
+  const executed: string[] = [];
+  const ledgerInserts: { sql: string; values: unknown[] }[] = [];
+  let updatedWallet = baseWallet;
+  const client = {
+    async query(sql: string, values: unknown[] = []) {
+      const normalized = sql.replace(/\s+/g, " ").trim();
+      executed.push(normalized);
+      if (normalized === "BEGIN" || normalized === "COMMIT" || normalized === "ROLLBACK") return { rows: [], rowCount: null };
+      if (normalized.startsWith("INSERT INTO wallets")) return { rows: [], rowCount: 0 };
+      if (normalized.startsWith("SELECT * FROM wallets")) return { rows: [baseWallet], rowCount: 1 };
+      if (normalized.startsWith("SELECT paid_available_credits, free_available_credits")) {
+        return { rows: [{ paid_available_credits: 100, free_available_credits: 300 }], rowCount: 1 };
+      }
+      if (normalized.startsWith("UPDATE wallets")) {
+        // 扣 200：先扣 200 免费，付费池不动。
+        const [deduction, freeAmount, paidAmount] = values as number[];
+        updatedWallet = { ...baseWallet, available_credits: 400 - deduction, free_available_credits: 300 - freeAmount, paid_available_credits: 100 - paidAmount };
+        return { rows: [updatedWallet], rowCount: 1 };
+      }
+      if (normalized.startsWith("INSERT INTO billing_ledger")) {
+        ledgerInserts.push({ sql: normalized, values });
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+    release() {},
+  };
+  const pool = { async connect() { return client; } } as unknown as Pool;
+  const store = createPgBillingStore(pool);
+
+  const wallet = await store.adjustCredits!(userId, -200, "管理员误扣更正", "99999999-9999-4999-8999-999999999999");
+  assert.equal(wallet.availableCredits, 200);
+  assert.equal(ledgerInserts.length, 1);
+  assert.ok(ledgerInserts[0]!.sql.includes("'adjust'"));
+  assert.equal(ledgerInserts[0]!.values[1], -200);
+  assert.equal(ledgerInserts[0]!.values[2], 0);
+  assert.equal(ledgerInserts[0]!.values[3], 200);
+  assert.ok(executed.some((sql) => sql.includes("FOR UPDATE")));
+  assert.ok(executed.some((sql) => sql.includes("adjusted_by")));
+
+  await assert.rejects(
+    () => store.adjustCredits!(userId, -500, "超额扣减"),
+    /积分不足/,
+  );
+});
+
+test("admin credit adjustment grant path books free credits and the operator reference", async () => {
+  const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const ledgerInserts: { sql: string; values: unknown[] }[] = [];
+  const client = {
+    async query(sql: string, values: unknown[] = []) {
+      const normalized = sql.replace(/\s+/g, " ").trim();
+      if (normalized === "BEGIN" || normalized === "COMMIT" || normalized === "ROLLBACK") return { rows: [], rowCount: null };
+      if (normalized.startsWith("INSERT INTO wallets")) return { rows: [], rowCount: 0 };
+      if (normalized.startsWith("SELECT * FROM wallets")) {
+        return { rows: [{
+          user_id: userId, available_credits: 400, frozen_credits: 0, total_spent_credits: 0,
+          paid_available_credits: 100, free_available_credits: 300, updated_at: new Date("2026-11-20T00:00:00.000Z"),
+        }], rowCount: 1 };
+      }
+      if (normalized.startsWith("UPDATE wallets")) {
+        return { rows: [{
+          user_id: userId, available_credits: 900, frozen_credits: 0, total_spent_credits: 0,
+          paid_available_credits: 100, free_available_credits: 800, updated_at: new Date("2026-11-20T00:00:00.000Z"),
+        }], rowCount: 1 };
+      }
+      if (normalized.startsWith("INSERT INTO billing_ledger")) {
+        ledgerInserts.push({ sql: normalized, values });
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+    release() {},
+  };
+  const pool = { async connect() { return client; } } as unknown as Pool;
+  const store = createPgBillingStore(pool);
+
+  const wallet = await store.adjustCredits!(userId, 500, "管理员手工充值", "99999999-9999-4999-8999-999999999999");
+  assert.equal(wallet.availableCredits, 900);
+  assert.equal(ledgerInserts.length, 1);
+  assert.ok(ledgerInserts[0]!.sql.includes("'adjust'"));
+  assert.equal(ledgerInserts[0]!.values[1], 500);
+  assert.equal(ledgerInserts[0]!.values[ledgerInserts[0]!.values.length - 1], "99999999-9999-4999-8999-999999999999");
+
+  await assert.rejects(() => store.adjustCredits!(userId, 0, "无效"), /不为 0 的整数/);
+});
+
 test("completed production job cannot settle without a matching credit hold", async () => {
   const { pool, events } = makePool({ workerId: "worker-a", hold: false });
   const store = createPgBillingStore(pool);

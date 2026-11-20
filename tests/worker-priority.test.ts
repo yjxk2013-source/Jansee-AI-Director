@@ -13,4 +13,5 @@ test("worker claim query prioritizes active membership tiers with queue aging", 
   assert.match(sql, /FLOOR\(EXTRACT\(EPOCH FROM \(now\(\) - queued_at\)\) \/ 21600\)/);
   assert.match(sql, /FOR UPDATE SKIP LOCKED/);
   assert.match(sql, /attempt_count < 3/);
+  assert.match(sql, /request_payload->>'creationScene' IN \('personal-creation', 'quick-cut'\)/);
 });

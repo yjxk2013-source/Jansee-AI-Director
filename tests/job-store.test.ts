@@ -119,38 +119,3 @@ test("worker heartbeat renews only the lease owned by the same worker", async ()
   assert.match(queryText, /worker_id = \$3/);
   assert.deepEqual(queryValues, ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", jobRow.id, "worker-a", 120]);
 });
-
-test("findUserActiveJob returns the newest active job for the user", async () => {
-  const queryTexts: string[] = [];
-  const queryValues: unknown[][] = [];
-  const pool = {
-    async query(sql: string, values: unknown[]) {
-      queryTexts.push(sql);
-      queryValues.push([...values]);
-      if (sql.includes("generation_job_assets")) return { rows: [{ asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }], rowCount: 1 };
-      return { rows: [{ ...jobRow, status: "planning", progress: 40 }], rowCount: 1 };
-    },
-  } as unknown as Pool;
-  const store = createPgJobStore(pool);
-  const active = await store.findUserActiveJob!("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-
-  assert.ok(active);
-  assert.equal(active.status, "planning");
-  assert.equal(active.progress, 40);
-  assert.deepEqual(active.assetIds, ["dddddddd-dddd-4ddd-8ddd-dddddddddddd"]);
-  assert.match(queryTexts[0], /status IN \('queued', 'inspecting', 'planning', 'rendering', 'quality-check'\)/);
-  assert.match(queryTexts[0], /ORDER BY created_at DESC/);
-  assert.deepEqual(queryValues[0], ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]);
-});
-
-test("findUserActiveJob returns null when the user has no active job", async () => {
-  const pool = {
-    async query() {
-      return { rows: [], rowCount: 0 };
-    },
-  } as unknown as Pool;
-  const store = createPgJobStore(pool);
-  const active = await store.findUserActiveJob!("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-
-  assert.equal(active, null);
-});

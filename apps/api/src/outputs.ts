@@ -10,6 +10,7 @@ export interface OutputRecord {
   jobId: string;
   userId: string;
   storageKey: string;
+  coverStorageKey?: string;
   mimeType: string;
   sizeBytes: number;
   durationMs: number | null;
@@ -25,6 +26,7 @@ export interface NewOutput {
   jobId: string;
   userId: string;
   storageKey: string;
+  coverStorageKey?: string;
   mimeType?: string;
   sizeBytes: number;
   durationMs?: number | null;
@@ -80,6 +82,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       works: outputs.map((out) => ({
         id: out.id,
         jobId: out.jobId,
+        coverUrl: out.coverStorageKey ? `/api/v1/works/${out.id}/cover` : null,
         mimeType: out.mimeType,
         sizeBytes: out.sizeBytes,
         durationMs: out.durationMs,
@@ -104,6 +107,29 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       return reply.code(404).send({ error: { code: "WORK_NOT_FOUND", message: "作品不存在或已过期" } });
     }
     return reply.header("cache-control", "no-store").send({ work: output });
+  });
+
+  // 纯净宣发封面（无烧录台词、无 AI 角标）。与视频预览一致，登录用户可读自己的封面。
+  app.get("/api/v1/works/:id/cover", async (request, reply) => {
+    const user = await authenticatedUser(request, options.authStore);
+    if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+    const { id } = request.params as { id: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return reply.code(400).send({ error: { code: "INVALID_OUTPUT_ID" } });
+    }
+    const output = await options.outputStore.findOutputById(user.id, id);
+    if (!output) return reply.code(404).send({ error: { code: "WORK_NOT_FOUND" } });
+    if (!output.coverStorageKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+    try {
+      const filePath = await options.storage.getFilePath(output.coverStorageKey);
+      const fileStat = await stat(filePath);
+      reply.header("cache-control", "private, max-age=3600");
+      reply.header("content-type", "image/jpeg");
+      reply.header("content-length", fileStat.size);
+      return reply.send(createReadStream(filePath));
+    } catch {
+      return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+    }
   });
 
   app.get("/api/v1/works/:id/stream", async (request, reply) => {

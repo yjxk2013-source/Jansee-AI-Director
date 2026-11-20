@@ -8,7 +8,7 @@ const manifest = JSON.parse(
   start_url: string;
   scope: string;
   display: string;
-  icons: Array<{ src: string; type: string }>;
+  icons: Array<{ src: string; type: string; purpose?: string }>;
 };
 
 const serviceWorker = readFileSync(
@@ -20,7 +20,9 @@ test("PWA uses the same responsive app shell as its installed experience", () =>
   assert.equal(manifest.start_url, "/");
   assert.equal(manifest.scope, "/");
   assert.equal(manifest.display, "standalone");
-  assert.ok(manifest.icons.some((icon) => icon.src === "/assets/jansee-mark.svg"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/assets/app-icon/jansee-pwa-192.png" && icon.type === "image/png"));
+  assert.ok(manifest.icons.some((icon) => icon.src === "/assets/app-icon/jansee-pwa-512.png" && icon.type === "image/png"));
+  assert.ok(manifest.icons.some((icon) => icon.purpose === "maskable"));
 });
 
 test("service worker excludes private API and media paths from its cache", () => {

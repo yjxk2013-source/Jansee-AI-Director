@@ -2,6 +2,14 @@ import { randomUUID } from "node:crypto";
 
 export const GENERATION_COST_CREDITS = 200;
 
+/**
+ * 免费入口：个人创作、一句话剪辑。
+ * 这些入口进入的任务不冻结、不核销、不退还积分；worker 只负责完成状态流转。
+ */
+export function isFreeCreationEntry(scene: unknown): boolean {
+  return scene === "personal-creation" || scene === "quick-cut";
+}
+
 export interface WalletRecord {
   userId: string;
   availableCredits: number;
@@ -10,7 +18,7 @@ export interface WalletRecord {
   updatedAt: string;
 }
 
-export type LedgerType = "grant" | "hold" | "settle" | "refund" | "recharge" | "compensation";
+export type LedgerType = "grant" | "hold" | "settle" | "refund" | "recharge" | "compensation" | "adjust";
 
 export interface BillingLedgerRecord {
   id: string;
@@ -175,6 +183,7 @@ export interface BillingStore {
   completeJobAndSettle?(userId: string, jobId: string, workerId: string): Promise<WalletRecord>;
   refundCredits(userId: string, jobId: string): Promise<WalletRecord>;
   grantCredits(userId: string, amount: number, description?: string, jobId?: string): Promise<WalletRecord>;
+  adjustCredits?(userId: string, amount: number, description: string, adjustedBy?: string): Promise<WalletRecord>;
   getLedger(userId: string): Promise<BillingLedgerRecord[]>;
 
   // 充值、外部支付与会员权益
@@ -228,6 +237,26 @@ export class InMemoryBillingStore implements BillingStore {
         });
       }
     }
+    return { ...wallet };
+  }
+
+  async adjustCredits(userId: string, amount: number, description: string): Promise<WalletRecord> {
+    if (!Number.isSafeInteger(amount) || amount === 0 || Math.abs(amount) > 1_000_000) throw new Error("积分调整数量必须是不为 0 的整数，单次上限 1,000,000");
+    const wallet = await this.getWallet(userId);
+    if (amount < 0 && wallet.availableCredits < -amount) {
+      throw new Error(`积分不足：当前可用 ${wallet.availableCredits} 积分，无法扣减 ${-amount} 积分`);
+    }
+    wallet.availableCredits += amount;
+    wallet.updatedAt = new Date().toISOString();
+    this.wallets.set(userId, wallet);
+    this.ledgers.push({
+      id: randomUUID(),
+      userId,
+      type: "adjust",
+      amount,
+      description: description.slice(0, 300),
+      createdAt: new Date().toISOString(),
+    });
     return { ...wallet };
   }
 

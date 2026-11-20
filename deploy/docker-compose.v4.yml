@@ -3,6 +3,10 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # 4G host: keep headroom so a runaway container can never lock out SSH/VNC.
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
     environment:
       POSTGRES_DB: jansee_v4
       POSTGRES_USER: jansee_v4
@@ -28,10 +32,17 @@ services:
       dockerfile: deploy/Dockerfile.v4
       target: api
     restart: unless-stopped
+    # 内存不设硬上限：ffmpeg 6.1.3 修复后按用户实测口径内存稳定（本机 4C4G 并发 2 正常）。
+    # CPU 放开到 4 核：单任务可吃满 4 核提速；双任务由内核 CFS 自动均分成各约 2 核。
+    # 瓶颈在 CPU 不在内存（用户实测）。pids_limit 防 fork 炸弹；Worker 并发数由 WORKER_CONCURRENCY 控制。
+    cpus: 4.0
+    pids_limit: 512
     env_file:
       - ../.env
     environment:
       NODE_ENV: production
+      # 并发 2：4C4G 实测可稳定并行两条渲染（内存由 ffmpeg 6.1.3 版本修复解决）。
+      # 服务器 .env 若显式设置 WORKER_CONCURRENCY，以 .env 为准。
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       API_HOST: 0.0.0.0
       API_PORT: 4100
@@ -50,6 +61,9 @@ services:
       - ../materials:/app/materials:ro
       # Host must provision a Linux whisper-cli and the model; Windows binaries are not valid here.
       - ../whisper.cpp:/app/whisper.cpp:ro
+      # Dependencies are shared from the host instead of baked into the image
+      # (read-write so the startup command can symlink ffmpeg-static).
+      - ../node_modules:/app/node_modules
     expose:
       - "4100"
     networks:
@@ -68,6 +82,8 @@ services:
       dockerfile: deploy/Dockerfile.v4
       target: web
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
     depends_on:
       api:
         condition: service_healthy

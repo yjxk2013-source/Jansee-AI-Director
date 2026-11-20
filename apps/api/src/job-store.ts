@@ -114,24 +114,6 @@ export function createPgJobStore(pool: Pool): JobStore {
       return mapJob(row, assetsRes.rows.map((r) => r.asset_id));
     },
 
-    async findUserActiveJob(userId) {
-      const result = await pool.query<JobRow>(
-        `SELECT * FROM generation_jobs
-         WHERE user_id = $1
-           AND status IN ('queued', 'inspecting', 'planning', 'rendering', 'quality-check')
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [userId],
-      );
-      const row = result.rows[0];
-      if (!row) return null;
-
-      const assetsRes = await pool.query<{ asset_id: string }>(
-        "SELECT asset_id FROM generation_job_assets WHERE job_id = $1 ORDER BY sequence_no ASC",
-        [row.id],
-      );
-      return mapJob(row, assetsRes.rows.map((r) => r.asset_id));
-    },
 
     async updateDirectorPlan(userId, jobId, directorPlan, workerId) {
       const result = await pool.query(

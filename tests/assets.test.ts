@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Fastify from "fastify";
 import { registerAssetRoutes, cleanupExpiredAssets, isImageMetadataWithinLimits, resolveUploadConcurrencyLimit, type AssetRecord, type AssetStore } from "../apps/api/src/assets.js";
 import type { AuthStore, AuthUser } from "../apps/api/src/auth.js";
@@ -16,15 +18,23 @@ function stores() {
   async createSession(){},async findSession(hash){return hash===createHash("sha256").update(token).digest("hex")?{user,expiresAt:new Date(Date.now()+60_000)}:null;},
   async revokeSession(){},
  };
- const saved=new Map<string,Buffer>(); let inserted:AssetRecord[]=[];
+ const saved=new Map<string,Buffer>(); const paths=new Map<string,string>(); let inserted:AssetRecord[]=[];
+ const storageDir=join(tmpdir(),`jansee-v4-asset-preview-test-${process.pid}`);
  const storage:LocalObjectStorage={
-  async putFile(key,path){saved.set(key,await readFile(path));return {sizeBytes:saved.get(key)!.length};},
-  async getFilePath(){throw new Error("not used");},
-  async deleteObject(key){saved.delete(key);},
+  async putFile(key,path){
+   const bytes=await readFile(path); saved.set(key,bytes);
+   await mkdir(storageDir,{recursive:true});
+   const target=join(storageDir,key.replace(/[^a-zA-Z0-9_-]/g,"_"));
+   await writeFile(target,bytes); paths.set(key,target);
+   return {sizeBytes:bytes.length};
+  },
+  async getFilePath(key){const path=paths.get(key);if(!path)throw new Error("not found");return path;},
+  async deleteObject(key){saved.delete(key);paths.delete(key);},
   async deleteExpired(){return 0;},
  };
  const assetStore:AssetStore={
    async createAssets(_userId,assets){inserted=[...inserted,...assets];},
+   async findUserAssets(userId,ids){return userId===user.id?inserted.filter(a=>ids.includes(a.id)):[];},
    async listUserAssets(userId){return userId===user.id?inserted:[];},
    async deleteAsset(userId,assetId){
      if(userId!==user.id) return null;
@@ -185,6 +195,45 @@ test("delete rejects invalid asset id format and unauthenticated requests", asyn
       headers: { origin, cookie: `jansee_session=${token}` },
     });
     assert.equal(badIdRes.statusCode, 400);
+  } finally { await app.close(); }
+});
+
+test("asset preview serves the owner image privately and rejects anonymous or invalid requests", async () => {
+  const s = stores(), app = Fastify();
+  registerAssetRoutes(app, { authStore: s.auth, assetStore: s.assetStore, storage: s.storage, allowedOrigins: [origin], production: false });
+  try {
+    const form = multipart(pngHeader(), "photo.png", "image/png");
+    const uploadRes = await app.inject({
+      method: "POST", url: "/api/v1/assets",
+      headers: { origin, cookie: `jansee_session=${token}`, "content-type": `multipart/form-data; boundary=${form.boundary}` },
+      payload: form.payload,
+    });
+    assert.equal(uploadRes.statusCode, 201);
+    const assetId = uploadRes.json().assets[0].assetId;
+
+    const previewRes = await app.inject({
+      method: "GET", url: `/api/v1/assets/${assetId}/preview`,
+      headers: { cookie: `jansee_session=${token}` },
+    });
+    assert.equal(previewRes.statusCode, 200, previewRes.body);
+    assert.equal(previewRes.headers["content-type"], "image/png");
+    assert.equal(previewRes.headers["cache-control"], "private, max-age=3600");
+    assert.deepEqual(previewRes.rawPayload, pngHeader());
+
+    const anonymousRes = await app.inject({ method: "GET", url: `/api/v1/assets/${assetId}/preview` });
+    assert.equal(anonymousRes.statusCode, 401);
+
+    const invalidRes = await app.inject({
+      method: "GET", url: "/api/v1/assets/not-a-uuid/preview",
+      headers: { cookie: `jansee_session=${token}` },
+    });
+    assert.equal(invalidRes.statusCode, 400);
+
+    const missingRes = await app.inject({
+      method: "GET", url: "/api/v1/assets/cccccccc-cccc-4ccc-8ccc-cccccccccccc/preview",
+      headers: { cookie: `jansee_session=${token}` },
+    });
+    assert.equal(missingRes.statusCode, 404);
   } finally { await app.close(); }
 });
 

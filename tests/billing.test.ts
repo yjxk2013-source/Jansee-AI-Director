@@ -27,6 +27,22 @@ test("manual job compensation is idempotent for a given job", async () => {
   assert.equal(compensationEntries.length, 1);
 });
 
+test("credit adjustment moves the wallet in both directions and writes audit ledger entries", async () => {
+  const store = new InMemoryBillingStore({ initialGrant: 1000 });
+  const topped = await store.adjustCredits!(testUser.id, 500, "管理员手工充值");
+  assert.equal(topped.availableCredits, 1500);
+  const deducted = await store.adjustCredits!(testUser.id, -300, "管理员误扣更正");
+  assert.equal(deducted.availableCredits, 1200);
+
+  const adjustEntries = (await store.getLedger(testUser.id)).filter((entry) => entry.type === "adjust");
+  assert.deepEqual(adjustEntries.map((entry) => entry.amount), [500, -300]);
+  assert.ok(adjustEntries.every((entry) => entry.description.includes("管理员")));
+
+  await assert.rejects(() => store.adjustCredits!(testUser.id, -999_999, "超额扣减"), /积分不足/);
+  await assert.rejects(() => store.adjustCredits!(testUser.id, 0, "无效数量"), /不为 0 的整数/);
+  await assert.rejects(() => store.adjustCredits!(testUser.id, 1.5, "非整数"), /不为 0 的整数/);
+});
+
 test("billing store initializes wallet with default grant and tracks two-phase credit lifecycle", async () => {
   const store = new InMemoryBillingStore({ initialGrant: 1000 });
   const wallet = await store.getWallet(testUser.id);

@@ -145,36 +145,20 @@ export interface DirectorPlanner {
   createPlans(input: DirectorPlanResolvedInput): Promise<DirectorPlan[]>;
 }
 
-const SLICE_INTENT_TERMS = [
-  String.fromCharCode(0x5207, 0x7247), // 切片
-  String.fromCharCode(0x62c6, 0x6761), // 拆条
-  String.fromCharCode(0x5206, 0x6bb5), // 分段
-  String.fromCharCode(0x62c6, 0x5206), // 拆分
-  String.fromCharCode(0x5206, 0x5272), // 分割
-  String.fromCharCode(0x5207, 0x6bb5), // 切段
-];
 const KEEP_ORIGINAL_TERMS = [
-  String.fromCharCode(0x4fdd, 0x7559, 0x539f, 0x58f0),
-  String.fromCharCode(0x539f, 0x58f0, 0x4fdd, 0x7559),
-  String.fromCharCode(0x4e0d, 0x8981, 0x914d, 0x97f3),
-  String.fromCharCode(0x4e0d, 0x52a0, 0x914d, 0x97f3),
-  String.fromCharCode(0x4e0d, 0x9700, 0x8981, 0x914d, 0x97f3),
-  String.fromCharCode(0x539f, 0x58f0, 0x76f4, 0x51fa),
-  String.fromCharCode(0x539f, 0x7247, 0x76f4, 0x51fa),
+  String.fromCharCode(0x4fdd, 0x7559, 0x539f, 0x58f0), // 保留原声
+  String.fromCharCode(0x539f, 0x58f0, 0x4fdd, 0x7559), // 原声保留
+  String.fromCharCode(0x4e0d, 0x8981, 0x914d, 0x97f3), // 不要配音
+  String.fromCharCode(0x4e0d, 0x52a0, 0x914d, 0x97f3), // 不加配音
+  String.fromCharCode(0x4e0d, 0x9700, 0x8981, 0x914d, 0x97f3), // 不需要配音
+  String.fromCharCode(0x539f, 0x58f0, 0x76f4, 0x51fa), // 原声直出
+  String.fromCharCode(0x539f, 0x7247, 0x76f4, 0x51fa), // 原片直出
 ];
-function isVideoSliceRequest(prompt: string): boolean {
-  if (explicitlyDisabled(prompt, "切片|拆条|分段|拆分|分割|切段|切成|分成|拆成|剪成|拆为|分为|多段|多条|多个视频|多个片段")) return false;
-  if (SLICE_INTENT_TERMS.some((term) => prompt.includes(term))) return true;
-  const splitVerb = /切成|切出|分成|拆成|剪成|拆为|分为|每隔.{0,10}(?:切|截|分)|每\s*[0-9一二两三四五六七八九十]+\s*秒.{0,8}(?:输出|生成|剪|切|截)/.test(prompt);
-  const multipleOutputs = /多段|多条|多个(?:视频|片段|短视频)|几段|几条|[0-9一二两三四五六七八九十]+\s*(?:个)?(?:段|条|短视频|视频)|每段|每条/.test(prompt);
-  const interval = /(?:[0-9]{1,3}|[一二两三四五六七八九十百]+)\s*秒/.test(prompt);
-  const perSegmentInterval = /每段\s*(?:[0-9]{1,3}|[一二两三四五六七八九十百]+)\s*秒/.test(prompt);
-  const perSegmentDuration = /每段\s*(?:(?:[0-9]{1,3}|[一二两三四五六七八九十百]+)\s*秒|(?:[0-9]{1,2}|[一二两三四五六七八九十百]+|半)\s*分钟)/.test(prompt);
-  return perSegmentDuration || perSegmentInterval || (splitVerb && (multipleOutputs || interval));
-}
+
 function isKeepOriginalRequest(prompt: string): boolean {
   return KEEP_ORIGINAL_TERMS.some((term) => prompt.includes(term));
 }
+
 function parseChineseNumber(value: string): number {
   const digits: Record<string, number> = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
   let total = 0;
@@ -199,9 +183,12 @@ function parseSliceSeconds(prompt: string): number {
   return Math.max(5, Math.min(120, Math.round(seconds)));
 }
 
-/** 切片与保留原声是确定性剪辑决策，由本地规则直接产出方案，不消耗 LLM 调用（对齐 V2：切片口播不进大模型）。 */
+/**
+ * 确定性剪辑决策：
+ * 1. 只有用户在 prompt 中明确表达“保留原声”意图时，才路由到 keep-original（进而触发 ASR 和文本人声核对面板）；
+ * 2. 默认三大场景（带货/门店/个人）与一句话剪辑均不拦截，完整交由 LLM 进行需求意图分析与导演规划。
+ */
 export function resolveDeterministicOperation(mode: DirectorPlanResolvedInput["mode"], prompt: string): "video-slice" | "keep-original" | null {
-  if (mode !== "image-film" && isVideoSliceRequest(prompt)) return "video-slice";
   if (mode === "video-dub" && isKeepOriginalRequest(prompt)) return "keep-original";
   return null;
 }
@@ -284,7 +271,7 @@ export function createHeuristicDirectorPlanner(): DirectorPlanner {
       const mode = input.mode;
       const text = input.prompt;
       const route = resolveDirectorRoute(input);
-      const variantType = route.isPersonal ? undefined : undefined;
+      const variantType = route.isPersonal ? undefined : decideVariantLocal(text, route.creationScene === "physical-store" ? "local" : "sell");
       const voiceIntent = detectUserVoiceIntent(text) || {};
       const voiceLanguage = voiceIntent.isCantonese ? "yue" : voiceIntent.isEnglish ? "en" : "zh";
       const preferredTemperament = voiceIntent.explicitTemperament || (route.creationScene === "physical-store" ? "f-soft" : route.creationScene === "online-ecommerce" ? "f-bright" : "f-warm");
@@ -322,10 +309,10 @@ export function createHeuristicDirectorPlanner(): DirectorPlanner {
         narration: "让每一处细节都被认真呈现，让内容表达更清晰、更有吸引力。",
         note: bgmEmotion === "tech_future" ? "科技质感 · 逐帧呈现"
           : bgmEmotion === "energetic" ? "活力节奏 · 每一秒都好看"
-          : bgmEmotion === "cozy" ? "温馨画面 · 慢慢看"
-          : bgmEmotion === "luxury" ? "高级质感 · 静待亲临"
-          : bgmEmotion === "relaxed" ? "轻松日常 · 慢慢逛"
-          : "治愈画面 · 慢慢看",
+            : bgmEmotion === "cozy" ? "温馨画面 · 慢慢看"
+              : bgmEmotion === "luxury" ? "高级质感 · 静待亲临"
+                : bgmEmotion === "relaxed" ? "轻松日常 · 慢慢逛"
+                  : "治愈画面 · 慢慢看",
         scenes,
         style: `简兮商业视觉流（叠化0.7s转场，人声音量0.10/0.22避让）`,
         soundtrack: `情绪曲目 [${bgmEmotion}] 匹配${route.isPersonal ? "个人表达" : "内容"}风格`,
@@ -449,7 +436,6 @@ export function createOpenAICompatiblePlanner(config: {
   streamTimeoutMs?: number;
   maxTokens?: number;
   thinkingBudget?: number;
-  maxAttemptsPerModel?: number;
   fetchImpl?: typeof fetch;
 }): DirectorPlanner {
   const fetchImpl = config.fetchImpl ?? fetch;
@@ -495,218 +481,215 @@ export function createOpenAICompatiblePlanner(config: {
 
   /** 主路径：模型调用循环，一次调用产出 expectedPlans 个方案（expectedPlans=1 即单版老契约）。 */
   async function callModels(input: DirectorPlanResolvedInput, expectedPlans: number): Promise<DirectorPlan[]> {
-      // 批量赛马：提示词契约按版数切换（versions 数组），单版保持原样。
-      const planningInput = expectedPlans > 1 ? { ...input, batchVersions: expectedPlans } : input;
-      const route = resolveDirectorRoute(planningInput);
-      const deterministicOperation = resolveDeterministicOperation(input.mode, input.prompt);
-      const models = [...new Set([config.model, ...(config.fallbackModels ?? [])].map((model) => model.trim()).filter(Boolean))];
-      const modelsAttempted: string[] = [];
-      const modelAttempts: DirectorModelAttempt[] = [];
-      let lastError: unknown;
-      const maxAttempts = Math.max(1, Math.min(2, Math.floor(config.maxAttemptsPerModel ?? 1)));
-      for (const model of models) {
-        if (!modelsAttempted.includes(model)) modelsAttempted.push(model);
-        for (let modelAttempt = 1; modelAttempt <= maxAttempts; modelAttempt += 1) {
-          if (modelAttempt > 1) await new Promise((resolve) => setTimeout(resolve, 1200));
-          const attemptStartedAt = Date.now();
-        const controller = new AbortController();
-        // 首包预算：首选 DeepSeek 25s 吐首字，备选 GLM 60s 吐首字。
-        // 一旦收到任意首包（无论是 reasoning 还是 content），立即彻底清除计时器，后续全程耐心等待，不限时。
-        const firstPacketTimeoutMs = model === config.model
-          ? (Number(config.timeoutMs) > 0 ? Number(config.timeoutMs) : 25_000)
-          : (Number(config.fallbackTimeoutMs) > 0 ? Number(config.fallbackTimeoutMs) : 60_000);
-        let timeoutError: Error | undefined;
-        let rejectTimeout!: (reason: Error) => void;
-        const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject; });
-        const fireTimeout = (error: Error) => {
-          timeoutError = error;
-          rejectTimeout(error);
-          controller.abort();
-        };
-        let firstPacketReceived = false;
-        let timer: NodeJS.Timeout | null = setTimeout(() => {
-          fireTimeout(new Error(`Director provider first token timed out after ${firstPacketTimeoutMs}ms`));
-        }, firstPacketTimeoutMs);
-        try {
-          const response = await Promise.race([fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-            method: "POST",
-            headers: {
-              authorization: `Bearer ${config.apiKey}`,
-              "content-type": "application/json",
-            },
-            signal: controller.signal,
-            body: JSON.stringify({
-              model,
-              temperature: 0.4,
-              stream: true,
-              stream_options: { include_usage: true },
-              // 批量赛马：一次调用要吐 N 个完整方案，按版数放大输出预算（单版按配置不变；仍受 8192 硬上限钳制）。
-              ...(Number.isFinite(config.maxTokens) && Number(config.maxTokens) > 0
-                ? {
-                    max_tokens: Math.max(128, Math.min(8192, Math.floor(
-                      expectedPlans > 1
-                        ? Math.max(Number(config.maxTokens), Math.ceil(expectedPlans * 1400))
-                        : Number(config.maxTokens),
-                    ))),
-                  }
-                : {}),
-              // thinking_budget 只发给主模型：备选 DeepSeek 收到该参数会只吐残缺 JSON。
-              ...(model === config.model && Number.isFinite(config.thinkingBudget) && Number(config.thinkingBudget) >= 128
-                ? { thinking_budget: Math.max(128, Math.min(32768, Math.floor(Number(config.thinkingBudget)))) }
-                : {}),
-              response_format: { type: "json_object" },
-              messages: [
-                {
-                  role: "system",
-                  content: buildDirectorSystemPrompt(planningInput),
-                },
-                {
-                  role: "user",
-                  content: buildDirectorUserPrompt(planningInput),
-                },
-              ],
-            }),
-          }), timeoutPromise]);
-          if (!response.ok) {
-            const detail = (await Promise.race([response.text(), timeoutPromise])).slice(0, 200).replace(/\s+/g, " ");
-            throw new Error(`Director provider returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
-          }
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error("Director provider returned no stream body");
-          const decoder = new TextDecoder();
-          let buffer = "";
-          let content = "";
-          let streamedModel: string | undefined;
-          let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
-          const consumeLine = (line: string) => {
-            const raw = line.trim();
-            if (!raw.startsWith("data:")) return;
-            const data = raw.slice(5).trim();
-            if (!data || data === "[DONE]") return;
-            const chunk = JSON.parse(data) as {
-              model?: string;
-              usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-              error?: { message?: string } | string;
-              choices?: Array<{ delta?: { content?: unknown; reasoning_content?: unknown } }>;
-            };
-            if (chunk.error) throw new Error(`Director provider stream error: ${typeof chunk.error === "string" ? chunk.error : (chunk.error.message ?? "unknown")}`);
-            // 思考模型的 reasoning_content 或 content 均代表首包到达：停止首包计时，后续不限时等待完整吐出。
-            if (!firstPacketReceived) {
-              firstPacketReceived = true;
-              if (timer) {
-                clearTimeout(timer);
-                timer = null;
-              }
-            }
-            if (typeof chunk.model === "string") streamedModel = chunk.model;
-            if (chunk.usage) usage = chunk.usage;
-            const delta = chunk.choices?.[0]?.delta;
-            if (typeof delta?.content === "string") content += delta.content;
-          };
-          while (true) {
-            // 首字到达后 timer 已销毁，timeoutPromise 不再触发超时中断，安心等待流完成。
-            const { value, done } = firstPacketReceived
-              ? await reader.read()
-              : await Promise.race([reader.read(), timeoutPromise]);
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-            for (const line of lines) consumeLine(line);
-          }
-          consumeLine(buffer);
-          if (!content.trim()) throw new Error("Director provider returned no structured content");
-          // 解析：批量走 versions 数组契约（容错三档）；单版保持原有单对象解析不变。
-          const rawPlans = expectedPlans > 1
-            ? parseDirectorPlansFromContent(content)
-            : [parseDirectorJsonContent(content)];
-          // 音色健康候选集一次计算，逐版共用。
-          const voiceIntent = detectUserVoiceIntent(input.prompt) || {};
-          const voiceLanguage = voiceIntent.isCantonese ? "yue" : voiceIntent.isEnglish ? "en" : "zh";
-          const preferredTemperament = voiceIntent.explicitTemperament || (route.creationScene === "physical-store" ? "f-soft" : route.creationScene === "online-ecommerce" ? "f-bright" : "f-warm");
-          const allowedVoiceCandidates = getAvailableTencentVoiceCandidates({ language: voiceLanguage, gender: voiceIntent.explicitGender || null, limit: 8, preferredTemperament });
-          if (!allowedVoiceCandidates.length) throw new Error(`TTS_VOICE_UNAVAILABLE: 当前没有通过健康探测且符合${voiceLanguage === "yue" ? "粤语" : voiceLanguage === "en" ? "英语" : "普通话"}语言/性别要求的腾讯音色`);
-          // 逐版校验：normalize + strict schema + 音色健康替换，任何一版不合格整包重试（保住"N 版都要能出片"的承诺）。
-          const validatedPlans = rawPlans.map((rawPlan) => {
-            const parsed = { ...rawPlan };
-            normalizeDirectorVoiceId(parsed);
-            // A clear slicing request is a deterministic operation decision, even if the LLM omits it.
-            if (deterministicOperation) parsed.operation = deterministicOperation;
-            if (deterministicOperation === "video-slice") parsed.sliceSeconds = parseSliceSeconds(input.prompt);
-            if (!parsed.packaging || typeof parsed.packaging !== "object") {
-              parsed.packaging = { intro: true, subtitles: true, bgm: true };
-            }
-            normalizePlanForRoute(parsed, route);
-            const validatedPlan = DirectorPlanSchema.parse(parsed);
-            // 赛马每条都必须出片（2026-11-20 用户定案）：变体偏离不再整版失败。
-            // 方案是完整真实的 LLM 创作，保留其实际选择的变体（标签与内容一致），
-            // 遥测自然记录 variantMatched=false 供追溯。执行层无条件执行（2026-11-20 用户定案）：
-            // 创作归 LLM，物理可行性静默归一化——LLM 选了不健康/不在候选集的音色时，
-            // 静默替换为健康候选，替换事实记录在遥测 voiceSubstituted 供追溯。
-            const requestedVoiceType = Number(validatedPlan.voice_id);
-            const requestedCandidate = allowedVoiceCandidates.find((candidate: { voiceType: number }) => candidate.voiceType === requestedVoiceType);
-            let finalCandidate = requestedCandidate;
-            if (!finalCandidate || !isTencentVoiceAvailable(requestedVoiceType)) {
-              finalCandidate = allowedVoiceCandidates[0]!;
-            }
-            // 以映射层解析结果为最终事实：候选集与映射目录同源，正常情况恒等。
-            const selectedVoiceType = mapVoiceFor("tencent", String(finalCandidate.voiceType));
-            validatedPlan.voice_id = String(selectedVoiceType);
-            return { plan: validatedPlan, substituted: finalCandidate.voiceType !== requestedVoiceType, selectedVoiceType };
-          });
-          if (validatedPlans.length < expectedPlans) {
-            throw new Error(`DIRECTOR_BATCH_INCOMPLETE: 导演本次只输出了 ${validatedPlans.length}/${expectedPlans} 个版本`);
-          }
-          const selectedModel = streamedModel ?? model;
-          const promptTokens = Number(usage?.prompt_tokens ?? 0);
-          const completionTokens = Number(usage?.completion_tokens ?? 0);
-          const totalTokens = Number(usage?.total_tokens ?? (promptTokens + completionTokens));
-          const baseTelemetry = {
-            providerMode: model === config.model ? "primary" as const : "fallback" as const,
-            requestedModel: config.model,
-            selectedModel,
-            modelsAttempted: [...modelsAttempted],
-            modelAttempts: [...modelAttempts, { model, durationMs: Date.now() - attemptStartedAt, ok: true }],
-            fallbackUsed: model !== config.model,
-            promptTokens: Number.isFinite(promptTokens) ? promptTokens : 0,
-            completionTokens: Number.isFinite(completionTokens) ? completionTokens : 0,
-            totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
-            usageAvailable: Boolean(usage && (usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined || usage.total_tokens !== undefined)),
-            costUsageAvailable: Boolean(usage && usage.prompt_tokens !== undefined && usage.completion_tokens !== undefined),
-            ...routeTelemetry(route, resolveDirectorHits(input, validatedPlans[0]!.plan, route)),
-            voiceCandidateIds: allowedVoiceCandidates.map((candidate: { voiceType: number }) => candidate.voiceType),
-          };
-          // 每版携带共享遥测 + 各自的音色事实（批量赛马时 N 版音色由 LLM 统筹、互不相同）。
-          return validatedPlans.slice(0, expectedPlans).map((item) => attachTelemetry(item.plan, {
-            ...baseTelemetry,
-            modelAttempts: [...baseTelemetry.modelAttempts],
-            voiceId: item.plan.voice_id,
-            voiceType: item.selectedVoiceType,
-            voiceSubstituted: item.substituted,
-          }));
-        } catch (error) {
-          lastError = timeoutError ?? error;
-          modelAttempts.push({
+    // 批量赛马：提示词契约按版数切换（versions 数组），单版保持原样。
+    const planningInput = expectedPlans > 1 ? { ...input, batchVersions: expectedPlans } : input;
+    const route = resolveDirectorRoute(planningInput);
+    const deterministicOperation = resolveDeterministicOperation(input.mode, input.prompt);
+    const models = [...new Set([config.model, ...(config.fallbackModels ?? [])].map((model) => model.trim()).filter(Boolean))];
+    const modelsAttempted: string[] = [];
+    const modelAttempts: DirectorModelAttempt[] = [];
+    let lastError: unknown;
+    for (const model of models) {
+      if (!modelsAttempted.includes(model)) modelsAttempted.push(model);
+      // 严格单次调用：禁止反复重试 LLM，首选 1 次 + 备选 1 次，杜绝 Token 浪费。
+      const attemptStartedAt = Date.now();
+      const controller = new AbortController();
+      // 首包预算：首选 DeepSeek 25s 吐首字，备选 GLM 60s 吐首字。
+      // 一旦收到任意首包（无论是 reasoning 还是 content），立即彻底清除计时器，后续全程耐心等待，不限时。
+      const firstPacketTimeoutMs = model === config.model
+        ? (Number(config.timeoutMs) > 0 ? Number(config.timeoutMs) : 25_000)
+        : (Number(config.fallbackTimeoutMs) > 0 ? Number(config.fallbackTimeoutMs) : 60_000);
+      let timeoutError: Error | undefined;
+      let rejectTimeout!: (reason: Error) => void;
+      const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject; });
+      const fireTimeout = (error: Error) => {
+        timeoutError = error;
+        rejectTimeout(error);
+        controller.abort();
+      };
+      let firstPacketReceived = false;
+      let timer: NodeJS.Timeout | null = setTimeout(() => {
+        fireTimeout(new Error(`Director provider first token timed out after ${firstPacketTimeoutMs}ms`));
+      }, firstPacketTimeoutMs);
+      try {
+        const response = await Promise.race([fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${config.apiKey}`,
+            "content-type": "application/json",
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
             model,
-            durationMs: Date.now() - attemptStartedAt,
-            ok: false,
-            error: lastError instanceof Error ? lastError.message.slice(0, 240) : String(lastError).slice(0, 240),
-          });
-        } finally {
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
-          }
+            temperature: 0.4,
+            stream: true,
+            stream_options: { include_usage: true },
+            // 批量赛马：一次调用要吐 N 个完整方案，按版数放大输出预算（单版按配置不变；仍受 8192 硬上限钳制）。
+            ...(Number.isFinite(config.maxTokens) && Number(config.maxTokens) > 0
+              ? {
+                max_tokens: Math.max(128, Math.min(8192, Math.floor(
+                  expectedPlans > 1
+                    ? Math.max(Number(config.maxTokens), Math.ceil(expectedPlans * 1400))
+                    : Number(config.maxTokens),
+                ))),
+              }
+              : {}),
+            // thinking_budget 只发给主模型：备选 DeepSeek 收到该参数会只吐残缺 JSON。
+            ...(model === config.model && Number.isFinite(config.thinkingBudget) && Number(config.thinkingBudget) >= 128
+              ? { thinking_budget: Math.max(128, Math.min(32768, Math.floor(Number(config.thinkingBudget)))) }
+              : {}),
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: buildDirectorSystemPrompt(planningInput),
+              },
+              {
+                role: "user",
+                content: buildDirectorUserPrompt(planningInput),
+              },
+            ],
+          }),
+        }), timeoutPromise]);
+        if (!response.ok) {
+          const detail = (await Promise.race([response.text(), timeoutPromise])).slice(0, 200).replace(/\s+/g, " ");
+          throw new Error(`Director provider returned HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
         }
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("Director provider returned no stream body");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let content = "";
+        let streamedModel: string | undefined;
+        let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
+        const consumeLine = (line: string) => {
+          const raw = line.trim();
+          if (!raw.startsWith("data:")) return;
+          const data = raw.slice(5).trim();
+          if (!data || data === "[DONE]") return;
+          const chunk = JSON.parse(data) as {
+            model?: string;
+            usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+            error?: { message?: string } | string;
+            choices?: Array<{ delta?: { content?: unknown; reasoning_content?: unknown } }>;
+          };
+          if (chunk.error) throw new Error(`Director provider stream error: ${typeof chunk.error === "string" ? chunk.error : (chunk.error.message ?? "unknown")}`);
+          // 思考模型的 reasoning_content 或 content 均代表首包到达：停止首包计时，后续不限时等待完整吐出。
+          if (!firstPacketReceived) {
+            firstPacketReceived = true;
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
+          }
+          if (typeof chunk.model === "string") streamedModel = chunk.model;
+          if (chunk.usage) usage = chunk.usage;
+          const delta = chunk.choices?.[0]?.delta;
+          if (typeof delta?.content === "string") content += delta.content;
+        };
+        while (true) {
+          // 首字到达后 timer 已销毁，timeoutPromise 不再触发超时中断，安心等待流完成。
+          const { value, done } = firstPacketReceived
+            ? await reader.read()
+            : await Promise.race([reader.read(), timeoutPromise]);
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) consumeLine(line);
+        }
+        consumeLine(buffer);
+        if (!content.trim()) throw new Error("Director provider returned no structured content");
+        // 解析：批量走 versions 数组契约（容错三档）；单版保持原有单对象解析不变。
+        const rawPlans = expectedPlans > 1
+          ? parseDirectorPlansFromContent(content)
+          : [parseDirectorJsonContent(content)];
+        // 音色健康候选集一次计算，逐版共用。
+        const voiceIntent = detectUserVoiceIntent(input.prompt) || {};
+        const voiceLanguage = voiceIntent.isCantonese ? "yue" : voiceIntent.isEnglish ? "en" : "zh";
+        const preferredTemperament = voiceIntent.explicitTemperament || (route.creationScene === "physical-store" ? "f-soft" : route.creationScene === "online-ecommerce" ? "f-bright" : "f-warm");
+        const allowedVoiceCandidates = getAvailableTencentVoiceCandidates({ language: voiceLanguage, gender: voiceIntent.explicitGender || null, limit: 8, preferredTemperament });
+        if (!allowedVoiceCandidates.length) throw new Error(`TTS_VOICE_UNAVAILABLE: 当前没有通过健康探测且符合${voiceLanguage === "yue" ? "粤语" : voiceLanguage === "en" ? "英语" : "普通话"}语言/性别要求的腾讯音色`);
+        // 逐版校验：normalize + strict schema + 音色健康替换，任何一版不合格整包重试（保住"N 版都要能出片"的承诺）。
+        const validatedPlans = rawPlans.map((rawPlan) => {
+          const parsed = { ...rawPlan };
+          normalizeDirectorVoiceId(parsed);
+          // A clear slicing request is a deterministic operation decision, even if the LLM omits it.
+          if (deterministicOperation) parsed.operation = deterministicOperation;
+          if (deterministicOperation === "video-slice") parsed.sliceSeconds = parseSliceSeconds(input.prompt);
+          if (!parsed.packaging || typeof parsed.packaging !== "object") {
+            parsed.packaging = { intro: true, subtitles: true, bgm: true };
+          }
+          normalizePlanForRoute(parsed, route);
+          const validatedPlan = DirectorPlanSchema.parse(parsed);
+          // 赛马每条都必须出片（2026-11-20 用户定案）：变体偏离不再整版失败。
+          // 方案是完整真实的 LLM 创作，保留其实际选择的变体（标签与内容一致），
+          // 遥测自然记录 variantMatched=false 供追溯。执行层无条件执行（2026-11-20 用户定案）：
+          // 创作归 LLM，物理可行性静默归一化——LLM 选了不健康/不在候选集的音色时，
+          // 静默替换为健康候选，替换事实记录在遥测 voiceSubstituted 供追溯。
+          const requestedVoiceType = Number(validatedPlan.voice_id);
+          const requestedCandidate = allowedVoiceCandidates.find((candidate: { voiceType: number }) => candidate.voiceType === requestedVoiceType);
+          let finalCandidate = requestedCandidate;
+          if (!finalCandidate || !isTencentVoiceAvailable(requestedVoiceType)) {
+            finalCandidate = allowedVoiceCandidates[0]!;
+          }
+          // 以映射层解析结果为最终事实：候选集与映射目录同源，正常情况恒等。
+          const selectedVoiceType = mapVoiceFor("tencent", String(finalCandidate.voiceType));
+          validatedPlan.voice_id = String(selectedVoiceType);
+          return { plan: validatedPlan, substituted: finalCandidate.voiceType !== requestedVoiceType, selectedVoiceType };
+        });
+        if (validatedPlans.length < expectedPlans) {
+          throw new Error(`DIRECTOR_BATCH_INCOMPLETE: 导演本次只输出了 ${validatedPlans.length}/${expectedPlans} 个版本`);
+        }
+        const selectedModel = streamedModel ?? model;
+        const promptTokens = Number(usage?.prompt_tokens ?? 0);
+        const completionTokens = Number(usage?.completion_tokens ?? 0);
+        const totalTokens = Number(usage?.total_tokens ?? (promptTokens + completionTokens));
+        const baseTelemetry = {
+          providerMode: model === config.model ? "primary" as const : "fallback" as const,
+          requestedModel: config.model,
+          selectedModel,
+          modelsAttempted: [...modelsAttempted],
+          modelAttempts: [...modelAttempts, { model, durationMs: Date.now() - attemptStartedAt, ok: true }],
+          fallbackUsed: model !== config.model,
+          promptTokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+          completionTokens: Number.isFinite(completionTokens) ? completionTokens : 0,
+          totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+          usageAvailable: Boolean(usage && (usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined || usage.total_tokens !== undefined)),
+          costUsageAvailable: Boolean(usage && usage.prompt_tokens !== undefined && usage.completion_tokens !== undefined),
+          ...routeTelemetry(route, resolveDirectorHits(input, validatedPlans[0]!.plan, route)),
+          voiceCandidateIds: allowedVoiceCandidates.map((candidate: { voiceType: number }) => candidate.voiceType),
+        };
+        // 每版携带共享遥测 + 各自的音色事实（批量赛马时 N 版音色由 LLM 统筹、互不相同）。
+        return validatedPlans.slice(0, expectedPlans).map((item) => attachTelemetry(item.plan, {
+          ...baseTelemetry,
+          modelAttempts: [...baseTelemetry.modelAttempts],
+          voiceId: item.plan.voice_id,
+          voiceType: item.selectedVoiceType,
+          voiceSubstituted: item.substituted,
+        }));
+      } catch (error) {
+        lastError = timeoutError ?? error;
+        modelAttempts.push({
+          model,
+          durationMs: Date.now() - attemptStartedAt,
+          ok: false,
+          error: lastError instanceof Error ? lastError.message.slice(0, 240) : String(lastError).slice(0, 240),
+        });
+      } finally {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
         }
       }
-      // 所有配置模型均调用失败：如实抛错，由调用方降级/标 failed。不再静默 heuristic 兜底。
-      const lastDetail = lastError instanceof Error
-        ? lastError.message.slice(0, 160)
-        : String(lastError ?? "unknown").slice(0, 160);
-      throw new Error(
-        `DIRECTOR_ALL_MODELS_FAILED: AI 导演服务暂时不可用（已尝试 ${modelsAttempted.join("、")}），请稍后重试。详情：${lastDetail}`,
-      );
+    }
+    // 所有配置模型均调用失败：如实抛错，由调用方降级/标 failed。不再静默 heuristic 兜底。
+    const lastDetail = lastError instanceof Error
+      ? lastError.message.slice(0, 160)
+      : String(lastError ?? "unknown").slice(0, 160);
+    throw new Error(
+      `DIRECTOR_ALL_MODELS_FAILED: AI 导演服务暂时不可用（已尝试 ${modelsAttempted.join("、")}），请稍后重试。详情：${lastDetail}`,
+    );
   }
 
   /** 单版规划：快捷路径 → 主模型调用。 */

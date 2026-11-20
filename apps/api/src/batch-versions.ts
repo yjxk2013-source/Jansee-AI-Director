@@ -85,7 +85,7 @@ export function deriveBatchIdempotencyKey(clientKey: string, index: number): str
  * 返回长度为 total 的数组；场景无变体体系时由调用方传空池/自行降级。
  */
 export function assignBatchVariants(prompt: string, scene: "sell" | "local", total: number): string[] {
-  const pool: string[] = (scene === "local" ? LOCAL_VARIANT_TYPES : SELL_VARIANT_TYPES) as string[];
+  const pool: string[] = [...(scene === "local" ? LOCAL_VARIANT_TYPES : SELL_VARIANT_TYPES)];
   const used: string[] = [];
   const assignments: string[] = [];
   for (let index = 0; index < total; index += 1) {

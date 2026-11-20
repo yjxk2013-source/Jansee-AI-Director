@@ -60,6 +60,8 @@ export interface EngineExecutionResult {
   height?: number;
   warnings?: string[];
   subtitleTimeline?: Array<{ start: number; end: number }>;
+  // 引擎生成的纯净宣发封面存储键（无烧录台词、无 AI 角标）。
+  coverStorageKey?: string;
 }
 
 export interface ProductionEngine {

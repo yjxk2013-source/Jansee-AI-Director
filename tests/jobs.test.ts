@@ -75,10 +75,6 @@ function createMocks() {
       const job = jobs.get(jobId);
       return job && job.userId === userId ? job : null;
     },
-    async findUserActiveJob(userId) {
-      return [...jobs.values()].find((job) => job.userId === userId
-        && ["queued", "inspecting", "planning", "rendering", "quality-check"].includes(job.status)) ?? null;
-    },
     async updateJobStatus(userId, jobId, toStatus, progress, error) {
       const job = jobs.get(jobId);
       if (!job || job.userId !== userId) return null;
@@ -123,7 +119,7 @@ test("job creation requires authentication", async (t) => {
   assert.equal(response.statusCode, 401);
 });
 
-test("job creation validates asset ownership and rejects foreign asset IDs", async (t) => {
+test("job creation does not perform asset ownership checks", async (t) => {
   const mocks = createMocks();
   const app = buildApp({
     allowedOrigins: [origin],
@@ -135,20 +131,21 @@ test("job creation validates asset ownership and rejects foreign asset IDs", asy
   });
   t.after(async () => app.close());
 
+  // 素材归属校验已移除：即便 assetStore 声称素材不属于该用户，提交也不应被 404 拦截。
+  const alienAssetId = "99999999-9999-4999-8999-999999999999";
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/jobs",
     headers: { origin, cookie: `jansee_session=${token}` },
     payload: {
       mode: "video-dub",
-      prompt: "做解说",
+      prompt: "[User-selected creation scene: personal-creation.]\n做解说",
       aspectRatio: "9:16",
-      assetIds: ["99999999-9999-4999-8999-999999999999"],
+      assetIds: [alienAssetId],
       idempotencyKey: "33333333-3333-4333-8333-333333333333",
     },
   });
-  assert.equal(response.statusCode, 404);
-  assert.equal(response.json().error.code, "ASSET_NOT_FOUND");
+  assert.equal(response.statusCode, 201);
 });
 
 test("authenticated user creates a job with idempotency deduplication", async (t) => {
@@ -247,7 +244,7 @@ test("job status can be queried and transitions safely through domain lifecycle"
   );
 });
 
-test("job creation is gated to one in-flight task per user", async (t) => {
+test("job creation allows multiple in-flight tasks per user (worker concurrency is the only cap)", async (t) => {
   const mocks = createMocks();
   const app = buildApp({
     allowedOrigins: [origin],
@@ -259,37 +256,33 @@ test("job creation is gated to one in-flight task per user", async (t) => {
   });
   t.after(async () => app.close());
 
-  const first = await app.inject({
+  const submit = (idempotencyKey: string, prompt: string) => app.inject({
     method: "POST",
     url: "/api/v1/jobs",
     headers: { origin, cookie: `jansee_session=${token}` },
     payload: {
       mode: "video-dub",
-      prompt: "做一支带货解说视频",
+      prompt,
       aspectRatio: "9:16",
       assetIds: ["11111111-1111-4111-8111-111111111111"],
-      idempotencyKey: "66666666-6666-4666-8666-666666666666",
+      idempotencyKey,
     },
   });
+
+  const first = await submit("66666666-6666-4666-8666-666666666666", "做一支带货解说视频");
   assert.equal(first.statusCode, 201);
 
-  // 已有在途任务时，换一个幂等键再次提交 → 409 门禁拦截
-  const second = await app.inject({
-    method: "POST",
-    url: "/api/v1/jobs",
-    headers: { origin, cookie: `jansee_session=${token}` },
-    payload: {
-      mode: "video-dub",
-      prompt: "做另一支带货解说视频",
-      aspectRatio: "9:16",
-      assetIds: ["11111111-1111-4111-8111-111111111111"],
-      idempotencyKey: "77777777-7777-4777-8777-777777777777",
-    },
-  });
-  assert.equal(second.statusCode, 409);
-  assert.equal(second.json().error.code, "ACTIVE_JOB_EXISTS");
-  assert.equal(second.json().error.activeJobId, first.json().job.id);
-  assert.equal(mocks.jobs.size, 1);
+  // 第一条仍在途时，换一个幂等键再提交 → 应放行，由 Worker 并发数控制实际并行
+  const second = await submit("77777777-7777-4777-8777-777777777777", "做另一支带货解说视频");
+  assert.equal(second.statusCode, 201);
+  assert.notEqual(second.json().job.id, first.json().job.id);
+  assert.equal(mocks.jobs.size, 2);
+
+  // 同一幂等键重试仍幂等去重，返回同一个任务
+  const retry = await submit("66666666-6666-4666-8666-666666666666", "做一支带货解说视频");
+  assert.equal(retry.statusCode, 201);
+  assert.equal(retry.json().job.id, first.json().job.id);
+  assert.equal(mocks.jobs.size, 2);
 });
 
 test("batch versions create N independent jobs with per-version credit holds", async (t) => {
@@ -476,6 +469,143 @@ test("personal scene requests are forced to single version even when versions is
   assert.equal(body.jobs, undefined);
   assert.equal(mocks.jobs.size, 1);
   const wallet = await billingStore.getWallet(user.id);
-  assert.equal(wallet.frozenCredits, 200);
+  assert.equal(wallet.frozenCredits, 0, "personal creation must not freeze credits");
+  assert.equal(wallet.availableCredits, 1000);
+  assert.equal([...mocks.jobs.values()][0]?.requestPayload.creationScene, "personal-creation");
 });
 
+test("explicit personal entry is free even without a prompt scene marker", async (t) => {
+  const mocks = createMocks();
+  const billingStore = new InMemoryBillingStore({ initialGrant: 1000 });
+  const app = buildApp({
+    allowedOrigins: [origin],
+    logLevel: "silent",
+    production: false,
+    authStore: mocks.authStore,
+    assetStore: mocks.assetStore,
+    jobStore: mocks.jobStore,
+    billingStore,
+  });
+  t.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/jobs",
+    headers: { origin, cookie: `jansee_session=${token}` },
+    payload: {
+      mode: "video-dub",
+      prompt: "拍一支口播自我介绍",
+      creationScene: "personal-creation",
+      aspectRatio: "9:16",
+      assetIds: ["11111111-1111-4111-8111-111111111111"],
+      idempotencyKey: "bbbbbbbb-2222-4111-8111-111111111111",
+      versions: 5,
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().jobs, undefined);
+  assert.equal(mocks.jobs.size, 1);
+  const stored = [...mocks.jobs.values()][0]!;
+  assert.equal(stored.requestPayload.creationScene, "personal-creation");
+  assert.match(stored.prompt, /User-selected creation scene: personal-creation/);
+  const wallet = await billingStore.getWallet(user.id);
+  assert.equal(wallet.frozenCredits, 0);
+  assert.equal(wallet.availableCredits, 1000);
+});
+
+test("quick-cut entry is free and cannot request multiple versions", async (t) => {
+  const mocks = createMocks();
+  const billingStore = new InMemoryBillingStore({ initialGrant: 1000 });
+  const app = buildApp({
+    allowedOrigins: [origin],
+    logLevel: "silent",
+    production: false,
+    authStore: mocks.authStore,
+    assetStore: mocks.assetStore,
+    jobStore: mocks.jobStore,
+    billingStore,
+  });
+  t.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/jobs",
+    headers: { origin, cookie: `jansee_session=${token}` },
+    payload: {
+      mode: "video-dub",
+      prompt: "每个 5 秒切成一段",
+      creationScene: "quick-cut",
+      aspectRatio: "9:16",
+      assetIds: ["11111111-1111-4111-8111-111111111111"],
+      idempotencyKey: "bbbbbbbb-3333-4111-8111-111111111111",
+      versions: 5,
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(mocks.jobs.size, 1);
+  assert.equal([...mocks.jobs.values()][0]?.requestPayload.creationScene, "quick-cut");
+  const wallet = await billingStore.getWallet(user.id);
+  assert.equal(wallet.frozenCredits, 0);
+  assert.equal(wallet.availableCredits, 1000);
+});
+
+
+test("guest users are blocked from paid creation scenes", async (t) => {
+  const mocks = createMocks();
+  const guestToken = "g".repeat(43);
+  const guestUser: AuthUser = { id: "guest-456", displayName: "访客体验用户", createdAt: new Date() };
+  const authStore: AuthStore = {
+    ...mocks.authStore,
+    async findSession(hash) {
+      if (hash === createHash("sha256").update(guestToken).digest("hex")) {
+        return { user: guestUser, expiresAt: new Date(Date.now() + 60_000) };
+      }
+      return null;
+    },
+  };
+  const billingStore = new InMemoryBillingStore({ initialGrant: 1000 });
+  const app = buildApp({
+    allowedOrigins: [origin],
+    logLevel: "silent",
+    production: false,
+    authStore,
+    assetStore: mocks.assetStore,
+    jobStore: mocks.jobStore,
+    billingStore,
+  });
+  t.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/jobs",
+    headers: { origin, cookie: `jansee_session=${guestToken}` },
+    payload: {
+      mode: "image-film",
+      prompt: "[User-selected creation scene: online-ecommerce.]\n真丝睡衣，29元，只在我的直播间",
+      aspectRatio: "9:16",
+      assetIds: ["11111111-1111-4111-8111-111111111111"],
+      idempotencyKey: "cccccccc-1111-4111-8111-111111111111",
+    },
+  });
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json().error.code, "GUEST_PAID_SCENE_BLOCKED");
+  assert.equal(mocks.jobs.size, 0, "no job may be created for a guest paid-scene request");
+
+  // 游客仍可提交免费场景：个人创作不扣积分、不受拦截
+  const freeResponse = await app.inject({
+    method: "POST",
+    url: "/api/v1/jobs",
+    headers: { origin, cookie: `jansee_session=${guestToken}` },
+    payload: {
+      mode: "video-dub",
+      prompt: "[User-selected creation scene: personal-creation.]\n拍一支口播自我介绍",
+      aspectRatio: "9:16",
+      assetIds: ["11111111-1111-4111-8111-111111111111"],
+      idempotencyKey: "dddddddd-1111-4111-8111-111111111111",
+    },
+  });
+  assert.equal(freeResponse.statusCode, 201);
+  assert.equal(mocks.jobs.size, 1);
+  const wallet = await billingStore.getWallet(guestUser.id);
+  assert.equal(wallet.frozenCredits, 0, "free scene must not freeze guest credits");
+});

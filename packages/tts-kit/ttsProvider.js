@@ -36,7 +36,8 @@ const registry = new Map();
 // 用 atempo 后处理实现「真实、线性、保留音调」的语速调整，覆盖 LLM 四档（0.85~1.3）。
 function runFfmpeg(args, cwd) {
   return new Promise((resolve, reject) => {
-    execFile(ffmpegStatic, args, { cwd, maxBuffer: 200 * 1024 * 1024 }, (err, _stdout, stderr) => {
+    // timeout=60s：单句 atempo 变速正常毫秒级完成，挂住即异常，自动 SIGKILL 防 worker 悬挂。
+    execFile(ffmpegStatic, args, { cwd, maxBuffer: 200 * 1024 * 1024, timeout: 60_000, killSignal: 'SIGKILL' }, (err, _stdout, stderr) => {
       if (err) {
         const tail = String(stderr || '')
           .split('\n')

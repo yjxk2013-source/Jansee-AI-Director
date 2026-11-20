@@ -6,6 +6,7 @@ interface OutputRow {
   job_id: string;
   user_id: string;
   storage_key: string;
+  cover_storage_key: string | null;
   mime_type: string;
   size_bytes: string | number;
   duration_ms: number | null;
@@ -22,6 +23,7 @@ function mapOutput(row: OutputRow): OutputRecord {
     jobId: row.job_id,
     userId: row.user_id,
     storageKey: row.storage_key,
+    ...(row.cover_storage_key ? { coverStorageKey: row.cover_storage_key } : {}),
     mimeType: row.mime_type,
     sizeBytes: Number(row.size_bytes),
     durationMs: row.duration_ms ? Number(row.duration_ms) : null,
@@ -44,12 +46,13 @@ export function createPgOutputStore(pool: Pool): OutputStore {
            FOR UPDATE
          )
          INSERT INTO generated_outputs
-          (job_id, user_id, storage_key, mime_type, size_bytes, duration_ms, width, height, status, expires_at)
-         SELECT $1, $2, $3, $4, $5, $6, $7, $8, 'ready', $9
+          (job_id, user_id, storage_key, cover_storage_key, mime_type, size_bytes, duration_ms, width, height, status, expires_at)
+         SELECT $1, $2, $3, $11, $4, $5, $6, $7, $8, 'ready', $9
          WHERE $10::text IS NULL OR EXISTS (SELECT 1 FROM owned_job)
          ON CONFLICT (storage_key) DO UPDATE SET
            job_id = EXCLUDED.job_id,
            user_id = EXCLUDED.user_id,
+           cover_storage_key = EXCLUDED.cover_storage_key,
            mime_type = EXCLUDED.mime_type,
            size_bytes = EXCLUDED.size_bytes,
            duration_ms = EXCLUDED.duration_ms,
@@ -70,6 +73,7 @@ export function createPgOutputStore(pool: Pool): OutputStore {
           output.height ?? null,
           expiresAt,
           output.workerId ?? null,
+          output.coverStorageKey ?? null,
         ],
       );
       if (!result.rows[0]) throw new Error(output.workerId ? "WORKER_LEASE_LOST" : "OUTPUT_INSERT_FAILED");

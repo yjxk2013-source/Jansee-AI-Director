@@ -43,10 +43,61 @@
     </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/assets/jansee-mark.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/app-icon/jansee-pwa-180.png" />
     <link rel="alternate" type="text/plain" href="/llms.txt" title="JANSEE AI-readable product information" />
     <title>简兮 JANSEE — AI 智能导演系统</title>
+    <style>
+      /* 与安卓 SplashActivity 同一套设计：白底 + logo 垂直居中 + slogan 沉底 */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #fff;
+      }
+      #app-splash .splash-logo {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        display: block;
+        width: 140px;
+        height: auto;
+      }
+      #app-splash .splash-slogan {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+        margin: 0;
+        text-align: center;
+        white-space: nowrap;
+        color: #9aa0a6;
+        font-size: 14px;
+        letter-spacing: .08em;
+      }
+      #app-splash.is-hidden { opacity: 0; pointer-events: none; transition: opacity 160ms ease-out; }
+      @media (prefers-reduced-motion: reduce) { #app-splash.is-hidden { transition: none; } }
+    </style>
+    <script>
+      window.__janseeSplashStart = Date.now();
+      window.__janseeHideSplash = function () {
+        var splash = document.getElementById("app-splash");
+        if (!splash || splash.dataset.hiding) return;
+        splash.dataset.hiding = "1";
+        var wait = Math.max(0, 1200 - (Date.now() - window.__janseeSplashStart));
+        setTimeout(function () {
+          splash.classList.add("is-hidden");
+          setTimeout(function () { splash.remove(); }, 200);
+        }, wait);
+      };
+      setTimeout(window.__janseeHideSplash, 5000);
+    </script>
   </head>
   <body>
+    <div id="app-splash" aria-hidden="true">
+      <img class="splash-logo" src="/assets/splash-logo.png" alt="" />
+      <p class="splash-slogan">行至简处 见光影 见山海 见简兮</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
