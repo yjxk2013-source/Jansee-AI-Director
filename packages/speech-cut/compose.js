@@ -234,8 +234,9 @@ export async function cutSegmentByRanges({ videoFile, keepRanges = [], taskDir, 
     '-i', path.relative(taskDir, videoFile).replace(/\\/g, '/'),
     '-filter_complex', filters.join(';'),
     '-map', '[vfin]', '-map', '[acut]',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '20',
-    '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+    '-maxrate', '3200k', '-bufsize', '6000k',
+    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     path.relative(taskDir, path.join(taskDir, outFile)).replace(/\\/g, '/'),
   ];
   setp('正在剪除该段冗余内容');
@@ -404,7 +405,8 @@ export async function composeSpeechcut({ videoFile, taskDir, words = [], deleted
     '-map', '[vfin]', '-map', '[afin]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
     '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
-    '-preset', 'veryfast', '-crf', '20',
+    '-preset', 'veryfast', '-crf', '23',
+    '-maxrate', '3200k', '-bufsize', '6000k',
     '-c:a', 'aac', '-b:a', '128k',
     '-movflags', '+faststart+use_metadata_tags',
     /* AIGC 隐式标识：字段单一真源 = subtitle-kit aiMetaArgs（与全平台同口径） */

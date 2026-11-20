@@ -127,8 +127,9 @@ export async function appendEndingTail({ workDir, videoFile, outPath, taskId, sc
     args.push(
       '-filter_complex', filters.join(';'),
       '-map', '[v]', '-map', '[aout]',
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '20',
-      '-c:a', 'aac', '-b:a', '192k',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+      '-maxrate', '3200k', '-bufsize', '6000k',
+      '-c:a', 'aac', '-b:a', '128k',
       '-movflags', '+faststart+use_metadata_tags',
       /* AIGC 隐式标识：字段单一真源 = subtitle-kit aiMetaArgs（与全平台同口径） */
       ...aiMetaArgs(taskId),
