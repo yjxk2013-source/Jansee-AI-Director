@@ -89,8 +89,6 @@ export interface DirectorJobInsight {
   variantTemplate: string;
   lockedVariant: string;
   variantMatched: boolean | null;
-  anchorHit: boolean;
-  anchorName: string;
   voiceId: string;
   scene: string;
   sceneSource: string;
@@ -148,7 +146,6 @@ export interface AdminOverviewStats {
   qualityPassRate: number;
   totalCostEstimateYuan: number;
   variantHitRate: number;
-  anchorHitRate: number;
   revenueDataAvailable: boolean;
   costDataAvailable: boolean;
   databaseDataAvailable: boolean;
@@ -207,7 +204,6 @@ const EMPTY_STATS: AdminOverviewStats = {
   qualityPassRate: 0,
   totalCostEstimateYuan: 0,
   variantHitRate: 0,
-  anchorHitRate: 0,
   revenueDataAvailable: false,
   costDataAvailable: false,
   databaseDataAvailable: false,
@@ -558,13 +554,14 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
             FROM generated_outputs WHERE deleted_at IS NULL GROUP BY user_id
           ) o ON o.user_id = u.id
         WHERE u.deleted_at IS NULL
+          AND (coalesce(u.phone, '') <> '' OR coalesce(u.email, '') <> '')
           AND ($3 = '' OR u.id::text ILIKE '%' || $3 || '%' OR coalesce(u.display_name,'') ILIKE '%' || $3 || '%' OR coalesce(u.email,'') ILIKE '%' || $3 || '%' OR coalesce(u.phone,'') ILIKE '%' || $3 || '%' OR coalesce(u.register_region,'') ILIKE '%' || $3 || '%' OR coalesce(u.register_province,'') ILIKE '%' || $3 || '%' OR coalesce(u.register_city,'') ILIKE '%' || $3 || '%')
         ORDER BY u.created_at DESC LIMIT $1 OFFSET $2
       `, [limit, offset, keyword]),
     ]);
     const totals = summary.rows[0] ?? {};
     const countResult = await options.pool.query<{ total: string }>(
-      "SELECT count(*)::text AS total FROM users WHERE deleted_at IS NULL AND ($1 = '' OR id::text ILIKE '%' || $1 || '%' OR coalesce(display_name,'') ILIKE '%' || $1 || '%' OR coalesce(email,'') ILIKE '%' || $1 || '%' OR coalesce(phone,'') ILIKE '%' || $1 || '%' OR coalesce(register_region,'') ILIKE '%' || $1 || '%' OR coalesce(register_province,'') ILIKE '%' || $1 || '%' OR coalesce(register_city,'') ILIKE '%' || $1 || '%')",
+      "SELECT count(*)::text AS total FROM users WHERE deleted_at IS NULL AND (coalesce(phone, '') <> '' OR coalesce(email, '') <> '') AND ($1 = '' OR id::text ILIKE '%' || $1 || '%' OR coalesce(display_name,'') ILIKE '%' || $1 || '%' OR coalesce(email,'') ILIKE '%' || $1 || '%' OR coalesce(phone,'') ILIKE '%' || $1 || '%' OR coalesce(register_region,'') ILIKE '%' || $1 || '%' OR coalesce(register_province,'') ILIKE '%' || $1 || '%' OR coalesce(register_city,'') ILIKE '%' || $1 || '%')",
       [keyword],
     );
     return reply.send({
@@ -586,6 +583,35 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       total: numeric(countResult.rows[0]?.total), limit, offset,
       regionDataAvailable: numeric(totals.geo_users) > 0,
     });
+  });
+
+  // 管理员手工调整用户积分：正数加、负数减，全部写入账本留痕。
+  app.post("/api/v1/admin/users/:userId/credits", async (request, reply) => {
+    const operator = await verifyAdminAuth(request, reply);
+    if (!operator) return;
+    if (!requireAdminOrigin(request, reply)) return;
+    if (!options.pool) return reply.code(503).send({ error: { code: "USER_ANALYTICS_UNAVAILABLE", message: "用户数据库未连接" } });
+    if (!options.billingStore?.adjustCredits) return reply.code(503).send({ error: { code: "CREDIT_ADJUSTMENT_UNAVAILABLE", message: "积分账本暂不可用" } });
+    const { userId } = request.params as { userId: string };
+    if (!validUuid(userId)) return reply.code(400).send({ error: { code: "INVALID_USER_ID", message: "用户编号无效" } });
+    const body = (request.body as { credits?: unknown; reason?: unknown } | undefined) ?? {};
+    const credits = Number(body.credits);
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (!Number.isSafeInteger(credits) || credits === 0 || Math.abs(credits) > 1_000_000) {
+      return reply.code(400).send({ error: { code: "INVALID_CREDIT_ADJUSTMENT", message: "调整数量必须是不为 0 的整数，单次上限 1,000,000" } });
+    }
+    if (!reason || reason.length > 300) return reply.code(400).send({ error: { code: "INVALID_ADJUSTMENT_REASON", message: "请填写 1–300 字的调整备注" } });
+    const user = await options.pool.query("SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL", [userId]);
+    if (!user.rows[0]) return reply.code(404).send({ error: { code: "USER_NOT_FOUND", message: "用户不存在" } });
+    try {
+      const wallet = await options.billingStore.adjustCredits(userId, credits, `管理员调整：${reason}`, operator.id);
+      return reply.send({
+        success: true, userId, credits,
+        availableCredits: wallet.availableCredits, frozenCredits: wallet.frozenCredits,
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: { code: "CREDIT_ADJUSTMENT_FAILED", message: error instanceof Error ? error.message : "积分调整失败" } });
+    }
   });
 
   app.get("/api/v1/admin/overview", async (request, reply) => {
@@ -616,7 +642,6 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       today_cost_estimate_yuan: string | number;
       today_cost_records: string | number;
       variant_hit_rate: string | number | null;
-      anchor_hit_rate: string | number | null;
       director_calls: string | number;
       primary_model_successes: string | number;
       fallback_model_successes: string | number;
@@ -641,12 +666,12 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         count(*)::int AS total_jobs,
         count(*) FILTER (WHERE status = 'failed')::int AS failed_jobs,
         count(*) FILTER (WHERE status = 'completed')::int AS completed_jobs,
-        avg(extract(epoch FROM (finished_at - queued_at)) * 1000) FILTER (WHERE status = 'completed' AND finished_at IS NOT NULL) AS avg_e2e_ms,
-        percentile_cont(0.50) WITHIN GROUP (ORDER BY extract(epoch FROM (finished_at - queued_at)) * 1000)
+        avg(extract(epoch FROM (finished_at - COALESCE(started_at, queued_at))) * 1000) FILTER (WHERE status = 'completed' AND finished_at IS NOT NULL) AS avg_e2e_ms,
+        percentile_cont(0.50) WITHIN GROUP (ORDER BY extract(epoch FROM (finished_at - COALESCE(started_at, queued_at))) * 1000)
           FILTER (WHERE status = 'completed' AND finished_at IS NOT NULL) AS p50_e2e_ms,
-        percentile_cont(0.90) WITHIN GROUP (ORDER BY extract(epoch FROM (finished_at - queued_at)) * 1000)
+        percentile_cont(0.90) WITHIN GROUP (ORDER BY extract(epoch FROM (finished_at - COALESCE(started_at, queued_at))) * 1000)
           FILTER (WHERE status = 'completed' AND finished_at IS NOT NULL) AS p90_e2e_ms,
-        percentile_cont(0.99) WITHIN GROUP (ORDER BY extract(epoch FROM (finished_at - queued_at)) * 1000)
+        percentile_cont(0.99) WITHIN GROUP (ORDER BY extract(epoch FROM (finished_at - COALESCE(started_at, queued_at))) * 1000)
           FILTER (WHERE status = 'completed' AND finished_at IS NOT NULL) AS p99_e2e_ms,
         avg(CASE WHEN director_plan->'_telemetry'->>'llmDurationMs' ~ '^[0-9]+([.][0-9]+)?$'
           THEN NULLIF((director_plan->'_telemetry'->>'llmDurationMs')::numeric, 0) END)
@@ -669,8 +694,6 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         count(*) FILTER (WHERE status = 'completed' AND finished_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')
           AND director_plan->'_telemetry'->>'costSource' = 'director_model_pricing')::int AS today_cost_records,
         (count(*) FILTER (WHERE director_plan ? 'variant_type')::numeric / NULLIF(count(*), 0) * 100) AS variant_hit_rate,
-        (count(*) FILTER (WHERE director_plan->'_telemetry'->>'anchorHit' = 'true'
-          OR (director_plan->'_telemetry'->>'anchorHit' IS NULL AND director_plan ? 'anchor'))::numeric / NULLIF(count(*), 0) * 100) AS anchor_hit_rate,
         count(*) FILTER (WHERE director_plan->'_telemetry'->>'providerMode' IN ('primary','fallback','heuristic'))::int AS director_calls,
         count(*) FILTER (WHERE director_plan->'_telemetry'->>'providerMode' = 'primary')::int AS primary_model_successes,
         count(*) FILTER (WHERE director_plan->'_telemetry'->>'providerMode' = 'fallback')::int AS fallback_model_successes,
@@ -725,7 +748,6 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         totalCostEstimateYuan: numeric(row.today_cost_estimate_yuan),
         costDataAvailable: numeric(row.today_cost_records) > 0,
         variantHitRate: Number(numeric(row.variant_hit_rate).toFixed(1)),
-        anchorHitRate: Number(numeric(row.anchor_hit_rate).toFixed(1)),
       },
     });
   });
@@ -743,12 +765,12 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     const result = await options.pool.query<{
       id: string; user_id: string; status: DirectorJobInsight["status"];
       aspect_ratio: string; created_at: Date; updated_at: Date; finished_at: Date | null;
-      queued_at: Date; director_plan: Record<string, unknown> | null;
+      queued_at: Date; started_at: Date | null; director_plan: Record<string, unknown> | null;
       credits_charged: string | number;
       error_code: string | null; error_message: string | null; total: string | number;
     }>(`
       SELECT j.id, j.user_id, j.status, j.aspect_ratio,
-             j.created_at, j.updated_at, j.finished_at, j.queued_at, j.director_plan,
+             j.created_at, j.updated_at, j.finished_at, j.queued_at, j.started_at, j.director_plan,
              coalesce((SELECT amount FROM billing_ledger l WHERE l.job_id = j.id AND l.type = 'settle' LIMIT 1), 0) AS credits_charged,
              j.error_code, j.error_message, count(*) OVER() AS total
       FROM generation_jobs j
@@ -761,13 +783,20 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       const plan = row.director_plan ?? {};
       const telemetry = (plan._telemetry as Record<string, unknown> | undefined) ?? {};
       const variantType = typeof plan.variant_type === "string" ? plan.variant_type : "";
-      const anchor = typeof plan.anchor === "string" ? plan.anchor : "";
+      // 交付耗时统一由数据库时间字段实时计算（受理 started_at → 完成 finished_at），
+      // 不读 director_plan._telemetry 里写死的历史值（旧算法把排队等待算进了耗时）。
+      // 这样新任务和历史任务明细都只显示真实制作时间。
+      // 进行中任务以当前时间为终点；终态无 finished_at 时以 updated_at 为终点。
+      const e2eEndAt = row.finished_at
+        ?? (["queued", "inspecting", "planning", "rendering", "quality-check"].includes(row.status) ? new Date() : row.updated_at);
+      const e2eStartAt = row.started_at ?? row.queued_at;
+      const e2eDurationMs = Math.max(0, e2eEndAt.getTime() - e2eStartAt.getTime());
       return {
         jobId: row.id,
         userId: row.user_id,
         status: row.status,
         aspectRatio: row.aspect_ratio,
-        e2eDurationMs: numeric(telemetry.e2eDurationMs) || Math.max(0, ((row.finished_at ?? (["queued", "inspecting", "planning", "rendering", "quality-check"].includes(row.status) ? new Date() : row.updated_at)).getTime()) - row.queued_at.getTime()),
+        e2eDurationMs,
         llmDurationMs: numeric(telemetry.llmDurationMs),
         ffmpegDurationMs: numeric(telemetry.ffmpegDurationMs),
         rendererDurationMs: numeric(telemetry.rendererDurationMs),
@@ -777,8 +806,6 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         variantTemplate: typeof plan.variant_template === "string" ? plan.variant_template : "未记录",
         lockedVariant: typeof telemetry.lockedVariant === "string" ? telemetry.lockedVariant : "",
         variantMatched: typeof telemetry.variantMatched === "boolean" ? telemetry.variantMatched : null,
-        anchorHit: typeof telemetry.anchorHit === "boolean" ? telemetry.anchorHit : Boolean(anchor),
-        anchorName: anchor || "未记录",
         voiceId: typeof plan.voice_id === "string" ? plan.voice_id : "未记录",
         scene: typeof telemetry.scene === "string" ? telemetry.scene : "",
         sceneSource: typeof telemetry.sceneSource === "string" ? telemetry.sceneSource : "",

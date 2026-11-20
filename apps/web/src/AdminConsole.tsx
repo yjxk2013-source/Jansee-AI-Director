@@ -39,7 +39,6 @@ interface AdminOverviewStats {
   qualityPassRate: number;
   totalCostEstimateYuan: number;
   variantHitRate: number;
-  anchorHitRate: number;
   revenueDataAvailable?: boolean;
   costDataAvailable?: boolean;
   databaseDataAvailable?: boolean;
@@ -60,8 +59,6 @@ interface DirectorJobInsight {
   variantTemplate: string;
   lockedVariant: string;
   variantMatched: boolean | null;
-  anchorHit: boolean;
-  anchorName: string;
   voiceId: string;
   scene: string;
   sceneSource: string;
@@ -191,7 +188,7 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   useEffect(() => {
     if (!toastMessage) return;
-    const timer = window.setTimeout(() => setToastMessage(null), 4000);
+    const timer = window.setTimeout(() => setToastMessage(null), 2500);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
   const [pricingCatalog, setPricingCatalog] = useState<AdminPricingCatalog | null>(null);
@@ -215,6 +212,10 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
   const [siteAnalytics, setSiteAnalytics] = useState<SiteAnalyticsData | null>(null);
   const [userKeyword, setUserKeyword] = useState("");
   const [userListBusy, setUserListBusy] = useState(false);
+  const [creditAdjustTarget, setCreditAdjustTarget] = useState<UserAnalyticsData["users"][number] | null>(null);
+  const [creditAdjustAmount, setCreditAdjustAmount] = useState("");
+  const [creditAdjustReason, setCreditAdjustReason] = useState("");
+  const [creditAdjustBusy, setCreditAdjustBusy] = useState(false);
   const [serverHealth, setServerHealth] = useState<ServerHealthData | null>(null);
   const [serverHealthError, setServerHealthError] = useState<string | null>(null);
   const [serverHealthBusy, setServerHealthBusy] = useState(false);
@@ -441,6 +442,50 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
     }
   };
 
+  const openCreditAdjustment = (user: UserAnalyticsData["users"][number]) => {
+    setCreditAdjustAmount("");
+    setCreditAdjustReason("");
+    setCreditAdjustTarget(user);
+  };
+
+  const closeCreditAdjustment = () => {
+    if (creditAdjustBusy) return;
+    setCreditAdjustTarget(null);
+  };
+
+  const submitCreditAdjustment = async () => {
+    const target = creditAdjustTarget;
+    if (!target || creditAdjustBusy) return;
+    const credits = Number(creditAdjustAmount.trim().replace(/^\+/, ""));
+    if (!Number.isSafeInteger(credits) || credits === 0) {
+      setToastMessage("调整数量必须是不为 0 的整数，例如 200 或 -200");
+      return;
+    }
+    const reason = creditAdjustReason.trim();
+    if (!reason) {
+      setToastMessage("请填写调整备注，方便日后对账");
+      return;
+    }
+    setCreditAdjustBusy(true);
+    try {
+      const response = await fetch(`/api/v1/admin/users/${target.id}/credits`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ credits, reason }),
+      });
+      const payload = await response.json().catch(() => null) as { availableCredits?: number; error?: { message?: string } } | null;
+      if (!response.ok) throw new Error(payload?.error?.message || "积分调整失败");
+      setToastMessage(`已${credits > 0 ? "增加" : "扣减"} ${Math.abs(credits)} 积分，${target.displayName} 当前可用 ${payload?.availableCredits ?? "—"} 积分`);
+      setCreditAdjustTarget(null);
+      await searchUsers();
+    } catch (error) {
+      setToastMessage(error instanceof Error ? error.message : "积分调整失败");
+    } finally {
+      setCreditAdjustBusy(false);
+    }
+  };
+
   const handleCompensate = async (jobId: string) => {
     setCompensatingJobId(jobId);
     try {
@@ -616,7 +661,7 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
     directorTelemetryAvailable: false, directorCalls: 0, primaryModelSuccessRate: 0,
     fallbackModelRate: 0, heuristicFallbackRate: 0, totalTokensUsed: 0, tokenUsageRecords: 0,
     totalTtsChars: 0, qualityCheckedJobs: 0, qualityPassedJobs: 0, qualityPassRate: 0,
-    totalCostEstimateYuan: 0, variantHitRate: 0, anchorHitRate: 0,
+    totalCostEstimateYuan: 0, variantHitRate: 0,
     revenueDataAvailable: false, costDataAvailable: false, databaseDataAvailable: false,
   };
 
@@ -966,7 +1011,7 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
                   <div className="admin-user-search-actions"><input className="admin-user-search" value={userKeyword} onChange={(event) => setUserKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void searchUsers(); }} placeholder="搜索昵称、账号、地区或 ID" /><button className="admin-user-search-button" disabled={userListBusy} onClick={searchUsers}>{userListBusy ? "读取中…" : "搜索用户"}</button></div>
                 </div>
                 <div className="admin-user-table-scroll">
-                  <table className="admin-user-table"><thead><tr><th>用户</th><th>注册地区</th><th>加入时间</th><th>剩余积分</th><th>出片条数</th><th>下载条数</th><th>账号状态</th></tr></thead>
+                  <table className="admin-user-table"><thead><tr><th>用户</th><th>注册地区</th><th>加入时间</th><th>剩余积分</th><th>出片条数</th><th>下载条数</th><th>账号状态</th><th>操作</th></tr></thead>
                     <tbody>{visibleUsers.map((user) => <tr key={user.id}>
                       <td><strong>{user.displayName}</strong><small>{user.contact || user.id}</small></td>
                       <td>{user.region || "地区待识别"}</td>
@@ -975,8 +1020,9 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
                       <td>{user.completedJobs.toLocaleString("zh-CN")}</td>
                       <td>{user.downloads.toLocaleString("zh-CN")}</td>
                       <td><span className={`admin-user-status ${user.status === "active" ? "is-active" : "is-paused"}`}>{user.status === "active" ? "正常" : user.status === "suspended" ? "已停用" : user.status}</span></td>
+                      <td><button className="admin-user-credit-btn" onClick={() => openCreditAdjustment(user)}>调整积分</button></td>
                     </tr>)}
-                    {!visibleUsers.length && <tr><td colSpan={7} className="admin-users-empty">没有找到匹配的用户记录</td></tr>}</tbody>
+                    {!visibleUsers.length && <tr><td colSpan={8} className="admin-users-empty">没有找到匹配的用户记录</td></tr>}</tbody>
                   </table>
                 </div>
                 <div className="admin-user-table-foot">当前展示 {userAnalytics?.users.length ?? 0} / {userAnalytics?.total ?? 0} 位匹配用户。联系方式已脱敏。</div>
@@ -1336,9 +1382,8 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
                 <div className="overview-card">
                   <h3>导演决策记录</h3>
                   <div className="stat-row"><span>变体策略字段记录率</span><strong>{stats.variantHitRate}%</strong></div>
-                  <div className="stat-row"><span>主播配置字段记录率</span><strong>{stats.anchorHitRate}%</strong></div>
                   <div className="stat-row"><span>场景契合度均分</span><strong>{stats.sceneScoreDataAvailable ? `${stats.avgSceneScore} / 100` : "尚未接入真实评分"}</strong></div>
-                  <p className="admin-data-note">当前策略/主播指标反映方案字段是否写入，不等同于用户效果或模型准确率。场景评分只在真实评分埋点存在时展示。</p>
+                  <p className="admin-data-note">变体策略指标反映方案字段是否写入，不等同于用户效果或模型准确率。场景评分只在真实评分埋点存在时展示。</p>
                 </div>
                 <div className="overview-card">
                   <h3>经营与成本</h3>
@@ -1355,6 +1400,47 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
         {toastMessage && (
           <div className="admin-toast">
             <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* 管理员调整用户积分 */}
+        {creditAdjustTarget && (
+          <div className="admin-credit-dialog-backdrop" role="dialog" aria-modal="true" aria-label="调整用户积分" onClick={closeCreditAdjustment}>
+            <div className="admin-credit-dialog" onClick={(event) => event.stopPropagation()}>
+              <div className="admin-credit-dialog-head">
+                <div>
+                  <span className="admin-eyebrow">CREDITS / ADJUST</span>
+                  <h3>调整用户积分</h3>
+                </div>
+                <strong>{creditAdjustTarget.displayName}</strong>
+              </div>
+              <p className="admin-credit-dialog-balance">当前可用积分 <strong>{creditAdjustTarget.credits.toLocaleString("zh-CN")}</strong>，调整后会立即生效并写入账本。</p>
+              <label className="admin-credit-dialog-field">
+                <span>调整数量（正数增加 · 负数扣减）</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={creditAdjustAmount}
+                  placeholder="例如 200 或 -200"
+                  onChange={(event) => setCreditAdjustAmount(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") void submitCreditAdjustment(); }}
+                />
+              </label>
+              <label className="admin-credit-dialog-field">
+                <span>调整备注（必填，写入账本）</span>
+                <input
+                  type="text"
+                  maxLength={300}
+                  value={creditAdjustReason}
+                  placeholder="例如：客户投诉补偿 / 手工充值 / 误扣更正"
+                  onChange={(event) => setCreditAdjustReason(event.target.value)}
+                />
+              </label>
+              <div className="admin-credit-dialog-actions">
+                <button type="button" className="admin-credit-cancel" disabled={creditAdjustBusy} onClick={closeCreditAdjustment}>取消</button>
+                <button type="button" className="admin-credit-confirm" disabled={creditAdjustBusy} onClick={() => void submitCreditAdjustment()}>{creditAdjustBusy ? "提交中…" : "确认调整"}</button>
+              </div>
+            </div>
           </div>
         )}
       </div>

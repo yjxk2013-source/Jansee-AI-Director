@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -13,6 +13,8 @@ const MAX_IMAGE_PIXELS = 40_000_000;
 const MAX_IMAGE_DIMENSION = 12_000;
 const IMAGE_LIMIT = 20 * 1024 * 1024, VIDEO_LIMIT = 200 * 1024 * 1024, REQUEST_LIMIT = 500 * 1024 * 1024, MAX_FILES = 9;
 const ASSET_RETENTION_MS = 24 * 60 * 60 * 1000;
+const ASSET_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SERVABLE_IMAGE_MIME_RE = /^image\/(png|jpeg|gif|webp|bmp|avif|heic|heif|tiff)$/i;
 let activeUploads = 0;
 export function resolveUploadConcurrencyLimit(value: string | undefined = process.env.MAX_CONCURRENT_UPLOADS): number {
   const requested = Number(value);
@@ -142,6 +144,33 @@ export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions
     });
   });
 
+  /** 工作台缩略图的长期来源：blob 预览刷新后失效，服务端素材是唯一可靠来源。 */
+  app.get("/api/v1/assets/:id/preview", async (request, reply) => {
+    const user = await authenticatedUser(request, options.authStore);
+    if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+    const { id } = request.params as { id: string };
+    if (!ASSET_ID_RE.test(id)) return reply.code(400).send({ error: { code: "INVALID_ASSET_ID", message: "素材 ID 格式无效" } });
+    if (!options.assetStore.findUserAssets) return reply.code(501).send({ error: { code: "NOT_IMPLEMENTED" } });
+
+    const [asset] = await options.assetStore.findUserAssets(user.id, [id]);
+    if (!asset || asset.mediaType !== "image" || !SERVABLE_IMAGE_MIME_RE.test(asset.mimeType)
+      || (asset.status && asset.status !== "uploaded" && asset.status !== "ready" && asset.status !== "processing")) {
+      return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "素材不存在或无法预览" } });
+    }
+    try {
+      const filePath = await options.storage.getFilePath(asset.storageKey);
+      const bytes = await readFile(filePath);
+      return reply
+        .header("content-type", asset.mimeType)
+        .header("content-length", bytes.length)
+        .header("cache-control", "private, max-age=3600")
+        .header("x-content-type-options", "nosniff")
+        .send(bytes);
+    } catch {
+      return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "素材文件不存在或已过期" } });
+    }
+  });
+
   app.delete("/api/v1/assets/:id", async (request, reply) => {
     if (typeof request.headers.origin === "string" && !options.allowedOrigins.includes(request.headers.origin)) {
       return reply.code(403).send({ error: { code: "ORIGIN_NOT_ALLOWED" } });
@@ -149,7 +178,7 @@ export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions
     const user = await authenticatedUser(request, options.authStore);
     if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
     const { id } = request.params as { id: string };
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    if (!ASSET_ID_RE.test(id)) {
       return reply.code(400).send({ error: { code: "INVALID_ASSET_ID", message: "素材 ID 格式无效" } });
     }
     if (!options.assetStore.deleteAsset) return reply.code(501).send({ error: { code: "NOT_IMPLEMENTED" } });

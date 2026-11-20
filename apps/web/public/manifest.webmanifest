@@ -14,15 +14,21 @@
   "categories": ["business", "productivity", "video"],
   "icons": [
     {
-      "src": "/assets/jansee-mark.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/assets/app-icon/jansee-pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/jansee-mark.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/assets/app-icon/jansee-pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/app-icon/jansee-pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]

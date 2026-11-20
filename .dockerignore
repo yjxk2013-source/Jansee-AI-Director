@@ -1,11 +1,10 @@
 .git
 .github
-node_modules
-**/node_modules
-**/dist
-coverage
+materials
+whisper.cpp
 storage
 backups
+coverage
 .env
 .env.*
 !.env.example

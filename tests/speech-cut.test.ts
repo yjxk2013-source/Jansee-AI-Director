@@ -135,7 +135,7 @@ function createSpeechMocks() {
     assetStore,
     jobStore,
     speechCutStore,
-    billingStore: new InMemoryBillingStore({ initialGrant: 1000 }),
+    billingStore: new InMemoryBillingStore({ initialGrant: 0 }),
     mediaStorage: {
       async putFile() { return { sizeBytes: 1 }; },
       async getFilePath() { return "test-video-file"; },
@@ -225,6 +225,7 @@ test("speech-cut confirmation accepts only stored suggestion IDs and creates a p
   assert.equal(confirmed.json().jobId, "33333333-3333-4333-8333-333333333333");
   assert.equal(mocks.getSession().status, "consumed");
   assert.equal(mocks.getJob()?.directorPlan?.operation, "speech-cut");
+  assert.equal(mocks.getJob()?.requestPayload.creationScene, "quick-cut");
   const speechCut = mocks.getJob()?.directorPlan?.speechCut as { selectedSuggestions: SpeechCutSuggestion[] };
   assert.equal(speechCut.selectedSuggestions[0]?.id, suggestionId);
 

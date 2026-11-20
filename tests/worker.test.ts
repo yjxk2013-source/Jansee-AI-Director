@@ -20,7 +20,7 @@ import { createMediaRenderer } from "../apps/api/src/renderer.js";
 // @ts-expect-error ffmpeg-kit exposes runtime media probes without bundled declarations
 import { hasAudioStream } from "@jansee/ffmpeg-kit/probe.mjs";
 import { createHeuristicDirectorPlanner } from "../apps/api/src/director.js";
-import { TENCENT_VOICE_CANDIDATES, applyTencentVoiceHealthSnapshot } from "../packages/tts-kit/voices.js";
+import { TENCENT_VOICE_CANDIDATES, applyTencentVoiceHealthSnapshot } from "@jansee/tts-kit";
 import { assertJobTransition } from "@jansee/domain";
 
 const ffmpeg = createRequire(import.meta.url)("ffmpeg-static") as string;
@@ -34,13 +34,13 @@ function createTestHarness() {
   const authStore: AuthStore = {
     async createUser() { return user; },
     async findUserByEmail() { return null; },
-    async createSession() {},
+    async createSession() { },
     async findSession(hash) {
       return hash === createHash("sha256").update(token).digest("hex")
         ? { user, expiresAt: new Date(Date.now() + 60_000) }
         : null;
     },
-    async revokeSession() {},
+    async revokeSession() { },
   };
 
   const assetId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -74,7 +74,7 @@ function createTestHarness() {
   };
 
   const assetStore: AssetStore = {
-    async createAssets() {},
+    async createAssets() { },
     async findUserAssets(userId, assetIds) {
       if (userId !== user.id) return [];
       return assetIds.includes(assetId) ? [assetRecord] : [];
@@ -331,7 +331,7 @@ test("worker pipeline transitions job through stages, renders output, and publis
   assert.ok(out.sizeBytes > 0);
 });
 
-test("worker preserves planning API model, scene, anchor-hit and selected voice telemetry when reusing a client plan", async () => {
+test("worker preserves planning API model, scene and selected voice telemetry when reusing a client plan", async () => {
   const h = createTestHarness();
   const prompt = "[User-selected creation scene: online-ecommerce] 为商品制作一支完整短片";
   const input = { mode: "image-film" as const, prompt, aspectRatio: "9:16" as const, assets: [{ name: "source.jpg", kind: "image" as const, size: 1024 }] };
@@ -340,7 +340,7 @@ test("worker preserves planning API model, scene, anchor-hit and selected voice 
     providerMode: "fallback", requestedModel: "primary-model", selectedModel: "fallback-model",
     modelsAttempted: ["primary-model", "fallback-model"], fallbackUsed: true,
     promptTokens: 11, completionTokens: 19, totalTokens: 30, usageAvailable: true, costUsageAvailable: true,
-    scene: "online-ecommerce", sceneSource: "user-selected", anchorHit: true, variantMatched: null,
+    scene: "online-ecommerce", sceneSource: "user-selected", variantMatched: null,
     voiceId: generated.voice_id, voiceType: Number(generated.voice_id), voiceCandidateIds: [Number(generated.voice_id)],
   };
   const job = await h.jobStore.createJob(user.id, {
@@ -355,7 +355,6 @@ test("worker preserves planning API model, scene, anchor-hit and selected voice 
   assert.equal(telemetry.selectedModel, "fallback-model");
   assert.equal(telemetry.scene, "online-ecommerce");
   assert.equal(telemetry.sceneSource, "user-selected");
-  assert.equal(telemetry.anchorHit, true);
   assert.equal(telemetry.voiceId, generated.voice_id);
   assert.deepEqual(telemetry.voiceCandidateIds, [Number(generated.voice_id)]);
   assert.equal(job.directorPlan?._providerTelemetry, undefined);
@@ -432,6 +431,40 @@ test("worker blocks publication and refunds the job when Auto-QC rejects a rende
   assert.ok(deletedOutputs >= 1, "rejected private outputs must be cleaned up");
 });
 
+test("free entry jobs complete without touching billing settlement", async () => {
+  const h = createTestHarness();
+  const job = await h.jobStore.createJob(user.id, {
+    mode: "image-film",
+    prompt: "[User-selected creation scene: personal-creation.]\n拍一支个人口播自我介绍",
+    aspectRatio: "9:16",
+    assetIds: [h.assetId],
+    idempotencyKey: "12121212-2222-4333-8444-555555555555",
+  });
+  job.requestPayload = { creationScene: "personal-creation" };
+  let billingCalls = 0;
+  const billingStore = {
+    async completeJobAndSettle() { billingCalls += 1; throw new Error("free job must not settle credits"); },
+    async settleCredits() { billingCalls += 1; throw new Error("free job must not settle credits"); },
+    async refundCredits() { billingCalls += 1; throw new Error("free job must not refund credits"); },
+  } as never;
+
+  const success = await processJob(job, {
+    storage: h.storage,
+    renderer: h.renderer,
+    jobStore: h.jobStore,
+    assetStore: h.assetStore,
+    outputStore: h.outputStore,
+    directorPlanner: createHeuristicDirectorPlanner(),
+    billingStore,
+    workerId: "unit-free-worker",
+  });
+
+  assert.equal(success, true);
+  assert.equal(job.status, "completed");
+  assert.equal(job.progress, 100);
+  assert.equal(billingCalls, 0);
+});
+
 test("worker permanently fails exhausted expired leases and refunds their held credits", async () => {
   const h = createTestHarness();
   const expiredJobId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
@@ -447,7 +480,7 @@ test("worker permanently fails exhausted expired leases and refunds their held c
       }
       return { rows: [], rowCount: 0 };
     },
-    release() {},
+    release() { },
   };
   const pool = {
     async connect() { return client; },
@@ -494,7 +527,7 @@ test("worker retries refunds for already-failed exhausted jobs after a previous 
       if (/WITH candidate AS/i.test(sql)) return { rows: [], rowCount: 0 };
       return { rows: [], rowCount: 0 };
     },
-    release() {},
+    release() { },
   };
   const handled = await processNextQueuedJob({
     pool: { async connect() { return client; } } as never,
@@ -541,7 +574,7 @@ test("queue worker atomically claims one queued job before releasing it to rende
           }
           return { rows: [] };
         },
-        release() {},
+        release() { },
       };
     },
   };
@@ -669,13 +702,24 @@ test("worker routes an explicit fixed-duration slicing request to the multi-outp
       idempotencyKey: "88888888-2222-4333-8444-555555555555",
     });
 
+    // 模拟 LLM 经过意图分析后，向执行层输出的结构化切片与分发决策
+    const customPlanner: DirectorPlanner = {
+      async createPlan(input) {
+        const base = await createHeuristicDirectorPlanner().createPlan(input);
+        return { ...base, operation: "video-slice", sliceSeconds: 5 };
+      },
+      async createPlans(input) {
+        return [await this.createPlan(input)];
+      },
+    };
+
     const success = await processJob(job, {
       storage: h.storage,
       renderer: h.renderer,
       jobStore: h.jobStore,
       assetStore: h.assetStore,
       outputStore: h.outputStore,
-      directorPlanner: createHeuristicDirectorPlanner(),
+      directorPlanner: customPlanner,
     });
 
     assert.equal(success, true);
@@ -849,7 +893,7 @@ test("worker loop runs two queued heavy media jobs concurrently by default", asy
           }
           return { rows: [] };
         },
-        release() {},
+        release() { },
       };
     },
   };

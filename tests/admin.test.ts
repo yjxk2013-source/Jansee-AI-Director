@@ -149,6 +149,76 @@ test("admin compensation grants credits once and only for a failed job", async (
   await app.close();
 });
 
+test("admin credit adjustment endpoint validates input, moves balance, and audits the operator", async () => {
+  const validToken = "c".repeat(43);
+  const targetUserId = "22222222-2222-4222-8222-222222222222";
+  const authStore: AuthStore = {
+    async createUser() { throw new Error("not implemented"); },
+    async findUserByEmail() { return null; },
+    async findUserById(id) { return id === testAdminUser.id ? testAdminUser : null; },
+    async verifyPassword() { return null; },
+    async createSession() {},
+    async findSession() { return { user: testAdminUser, expiresAt: new Date(Date.now() + 3600_000) }; },
+    async deleteSession() {},
+    async deleteUserSessions() {},
+  };
+  const pool = {
+    async query(sql: string) {
+      if (sql.includes("SELECT id FROM users")) return { rows: [{ id: targetUserId }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    },
+  } as unknown as Pool;
+  const billingStore = new InMemoryBillingStore({ initialGrant: 500 });
+  const app = buildApp({
+    allowedOrigins: ["http://localhost:3000"], logLevel: "silent", production: false,
+    authStore, adminPool: pool, billingStore, adminEmails: ["admin@jansee.com"],
+  });
+  const headers = {
+    origin: "http://localhost:3000",
+    cookie: `jansee_session=${validToken}`,
+    "content-type": "application/json",
+  };
+  const request = (payload: unknown, cookieHeaders = headers) => app.inject({
+    method: "POST", url: `/api/v1/admin/users/${targetUserId}/credits`, headers: cookieHeaders, payload,
+  });
+
+  const unauth = await request({ credits: 100, reason: "未登录" }, {
+    origin: "http://localhost:3000", "content-type": "application/json",
+  });
+  assert.equal(unauth.statusCode, 401);
+
+  const zeroAmount = await request({ credits: 0, reason: "零" });
+  assert.equal(zeroAmount.statusCode, 400);
+  assert.equal(zeroAmount.json().error.code, "INVALID_CREDIT_ADJUSTMENT");
+
+  const blankReason = await request({ credits: 100, reason: "   " });
+  assert.equal(blankReason.statusCode, 400);
+  assert.equal(blankReason.json().error.code, "INVALID_ADJUSTMENT_REASON");
+
+  const badUser = await app.inject({
+    method: "POST", url: "/api/v1/admin/users/not-a-uuid/credits", headers, payload: { credits: 100, reason: "无效用户" },
+  });
+  assert.equal(badUser.statusCode, 400);
+
+  const added = await request({ credits: 300, reason: "客户投诉补偿" });
+  assert.equal(added.statusCode, 200);
+  assert.equal(added.json().availableCredits, 800);
+
+  const deducted = await request({ credits: -200, reason: "误扣更正" });
+  assert.equal(deducted.statusCode, 200);
+  assert.equal(deducted.json().availableCredits, 600);
+
+  const overdraft = await request({ credits: -100_000, reason: "超额扣减" });
+  assert.equal(overdraft.statusCode, 400);
+  assert.equal(overdraft.json().error.code, "CREDIT_ADJUSTMENT_FAILED");
+
+  const ledger = await billingStore.getLedger(targetUserId);
+  const adjustEntries = ledger.filter((entry) => entry.type === "adjust");
+  assert.equal(adjustEntries.length, 2);
+  assert.ok(adjustEntries.every((entry) => entry.description.includes("管理员调整")));
+  await app.close();
+});
+
 test("admin API exposes overview stats and director job insights with triad latency metrics", async () => {
   const validToken = "a".repeat(43);
   const authStore: AuthStore = {
@@ -326,6 +396,68 @@ test("admin delivery timer stays frozen for failed jobs even when finished_at is
   await app.close();
 });
 
+test("admin delivery timer starts at acceptance (started_at), excluding queue wait", async () => {
+  const validToken = "e".repeat(43);
+  // 赛马场景：任务 02:00 入队，排队 30s，02:00:30 被 worker 受理，02:00:40 完成。
+  // 交付耗时应为受理到完成 = 10s，而不是入队到完成 = 40s。
+  const queuedAt = new Date("2026-11-18T02:00:00.000Z");
+  const startedAt = new Date("2026-11-18T02:00:30.000Z");
+  const finishedAt = new Date("2026-11-18T02:00:40.000Z");
+  let querySeen = "";
+  const authStore: AuthStore = {
+    async createUser() { throw new Error("not implemented"); },
+    async findUserByEmail() { return null; },
+    async findUserById(id) { return id === testAdminUser.id ? testAdminUser : null; },
+    async verifyPassword() { return null; },
+    async createSession() { throw new Error("not implemented"); },
+    async findSession() { return { user: testAdminUser, expiresAt: new Date(Date.now() + 60_000) }; },
+    async deleteSession() {},
+    async deleteUserSessions() {},
+  };
+  const pool = {
+    async query(sql: string) {
+      querySeen = sql;
+      return { rows: [{
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        status: "completed",
+        aspect_ratio: "9:16",
+        created_at: queuedAt,
+        updated_at: finishedAt,
+        queued_at: queuedAt,
+        started_at: startedAt,
+        finished_at: finishedAt,
+        // 历史任务遥测里写死了旧的偏大耗时（入队→完成 40s）；明细必须忽略它，
+        // 只用数据库时间字段算真实制作时间（受理→完成 10s）。
+        director_plan: { _telemetry: { e2eDurationMs: 40_000 } },
+        credits_charged: 200,
+        error_code: null,
+        error_message: null,
+        total: 1,
+      }], rowCount: 1 };
+    },
+  } as unknown as Pool;
+  const app = buildApp({
+    allowedOrigins: ["http://localhost:3000"],
+    logLevel: "silent",
+    production: false,
+    authStore,
+    adminEmails: ["admin@jansee.com"],
+    adminPool: pool,
+  });
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/admin/director-jobs?status=completed",
+    headers: { origin: "http://localhost:3000", cookie: `jansee_session=${validToken}` },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.match(querySeen, /j\.started_at/);
+  // 受理到完成 10s，而非入队到完成 40s——排队等待不计入交付耗时；
+  // 且忽略遥测里写死的旧 40s 值，新旧任务明细都只显示真实制作时间。
+  assert.equal(response.json().jobs[0].e2eDurationMs, 10_000);
+  await app.close();
+});
+
 test("admin overview derives revenue, delivery latency and director telemetry from PostgreSQL aggregates", async () => {
   const validToken = "m".repeat(43);
   const authStore: AuthStore = {
@@ -366,7 +498,6 @@ test("admin overview derives revenue, delivery latency and director telemetry fr
           today_cost_estimate_yuan: "20.00",
           today_cost_records: 2,
           variant_hit_rate: "75",
-          anchor_hit_rate: "50",
           director_calls: 10,
           primary_model_successes: 7,
           fallback_model_successes: 2,
@@ -403,6 +534,7 @@ test("admin overview derives revenue, delivery latency and director telemetry fr
   assert.match(aggregateSql, /provider_payment_status IN \('PAID', 'REFUNDED'\)/);
   assert.match(aggregateSql, /billing_order_refund_records/);
   assert.match(aggregateSql, /generation_jobs/);
+  assert.match(aggregateSql, /COALESCE\(started_at, queued_at\)/); // E2E 从受理时间起算，排除排队等待
   assert.match(aggregateSql, /costEstimateYuan/);
   assert.equal(stats.databaseDataAvailable, true);
   assert.equal(stats.todayRevenueYuan, 100.5);
@@ -641,8 +773,12 @@ test("admin users endpoint aggregates real database records", { skip: !loadDatab
     [admin.rows[0].id, tokenHash],
   );
   try {
+    // summary 保留含游客的全量口径（用于看流量）；名单 total 只数注册用户
     const expected = await pool.query(
       "SELECT count(*) FILTER (WHERE deleted_at IS NULL)::int AS total, count(*) FILTER (WHERE deleted_at IS NULL AND (register_province IS NOT NULL OR register_city IS NOT NULL))::int AS geo_users FROM users",
+    );
+    const expectedRegistered = await pool.query(
+      "SELECT count(*)::int AS total FROM users WHERE deleted_at IS NULL AND (coalesce(phone, '') <> '' OR coalesce(email, '') <> '')",
     );
     const expectedTotal = expected.rows[0].total;
     const expectedGeo = expected.rows[0].geo_users;
@@ -657,12 +793,20 @@ test("admin users endpoint aggregates real database records", { skip: !loadDatab
     assert.equal(data.summary.geoUsers, expectedGeo, "geo users must equal the direct database count");
     assert.equal(data.summary.unknownRegionUsers, expectedTotal - expectedGeo);
     assert.equal(data.trend.length, 30);
-    assert.equal(data.total, expectedTotal);
+    assert.equal(data.total, expectedRegistered.rows[0].total, "directory total must count registered users only");
     assert.ok(Array.isArray(data.regions));
     assert.ok(Array.isArray(data.users) && data.users.length > 0, "user directory must list at least the admin account");
     for (const row of data.users) {
       assert.match(row.contact, /\*/, "admin directory contacts must be masked");
     }
+    // 搜索游客默认昵称应当一条也搜不到
+    const guestSearch = await app.inject({
+      method: "GET", url: `/api/v1/admin/users?limit=50&keyword=${encodeURIComponent("访客体验用户")}`,
+      headers: { origin: "http://localhost:5173", cookie: `jansee_session=${token}` },
+    });
+    assert.equal(guestSearch.statusCode, 200);
+    assert.equal(guestSearch.json().total, 0, "guest accounts must be excluded from the member directory");
+    assert.equal(guestSearch.json().users.length, 0);
     const denied = await app.inject({ method: "GET", url: "/api/v1/admin/users?limit=50", headers: { origin: "http://localhost:5173" } });
     assert.equal(denied.statusCode, 401);
   } finally {
@@ -670,4 +814,57 @@ test("admin users endpoint aggregates real database records", { skip: !loadDatab
     await pool.end();
     await app.close();
   }
+});
+
+test("only the member directory query filters out guests; traffic metrics keep all accounts", async () => {
+  const validToken = "g".repeat(43);
+  const adminUser: AuthUser = { ...testAdminUser, email: "admin@jansee.com" };
+  const authStore: AuthStore = {
+    async createUser() { throw new Error("not implemented"); },
+    async findUserByEmail() { return null; },
+    async findUserById(id) { return id === adminUser.id ? adminUser : null; },
+    async verifyPassword() { return null; },
+    async createSession() {},
+    async findSession() { return { user: adminUser, expiresAt: new Date(Date.now() + 3600_000) }; },
+    async deleteSession() {},
+    async deleteUserSessions() {},
+  };
+  const userQueries: string[] = [];
+  const pool = {
+    async query(sql: string) {
+      if (sql.includes("FROM users")) userQueries.push(sql);
+      if (sql.includes("variant_hit_rate")) return { rows: [{}], rowCount: 1 }; // overview
+      if (sql.includes("generate_series")) return { rows: [], rowCount: 0 };     // trend
+      if (sql.includes("AS total_users")) {
+        return { rows: [{ total_users: 2, active_users: 2, today_new_users: 1, last_7_days: 2, last_30_days: 2, geo_users: 1 }], rowCount: 1 };
+      }
+      if (sql.includes("count(*)::text AS total")) return { rows: [{ total: "2" }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    },
+  } as unknown as Pool;
+  const app = buildApp({
+    allowedOrigins: ["http://localhost:3000"], logLevel: "silent", production: false,
+    authStore, adminPool: pool, adminEmails: ["admin@jansee.com"],
+  });
+  const headers = { origin: "http://localhost:3000", cookie: `jansee_session=${validToken}` };
+  try {
+    const directory = await app.inject({ method: "GET", url: "/api/v1/admin/users", headers });
+    assert.equal(directory.statusCode, 200);
+    const overview = await app.inject({ method: "GET", url: "/api/v1/admin/overview", headers });
+    assert.equal(overview.statusCode, 200);
+
+    assert.equal(userQueries.length, 6, `expected 6 user queries, got ${userQueries.length}`);
+    const guestFilter = /coalesce\((?:u\.)?phone,\s*''\)\s*<>\s*''\s*OR\s*coalesce\((?:u\.)?email,\s*''\)\s*<>\s*''/;
+    // 只有 MEMBERS 名单本体（LEFT JOIN wallets）和它的分页计数要排除游客
+    const filtered = userQueries.filter((sql) => guestFilter.test(sql));
+    assert.equal(filtered.length, 2, `only directory list and its count should filter guests, got ${filtered.length}`);
+    assert.ok(filtered.some((sql) => sql.includes("LEFT JOIN wallets")));
+    assert.ok(filtered.some((sql) => sql.includes("count(*)::text AS total")));
+    // 统计卡片 / 增长曲线 / 地区分布 / 总览保持含游客口径
+    const unfiltered = userQueries.filter((sql) => !guestFilter.test(sql));
+    assert.ok(unfiltered.some((sql) => sql.includes("AS total_users")));
+    assert.ok(unfiltered.some((sql) => sql.includes("generate_series")));
+    assert.ok(unfiltered.some((sql) => sql.includes("json_agg")));
+    assert.ok(unfiltered.some((sql) => sql.includes("variant_hit_rate")));
+  } finally { await app.close(); }
 });

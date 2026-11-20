@@ -7,8 +7,6 @@ import type { FastifyInstance } from "fastify";
 import type { AuthStore } from "./auth.js";
 import { authenticatedUser, type AssetStore } from "./assets.js";
 import type { JobStore } from "./jobs.js";
-import type { BillingStore } from "./billing.js";
-import { GENERATION_COST_CREDITS } from "./billing.js";
 import type { LocalObjectStorage } from "./storage-local.js";
 import type { SpeechCutStore, SpeechCutSuggestion } from "./speech-cut-store.js";
 // @ts-expect-error ffmpeg-kit exports runtime media probes
@@ -31,7 +29,6 @@ export interface SpeechCutRoutesOptions {
   jobStore: JobStore;
   speechCutStore: SpeechCutStore;
   storage: LocalObjectStorage;
-  billingStore?: BillingStore;
   allowedOrigins: string[];
   analyzeVideo(filePath: string, workDir: string): Promise<SpeechCutAnalysis>;
   detectSuggestions(words: SpeechCutAnalysis["words"]): Array<Omit<SpeechCutSuggestion, "id">>;
@@ -165,13 +162,7 @@ export function registerSpeechCutRoutes(app: FastifyInstance, options: SpeechCut
       return reply.code(400).send({ error: { code: "SPEECH_CUT_ALL_WORDS_REMOVED", message: "不能删除全部口播内容" } });
     }
 
-    if (options.billingStore) {
-      const wallet = await options.billingStore.getWallet(user.id);
-      if (wallet.availableCredits < GENERATION_COST_CREDITS) {
-        return reply.code(402).send({ error: { code: "INSUFFICIENT_CREDITS", availableCredits: wallet.availableCredits, requiredCredits: GENERATION_COST_CREDITS } });
-      }
-    }
-
+    // 一句话剪辑（含停顿精剪）按产品契约免费，不检查余额、不冻结积分。
     const claimed = await options.speechCutStore.claimForProduction(user.id, id, [...selectedIds]);
     if (!claimed) return reply.code(409).send({ error: { code: "SPEECH_CUT_ALREADY_SUBMITTED" } });
 
@@ -183,6 +174,7 @@ export function registerSpeechCutRoutes(app: FastifyInstance, options: SpeechCut
         aspectRatio: "9:16",
         assetIds: [session.assetId],
         idempotencyKey: randomUUID(),
+        creationScene: "quick-cut",
         directorPlan: {
           operation: "speech-cut",
           _serverValidatedSpeechCut: true,
@@ -194,7 +186,6 @@ export function registerSpeechCutRoutes(app: FastifyInstance, options: SpeechCut
         },
       });
       createdJobId = job.id;
-      await options.billingStore?.holdCredits(user.id, job.id, GENERATION_COST_CREDITS);
       await options.speechCutStore.attachJob(user.id, id, job.id);
       return reply.code(202).send({ jobId: job.id, status: job.status });
     } catch (error) {
@@ -203,7 +194,6 @@ export function registerSpeechCutRoutes(app: FastifyInstance, options: SpeechCut
           code: "SPEECH_CUT_SUBMISSION_FAILED",
           message: error instanceof Error ? error.message.slice(0, 300) : "语音精剪任务提交失败",
         }).catch(() => undefined);
-        await options.billingStore?.refundCredits(user.id, createdJobId).catch(() => undefined);
       }
       await options.speechCutStore.releaseClaim(user.id, id).catch(() => undefined);
       const message = error instanceof Error ? error.message : "语音精剪任务提交失败";

@@ -121,14 +121,22 @@ async function transaction<T>(pool: Pool, run: (client: PoolClient) => Promise<T
 }
 
 async function ensureWallet(client: PoolClient, userId: string): Promise<WalletRecord> {
-  const inserted = await client.query<WalletRow>(
-    "INSERT INTO wallets (user_id, available_credits, free_available_credits) VALUES ($1, 600, 600) ON CONFLICT (user_id) DO NOTHING RETURNING *",
+  // 游客（未绑定手机/邮箱）不给可消费积分：收费场景的 200 积分不能被匿名会话白嫖。
+  // 免费场景（个人创作/一句话剪辑）不扣积分，游客体验不受影响。
+  const identity = await client.query<{ phone: string | null; email: string | null }>(
+    "SELECT phone, email FROM users WHERE id = $1",
     [userId],
+  );
+  const isGuest = !identity.rows[0]?.phone && !identity.rows[0]?.email;
+  const initialGrant = isGuest ? 0 : 600;
+  const inserted = await client.query<WalletRow>(
+    "INSERT INTO wallets (user_id, available_credits, free_available_credits) VALUES ($1, $2, $2) ON CONFLICT (user_id) DO NOTHING RETURNING *",
+    [userId, initialGrant],
   );
   if (inserted.rows[0]) {
     await client.query(
-      "INSERT INTO billing_ledger (user_id, type, amount, free_amount, description) VALUES ($1, 'grant', 600, 600, $2)",
-      [userId, "新账号注册体验积分"],
+      "INSERT INTO billing_ledger (user_id, type, amount, free_amount, description) VALUES ($1, 'grant', $2, $2, $3)",
+      [userId, initialGrant, isGuest ? "游客体验账号（注册后获赠积分）" : "新账号注册体验积分"],
     );
     return mapWallet(inserted.rows[0]);
   }
@@ -285,6 +293,43 @@ export function createPgBillingStore(pool: Pool): BillingStore {
         await client.query(
           "INSERT INTO billing_ledger (user_id, job_id, type, amount, free_amount, description) VALUES ($1, $2, $3, $4, $4, $5)",
           [userId, jobId ?? null, jobId ? "compensation" : "grant", amount, description.slice(0, 300)],
+        );
+        return mapWallet(updated.rows[0]!);
+      });
+    },
+
+    async adjustCredits(userId, amount, description, adjustedBy) {
+      if (!Number.isSafeInteger(amount) || amount === 0 || Math.abs(amount) > 1_000_000) throw new Error("积分调整数量必须是不为 0 的整数，单次上限 1,000,000");
+      return transaction(pool, async (client) => {
+        const wallet = await ensureWallet(client, userId);
+        if (amount > 0) {
+          const updated = await client.query<WalletRow>(
+            "UPDATE wallets SET available_credits = available_credits + $1, free_available_credits = free_available_credits + $1, updated_at = now() WHERE user_id = $2 RETURNING *",
+            [amount, userId],
+          );
+          await client.query(
+            "INSERT INTO billing_ledger (user_id, type, amount, free_amount, description, adjusted_by) VALUES ($1, 'adjust', $2, $2, $3, $4)",
+            [userId, amount, description.slice(0, 300), adjustedBy ?? null],
+          );
+          return mapWallet(updated.rows[0]!);
+        }
+        const deduction = -amount;
+        if (wallet.availableCredits < deduction) throw new Error(`积分不足：当前可用 ${wallet.availableCredits} 积分，无法扣减 ${deduction} 积分`);
+        const assets = await client.query<{ paid_available_credits: string | number; free_available_credits: string | number }>(
+          "SELECT paid_available_credits, free_available_credits FROM wallets WHERE user_id = $1 FOR UPDATE", [userId],
+        );
+        const paidBefore = Number(assets.rows[0]?.paid_available_credits ?? 0);
+        const freeBefore = Number(assets.rows[0]?.free_available_credits ?? 0);
+        // 扣减顺序与消费一致：先扣免费池，再扣付费池，保证退款口径可用。
+        const freeAmount = Math.min(freeBefore, deduction);
+        const paidAmount = deduction - freeAmount;
+        const updated = await client.query<WalletRow>(
+          "UPDATE wallets SET available_credits = available_credits - $1, free_available_credits = free_available_credits - $2, paid_available_credits = paid_available_credits - $3, updated_at = now() WHERE user_id = $4 RETURNING *",
+          [deduction, freeAmount, paidAmount, userId],
+        );
+        await client.query(
+          "INSERT INTO billing_ledger (user_id, type, amount, paid_amount, free_amount, description, adjusted_by) VALUES ($1, 'adjust', $2, $3, $4, $5, $6)",
+          [userId, amount, paidAmount, freeAmount, description.slice(0, 300), adjustedBy ?? null],
         );
         return mapWallet(updated.rows[0]!);
       });

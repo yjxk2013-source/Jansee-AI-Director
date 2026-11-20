@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 // @ts-expect-error video-dub is a frozen JavaScript workspace module
@@ -24,6 +24,42 @@ import type { AssetRecord } from "./assets.js";
 const require = createRequire(import.meta.url);
 const bundledFfmpeg = require("ffmpeg-static") as string | null;
 
+/**
+ * 台词是唯一时间源：把 TTS 实测出的整轨时长，按每句配音的时间窗切成 N 个镜头。
+ * 每句说完的那一刻，就是对应镜头叠化切换的时刻；成片总时长 = 真实配音时长。
+ * xfade 会吃掉 fadeDuration，所以后续镜头各补回一段，保证输出总长仍与音轨相等。
+ */
+export function resolveShotDurations(input: {
+  shotCount: number;
+  cues: Array<{ audioStart: number; audioEnd: number }>;
+  speechDurationSec: number;
+  fadeDuration: number;
+  fallbackClipDuration: number;
+}): number[] {
+  const count = Math.max(1, Math.floor(input.shotCount));
+  const total = Number(input.speechDurationSec);
+  if (!input.cues.length || !Number.isFinite(total) || total <= 0) {
+    return Array.from({ length: count }, () => input.fallbackClipDuration);
+  }
+  // 一句台词对应一个镜头；句数不一致时按整轨均分，总时长依然由 TTS 决定。
+  const raw = Array.from({ length: count }, (_, index) => {
+    if (input.cues.length !== count) return total / count;
+    const previousEnd = index === 0 ? 0 : input.cues[index - 1]!.audioEnd;
+    return Math.max(0.1, input.cues[index]!.audioEnd - previousEnd);
+  });
+  const rawSum = raw.reduce((sum, value) => sum + value, 0);
+  let net = raw.map((value) => (value / rawSum) * total);
+  // 首镜太短会被 xfade 吞掉；从其余镜头按比例匀出 1 秒给它，总时长不变。
+  if (net.length > 1 && net[0]! < 1) {
+    const restSum = net.slice(1).reduce((sum, value) => sum + value, 0);
+    if (restSum > 0) {
+      const extra = 1 - net[0]!;
+      net = net.map((value, index) => index === 0 ? 1 : value - extra * (value / restSum));
+    }
+  }
+  return net.map((value, index) => value + (index > 0 ? input.fadeDuration : 0));
+}
+
 export interface RenderResult {
   storageKey: string;
   mimeType: string;
@@ -34,6 +70,35 @@ export interface RenderResult {
   subtitleTimeline?: Array<{ start: number; end: number }>;
   ttsDurationMs?: number;
   ffmpegDurationMs?: number;
+  // 引擎生成的纯净宣发封面（无烧录台词、无 AI 角标）存储键，供作品库展示/下载。
+  coverStorageKey?: string;
+}
+
+/**
+ * 把引擎在 taskDir 里生成的纯净封面 cover.jpg 存入对象存储。
+ * 引擎（image-film / video-dub）已保证该图不含台词字幕与 AI 角标；
+ * 这里只做存在性检查与上传，失败不阻断出片——封面缺失时前端回退到视频截帧。
+ */
+async function stageCover(
+  storage: LocalObjectStorage,
+  job: GenerationJobRecord,
+  taskDir: string,
+): Promise<string | undefined> {
+  const coverPath = join(taskDir, "cover.jpg");
+  try {
+    await access(coverPath);
+  } catch {
+    return undefined;
+  }
+  const coverKey = `users/${job.userId}/covers/${job.id}`;
+  try {
+    await storage.putFile(coverKey, coverPath);
+    return coverKey;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[jansee-director] cover upload failed for job=${job.id}: ${message.slice(0, 180)}`);
+    return undefined;
+  }
 }
 
 export interface MediaRenderer {
@@ -80,9 +145,11 @@ export function resolveRendererScene(job: GenerationJobRecord): "personal" | "se
   const stored = job.requestPayload?.creationScene;
   const scene: CreationScene = stored === "online-ecommerce" || stored === "physical-store" || stored === "personal-creation"
     ? stored
-    : /个人|博主|口播|vlog/i.test(job.prompt)
+    : stored === "quick-cut"
       ? "personal-creation"
-      : detectCreationScene(job.prompt, job.mode);
+      : /个人|博主|口播|vlog/i.test(job.prompt)
+        ? "personal-creation"
+        : detectCreationScene(job.prompt, job.mode);
   return scene === "personal-creation" ? "personal" : scene === "online-ecommerce" ? "sell" : "local";
 }
 
@@ -121,6 +188,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             const end = Math.floor((index + 1) * sentences.length / assets.length);
             return sentences.slice(start, Math.max(start + 1, end)).join("");
           });
+          const planScenes = Array.isArray(plan?.scenes) ? plan!.scenes as Array<Record<string, unknown>> : [];
           const cut = {
             title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 24),
             // 版式底部说明行（cut.subtitle → T1–T5 版式 note 槽）：由导演方案 note 字段提供（LLM 生成或启发式兜底），
@@ -138,6 +206,11 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
               line: shotLines[index] || "",
               side_typo: "",
               climax: index === assets.length - 1,
+              // 运镜放权：把导演为每镜编排的 motion ID 透传给引擎。
+              // 引擎 imageFilm.js 的 MOTION_MAP 只认 sweep_lr/sweep_rl/rise_up/diagonal，
+              // schema 已用 strict enum 约束，这里只做透传；缺失时引擎会按 seed 抽选兜底。
+              ...(typeof planScenes[index]?.motion === "string"
+                ? { motion: planScenes[index]!.motion } : {}),
             })),
           };
           const result = await (produceImageFilm as (input: Record<string, unknown>) => Promise<{ outputPath: string; videoSec: number; timings?: Record<string, number> }>)({
@@ -155,6 +228,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             },
           });
           const stored = await options.storage.putFile(outputKey, result.outputPath);
+          const coverStorageKey = await stageCover(options.storage, job, taskDir);
           const measuredSize = probeVideoSize(result.outputPath);
           const fallbackSize = resolveDimensions(job.aspectRatio);
           return {
@@ -166,6 +240,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             height: measuredSize?.height || fallbackSize.height,
             ttsDurationMs: Math.round((result.timings?.tts || 0) * 1000),
             ffmpegDurationMs: Math.round((result.timings?.render || result.timings?.grandTotalSec || 0) * 1000),
+            ...(coverStorageKey ? { coverStorageKey } : {}),
           };
         } finally {
           await rm(taskDir, { recursive: true, force: true }).catch(() => undefined);
@@ -215,6 +290,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             scene,
           });
           const stored = await options.storage.putFile(outputKey, result.outputPath);
+          const coverStorageKey = await stageCover(options.storage, job, taskDir);
           const measuredSize = probeVideoSize(result.outputPath);
           const fallbackSize = resolveDimensions(job.aspectRatio);
           return {
@@ -226,6 +302,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             height: measuredSize?.height || fallbackSize.height,
             ttsDurationMs: Math.round((result.timings?.tts ?? 0) * 1000),
             ffmpegDurationMs: Math.round(((result.timings?.ffmpeg ?? 0) + (result.timings?.concat ?? 0) + (result.timings?.bgm ?? 0)) * 1000),
+            ...(coverStorageKey ? { coverStorageKey } : {}),
           };
         } finally {
           await rm(taskDir, { recursive: true, force: true }).catch(() => undefined);
@@ -252,7 +329,6 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
 
       // 提取导演方案中的分镜节奏与视觉设定
       const planObj = (job.directorPlan || job.requestPayload?.directorPlan) as Record<string, unknown> | undefined;
-      const scenes = Array.isArray(planObj?.scenes) ? planObj.scenes : [];
       const bgmEmotion = typeof planObj?.bgm_emotion === "string" ? planObj.bgm_emotion : "warm";
       const packaging = planObj?.packaging && typeof planObj.packaging === "object"
         ? planObj.packaging as Record<string, unknown>
@@ -267,6 +343,9 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
         throw new Error("DIRECTOR_VOICE_SPEED_REQUIRED: 导演方案缺少有效腾讯 VoiceType 或导演语速，禁止使用固定默认值");
       }
       const cues: Array<{ content: string; audioStart: number; audioEnd: number }> = [];
+      // speechCues 与 cues 同源；speechDurationSec 是 TTS 合成整轨的真实时长（秒）。
+      let speechCues: Array<{ content: string; audioStart: number; audioEnd: number }> = [];
+      let speechDurationSec = 0;
       // 未配置正式 TTS 时，开发环境允许无旁白预览；生产环境必须拒绝静音成片。
       if (process.env.NODE_ENV === "production" && (!ttsConfigured || !narration)) {
         throw new Error(!ttsConfigured ? "TTS_NOT_CONFIGURED: production requires Tencent TTS credentials" : "DIRECTOR_NARRATION_MISSING: director did not provide narration");
@@ -279,11 +358,17 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
       if (hasFfmpeg && ttsConfigured && narration) {
         ttsWorkDir = join(tmpdir(), `jansee-tts-${job.id}-${randomUUID()}`);
         try {
+          // 台词是唯一时间源：不传 targetSpanSec，TTS 按自然语速与停顿合成，
+          // 下面再用每句实测时间窗反推每个镜头的画面时长，实现真正的音画对齐。
           const ttsStartedAt = Date.now();
-          const tts = await buildTtsAudio(ttsWorkDir, narration, voiceId, { targetSpanSec: Number(planObj?.durationSeconds) || 0, speed: speechSpeed });
+          const tts = await buildTtsAudio(ttsWorkDir, narration, voiceId, { speed: speechSpeed });
           ttsDurationMs = Date.now() - ttsStartedAt;
           voiceTrackPath = tts.audioFile;
-          cues.push(...tts.cues);
+          speechCues = tts.cues.filter((cue) => cue.audioEnd > cue.audioStart);
+          cues.push(...speechCues);
+          speechDurationSec = Number(tts.durationSec) > 0
+            ? Number(tts.durationSec)
+            : (speechCues.at(-1)?.audioEnd ?? 0);
         } catch (error) {
           await rm(ttsWorkDir, { recursive: true, force: true }).catch(() => undefined);
           throw new Error(`TTS_SYNTHESIS_FAILED: ${error instanceof Error ? error.message : String(error)}`);
@@ -326,16 +411,16 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
           }
 
           // 构造 FFmpeg 参数，生成安全标准 H.264/AAC MP4 视频，并混合避让 BGM 与发丝字幕
-          // 每份素材独立成为一个镜头；多镜头通过 xfade 平滑衔接，最长控制在约 30 秒。
-          const fallbackClipDuration = assets.length === 1 ? 10 : Math.min(5, 30 / assets.length);
-          const clipDurations = assets.map((_, index) => {
-            const scene = scenes[index] as { durationSeconds?: number } | undefined;
-            const requested = Number(scene?.durationSeconds);
-            return Number.isFinite(requested) && requested >= 1.5 && requested <= 12
-              ? requested
-              : fallbackClipDuration;
-          });
+          // 每份素材独立成为一个镜头；台词是唯一时间源，画面时长由该句 TTS 实测时间窗决定。
           const fadeDuration = assets.length > 1 ? XFADE.duration : 0;
+          const fallbackClipDuration = assets.length === 1 ? 10 : Math.min(5, 30 / assets.length);
+          const clipDurations = resolveShotDurations({
+            shotCount: assets.length,
+            cues: speechCues,
+            speechDurationSec,
+            fadeDuration,
+            fallbackClipDuration,
+          });
           const totalDuration = clipDurations.reduce((sum, duration) => sum + duration, 0) - fadeDuration * Math.max(0, assets.length - 1);
           const args = ["-y", "-threads", "2"];
 

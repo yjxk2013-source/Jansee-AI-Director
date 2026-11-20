@@ -1,5 +1,5 @@
 ﻿const CACHE_PREFIX = "jansee-v4-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}4.0.0-alpha.1-dm-sans-wordmark`;
+const CACHE_NAME = `${CACHE_PREFIX}4.0.0-alpha.1-filmstrip-reveal`;
 const STATIC_ASSETS = [
   "/",
   "/offline.html",

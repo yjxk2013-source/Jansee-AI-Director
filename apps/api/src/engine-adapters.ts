@@ -240,6 +240,7 @@ function createRendererEngine(id: "image-film" | "video-dub"): ProductionEngine 
         height: rendered.height,
         ...(rendered.ttsDurationMs !== undefined ? { ttsDurationMs: rendered.ttsDurationMs } : {}),
         ...(rendered.ffmpegDurationMs !== undefined ? { ffmpegDurationMs: rendered.ffmpegDurationMs } : {}),
+        ...(rendered.coverStorageKey ? { coverStorageKey: rendered.coverStorageKey } : {}),
       };
     },
   };
