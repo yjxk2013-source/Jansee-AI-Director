@@ -22,6 +22,8 @@ body,
   min-width: 320px;
   min-height: 100%;
   margin: 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -1016,11 +1018,34 @@ textarea:focus-visible {
 }
 
 .creation-scene-picker {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   padding: 0 0 10px;
+}
+
+/* 游客点收费场景的轻提示：浮在场景选择器上方，2.5 秒自动消失 */
+.guest-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: var(--jansee-action, #252629);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: nav-fade-in 0.16s ease-out;
+  pointer-events: none;
 }
 
 .creation-scene-label {
@@ -1066,10 +1091,33 @@ textarea:focus-visible {
   background: transparent;
 }
 
+/* 游客下收费场景：视觉锁定（降低对比度），但仍可点击以弹出登录引导 */
+.creation-scene-options button.is-locked {
+  color: #a8abb2;
+  cursor: pointer;
+}
+.creation-scene-options button.is-locked:hover {
+  color: #8a8e96;
+}
+.creation-scene-options button.is-locked.is-selected {
+  color: #a8abb2;
+  text-decoration-color: #c8cad0;
+}
+
 .creation-scene-free-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 3px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
   color: #26734d;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: middle;
   white-space: nowrap;
 }
 
@@ -1171,9 +1219,56 @@ textarea:focus-visible {
 }
 
 .composer-main .voice-button.is-listening {
+  position: relative;
   color: #625bc8;
   background: #f0efff;
   box-shadow: 0 0 0 3px #625bc812;
+}
+
+.composer-main .voice-countdown-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.composer-main .voice-countdown-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.composer-main .voice-countdown-bg {
+  fill: none;
+  stroke: rgba(98, 91, 200, 0.18);
+  stroke-width: 2.4;
+}
+
+.composer-main .voice-countdown-progress {
+  fill: none;
+  stroke: #625bc8;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s linear;
+}
+
+.composer-main .voice-countdown-number {
+  font-size: 13px;
+  font-weight: 600;
+  color: #625bc8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1;
+  letter-spacing: -0.3px;
+  user-select: none;
 }
 
 .composer-main .send-button {
@@ -1395,6 +1490,13 @@ textarea:focus-visible {
   inset: 0;
 }
 
+/* The panel is a centered grid item: without an explicit track limit, long
+   nowrap content (balances, invite labels) can grow the auto track past the
+   viewport and push the right edge off-screen. */
+.header-panel-layer {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .navigation-backdrop,
 .header-panel-backdrop {
   position: absolute;
@@ -1588,12 +1690,11 @@ textarea:focus-visible {
 .header-panel {
   position: relative;
   z-index: 1;
+  min-width: 0;
   width: min(100%, 420px);
   padding: 30px;
-  border: 1px solid #eceef0;
-  border-radius: 24px;
+  /* border / radius / shadow are set once in the token-based rule below. */
   background: #fff;
-  box-shadow: 0 20px 70px rgba(32, 33, 36, .18);
   animation: panel-in .18s ease-out;
 }
 
@@ -1917,11 +2018,6 @@ textarea:focus-visible {
     padding-inline: 14px;
     font-size: 12px;
   }
-
-  .header-panel {
-    padding: 26px 22px 22px;
-    border-radius: 21px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2150,18 +2246,15 @@ textarea:focus-visible {
   width: 100%;
   min-height: 43px;
   padding: 0 12px;
-  border: 1px solid #dadce0;
-  border-radius: 11px;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  border-radius: 8px;
   outline: 0;
-  color: #202124;
+  color: var(--jansee-text, #202124);
   background: #fff;
   font: inherit;
-  font-size: 13px;
-}
-
-.auth-form input:focus {
-  border-color: #8179e8;
-  box-shadow: 0 0 0 3px #8179e81a;
+  /* 16px prevents mobile browsers from auto-zooming the page on focus. */
+  font-size: 16px;
+  box-shadow: none;
 }
 
 .auth-form .panel-primary-action {
@@ -3239,18 +3332,6 @@ textarea:focus-visible {
     margin-top: 6px;
   }
 
-  .header-panel-layer {
-    align-items: end;
-    padding: 10px;
-  }
-
-  .header-panel {
-    width: 100%;
-    max-height: 88dvh;
-    padding: 26px 18px 18px;
-    border-radius: 20px 20px 16px 16px;
-  }
-
   .navigation-drawer {
     width: min(320px, 88vw);
     padding-top: max(18px, env(safe-area-inset-top));
@@ -3707,12 +3788,6 @@ body,
 .upload-menu button>svg {
   color: #77719d;
   stroke: currentColor;
-}
-
-.header-panel {
-  border-color: #e9e8ef;
-  border-radius: 22px;
-  box-shadow: 0 22px 70px rgba(32, 33, 44, .14);
 }
 
 .navigation-drawer {
@@ -4293,11 +4368,6 @@ body,
 
 @media (max-width: 560px) {
 
-  .header-panel:has(.credit-products),
-  .header-panel:has(.billing-tabs) {
-    padding: 25px 18px 20px;
-  }
-
   .credit-plan-card {
     padding: 11px 10px;
     gap: 8px;
@@ -4538,7 +4608,7 @@ select:focus-visible {
 }
 
 .header-panel {
-  border-color: var(--jansee-border);
+  border: 1px solid var(--jansee-border);
   border-radius: 16px;
   box-shadow: var(--jansee-shadow-panel);
 }
@@ -5022,6 +5092,14 @@ select:focus-visible {
     overscroll-behavior: contain;
     padding: 24px 18px 20px;
     border-radius: 16px;
+  }
+
+  /* 输入框字号不低于 16px：低于此值时浏览器（含 Android WebView）会在聚焦时
+     自动放大整个页面，表现为登录卡被撑大、超出屏幕边界。 */
+  .header-panel input,
+  .header-panel textarea,
+  .header-panel select {
+    font-size: 16px;
   }
 
   .header-panel:has(.credit-products),
@@ -5897,6 +5975,20 @@ body,
   }
 }
 
+/* Home hero safe inset: keep a comfortable gutter from the screen edges,
+   matching the reading margin used by mainstream AI assistants (e.g. Yuanbao). */
+.welcome-panel {
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+@media (max-width: 380px) {
+  .welcome-panel {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
 /* Navigation drawer: one clear action, recent works, and quiet utilities. */
 .navigation-drawer {
   width: min(304px, 88vw);
@@ -6030,6 +6122,135 @@ body,
   font-size: 11px;
 }
 
+.install-platform-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 20px 0 4px;
+}
+
+.install-platform-tab {
+  padding: 7px 14px;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  border-radius: 8px;
+  color: var(--jansee-text-secondary, #5f6368);
+  font-size: 13px;
+}
+
+.install-platform-tab.is-active {
+  border-color: var(--jansee-text-primary, #202124);
+  background: var(--jansee-text-primary, #202124);
+  color: #fff;
+}
+
+.install-section {
+  padding-top: 20px;
+}
+
+.install-section-title {
+  margin: 0 0 8px;
+  color: var(--jansee-text-primary, #202124);
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.install-section-copy {
+  margin: 0 0 16px;
+  color: var(--jansee-text-secondary, #5f6368);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.install-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.install-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--jansee-text-secondary, #5f6368);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.install-steps strong {
+  color: var(--jansee-text-primary, #202124);
+  font-weight: 550;
+}
+
+.install-step-num {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  border-radius: 50%;
+  color: var(--jansee-text-primary, #202124);
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.install-note {
+  margin: 20px 0 0;
+  color: var(--jansee-text-muted, #80868b);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/* 安卓下载按钮复用付款卡片按钮（credit-buy-button），仅做宽度自适应并居中 */
+.credit-buy-button.install-download-button {
+  display: flex;
+  width: fit-content;
+  min-width: 150px;
+  margin: 0 auto;
+}
+
+.install-qr-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.install-qr-image {
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.install-qr-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  border-radius: 10px;
+  color: var(--jansee-text-muted, #80868b);
+  font-size: 12px;
+  text-align: center;
+  padding: 12px;
+}
+
+.install-qr-hint {
+  margin: 0;
+  color: var(--jansee-text-muted, #80868b);
+  font-size: 12px;
+}
+
+.credit-buy-button.install-download-button:focus-visible {
+  outline: 2px solid var(--jansee-focus, #6b7280);
+  outline-offset: 2px;
+}
+
 @media (max-width: 760px) {
   .navigation-drawer {
     width: min(304px, 88vw);
@@ -6046,21 +6267,13 @@ body,
   }
 }
 
-/* Phase 5: align account surfaces with the neutral JANSEE design system. */
-.auth-form input {
-  border-color: var(--jansee-border, #e5e7eb) !important;
-  border-radius: 8px !important;
-  color: var(--jansee-text, #202124) !important;
-  background: #fff !important;
-  box-shadow: none !important;
-}
-
+/* Auth form focus/placeholder states (base field styling lives with .auth-form). */
 .auth-form input::placeholder {
   color: var(--jansee-text-muted, #80868b);
 }
 
 .auth-form input:focus {
-  border-color: #8b9096 !important;
+  border-color: #8b9096;
   outline: 2px solid rgba(107, 114, 128, .16);
   outline-offset: 1px;
 }
@@ -8794,6 +9007,160 @@ body,
   min-width: 190px;
 }
 
+/* 管理员调整用户积分：行内入口 + 浮层表单（中性色，遵循设计系统） */
+.admin-user-credit-btn {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #5f6368;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: .18s ease;
+}
+
+.admin-user-credit-btn:hover {
+  border-color: #c6c9cd;
+  color: #202124;
+}
+
+.admin-credit-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(32, 33, 36, .38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn .18s ease;
+}
+
+.admin-credit-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .16);
+}
+
+.admin-credit-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-credit-dialog-head h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #202124;
+}
+
+.admin-credit-dialog-head strong {
+  font-size: 13px;
+  color: #5f6368;
+  text-align: right;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-credit-dialog-balance {
+  margin: 0;
+  font-size: 13px;
+  color: #5f6368;
+}
+
+.admin-credit-dialog-balance strong {
+  color: #202124;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-credit-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-credit-dialog-field span {
+  font-size: 12px;
+  color: #80868b;
+}
+
+.admin-credit-dialog-field input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #202124;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-credit-dialog-field input:focus {
+  outline: none;
+  border-color: #6b7280;
+}
+
+.admin-credit-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-credit-cancel,
+.admin-credit-confirm {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: .18s ease;
+}
+
+.admin-credit-cancel {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #5f6368;
+}
+
+.admin-credit-cancel:hover:not(:disabled) {
+  border-color: #c6c9cd;
+  color: #202124;
+}
+
+.admin-credit-confirm {
+  border: 1px solid #252629;
+  background: #252629;
+  color: #fff;
+}
+
+.admin-credit-confirm:hover:not(:disabled) {
+  background: #111214;
+  border-color: #111214;
+}
+
+.admin-credit-cancel:disabled,
+.admin-credit-confirm:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+@media (max-width: 760px) {
+  .admin-credit-dialog {
+    padding: 18px;
+  }
+}
+
 @media(max-width:760px) {
   .admin-user-search-actions {
     width: 100%;
@@ -9394,8 +9761,9 @@ body,
 }
 
 .app-shell {
+  height: 100vh;
   height: 100dvh;
-  min-height: 100svh;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -9431,9 +9799,19 @@ body,
 
 @media (max-width: 760px) {
   .app-shell {
-    height: 100dvh !important;
-    min-height: 100dvh;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
     overflow: hidden !important;
+  }
+
+  /* 16px prevents mobile browsers from zooming the page when the input gains focus. */
+  .composer-main textarea {
+    font-size: 16px;
   }
 
   .chat-stage {
@@ -10765,24 +11143,71 @@ body,
 }
 
 .filmstrip-rec-dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: #ef4444;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
-  animation: filmstrip-rec-blink 1.8s infinite ease-in-out;
+  background: #6366f1;
+  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6), 0 0 10px 2px rgba(99, 102, 241, 0.45);
+  animation: filmstrip-rec-rainbow 3.6s infinite ease-in-out;
 }
 
-@keyframes filmstrip-rec-blink {
+/* 制作中七彩呼吸灯：平滑循环流转赤橙黄绿青蓝紫，伴随柔和舒缓的明暗呼吸与光晕扩散 */
+@keyframes filmstrip-rec-rainbow {
+  0% {
+    background: #ef4444;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px 2px rgba(239, 68, 68, 0.45);
+    transform: scale(1);
+  }
 
-  0%,
+  14% {
+    background: #f97316;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15), 0 0 12px 3px rgba(249, 115, 22, 0.55);
+    transform: scale(1.12);
+  }
+
+  28% {
+    background: #eab308;
+    box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.2), 0 0 11px 2px rgba(234, 179, 8, 0.5);
+    transform: scale(1.05);
+  }
+
+  42% {
+    background: #10b981;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1), 0 0 13px 3px rgba(16, 185, 129, 0.55);
+    transform: scale(1.15);
+  }
+
+  57% {
+    background: #06b6d4;
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2), 0 0 11px 3px rgba(6, 182, 212, 0.5);
+    transform: scale(1.06);
+  }
+
+  71% {
+    background: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 0 12px 3px rgba(59, 130, 246, 0.55);
+    transform: scale(1.14);
+  }
+
+  85% {
+    background: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2), 0 0 11px 2px rgba(139, 92, 246, 0.5);
+    transform: scale(1.08);
+  }
+
   100% {
-    opacity: 1;
+    background: #ef4444;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px 2px rgba(239, 68, 68, 0.45);
+    transform: scale(1);
   }
+}
 
-  50% {
-    opacity: 0.35;
-  }
+/* 成片已完成/已交付：常亮静止稳定绿灯，不再闪烁或流转七彩，给用户明确的完成指示 */
+.director-filmstrip-panel.is-settled .filmstrip-rec-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px 2px rgba(16, 185, 129, 0.6), 0 0 0 1px rgba(16, 185, 129, 0.3);
+  animation: none;
+  transform: none;
 }
 
 .filmstrip-rec-text {
@@ -10796,6 +11221,31 @@ body,
   font-size: 12px;
   color: #9ca3af;
   font-variant-numeric: tabular-nums;
+}
+
+/* 导演创作阐述：把 LLM 的 concept 呈现给用户，暗色面板内保持克制 */
+.filmstrip-concept {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.035);
+  border-left: 2px solid rgba(255, 255, 255, 0.28);
+  border-radius: 0 6px 6px 0;
+}
+.filmstrip-concept-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #d1d5db;
+  line-height: 1.6;
+}
+.filmstrip-concept-text {
+  font-size: 12px;
+  color: #b6bcc6;
+  line-height: 1.6;
 }
 
 /* 胶卷横向走带轨道 (支持 1~9 镜头原生滚动) */
@@ -10912,13 +11362,38 @@ body,
 }
 
 .filmstrip-motion-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
-  color: #60a5fa;
+  color: #93c5fd;
   background: rgba(96, 165, 250, 0.12);
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: 4px;
   align-self: flex-start;
   font-weight: 500;
+  animation: filmstrip-motion-in 0.42s ease-out both;
+}
+
+.motion-icon {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
+
+@keyframes filmstrip-motion-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .filmstrip-script-text {
@@ -11030,6 +11505,23 @@ body,
   .filmstrip-wave-bars span {
     animation: none;
     transform: scaleY(0.7);
+  }
+
+  .filmstrip-motion-tag {
+    animation: none;
+  }
+}
+
+/* 窄屏：录制徽标与进度状态改为两行，避免相互挤压；红点始终清晰可见 */
+@media (max-width: 560px) {
+  .filmstrip-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .filmstrip-meta-status {
+    font-size: 11px;
   }
 }
 
@@ -11484,14 +11976,37 @@ body,
   color: #737579 !important;
 }
 
+/* 经营总览类页面卡片淡色主题：与用户运营/服务器/导演效能的浅色卡片保持同一调性。
+   四个页面用不同色相做轻区分；文字仍用深色，符合后台对比度标准。 */
+.admin-console-container:has(.admin-body > .overview-viewport) {
+  --admin-page-card-tint: linear-gradient(120deg, #f2f6fd 0%, #ffffff 68%, #f6f9ff 100%);
+  --admin-page-card-border: #e1e8f4;
+}
+
+.admin-console-container:has(.admin-body > .overview-viewport.admin-pricing-viewport) {
+  --admin-page-card-tint: linear-gradient(120deg, #f5f4fd 0%, #ffffff 68%, #f9f8ff 100%);
+  --admin-page-card-border: #e7e5f5;
+}
+
+.admin-console-container:has(.admin-body > .overview-viewport.partner-finance-viewport) {
+  --admin-page-card-tint: linear-gradient(120deg, #f0f8f4 0%, #ffffff 68%, #f6fbf8 100%);
+  --admin-page-card-border: #dcece3;
+}
+
+.admin-console-container:has(.admin-body > .overview-viewport.admin-inbox-viewport) {
+  --admin-page-card-tint: linear-gradient(120deg, #f5f3ff 0%, #ffffff 68%, #faf8ff 100%);
+  --admin-page-card-border: #e8e4f6;
+}
+
 .admin-console-container:has(.admin-body > .overview-viewport) .admin-dashboard-kpi,
 .admin-console-container:has(.admin-body > .overview-viewport) .admin-visual-card,
 .admin-console-container:has(.admin-body > .overview-viewport) .admin-performance-primary,
 .admin-console-container:has(.admin-body > .overview-viewport) .admin-stage-list,
 .admin-console-container:has(.admin-body > .overview-viewport) .overview-card,
-.admin-console-container:has(.admin-body > .overview-viewport) .admin-user-chart-card {
-  background: #fff !important;
-  border: 1px solid #e5e5e2 !important;
+.admin-console-container:has(.admin-body > .overview-viewport) .admin-user-chart-card,
+.admin-console-container:has(.admin-body > .overview-viewport) .admin-trend-mini {
+  background: var(--admin-page-card-tint) !important;
+  border: 1px solid var(--admin-page-card-border) !important;
   color: #292a2c !important;
   box-shadow: none !important;
 }
@@ -11678,6 +12193,68 @@ body,
   background: #f1f3f4;
   color: var(--jansee-text-primary, #202124);
   border-color: #d1d5db;
+}
+
+/* 任务失败提示：语义化 Danger 色，不使用霓虹/发光，复用交付通知的结构节奏 */
+.job-failure-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--jansee-surface-subtle, #f7f7f5);
+  box-sizing: border-box;
+}
+
+.job-failure-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid var(--jansee-border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.job-failure-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--jansee-danger, #b54747);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.job-failure-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.job-failure-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--jansee-danger, #b54747);
+  line-height: 1.4;
+}
+
+.job-failure-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--jansee-text-primary, #202124);
+  line-height: 1.5;
+}
+
+.job-failure-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--jansee-text-secondary, #5f6368);
+  line-height: 1.5;
 }
 
 .job-delivery-notice-pending {
@@ -11984,24 +12561,27 @@ body,
 
 .work-cover-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
   margin-top: 2px;
 }
 
 .work-cover-btn-action {
   display: inline-flex;
+  flex: 1 1 0;
+  min-width: 0;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  height: 28px;
+  height: 32px;
   padding: 0 10px;
   border: 1px solid var(--jansee-border, #e5e7eb);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #ffffff;
   color: var(--jansee-text-secondary, #5f6368);
   font-size: 11px;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -12010,6 +12590,19 @@ body,
   background: #f7f7f5;
   color: var(--jansee-text-primary, #202124);
   border-color: #d1d5db;
+}
+
+/* 下载封面为主操作：深色实底；截取帧为次要操作：白底描边。两者同高、等宽。 */
+.work-cover-btn-download {
+  border-color: var(--jansee-action, #252629);
+  background: var(--jansee-action, #252629);
+  color: #ffffff;
+}
+
+.work-cover-btn-download:hover {
+  background: var(--jansee-action-hover, #111214);
+  border-color: var(--jansee-action-hover, #111214);
+  color: #ffffff;
 }
 
 .work-cover-btn-action svg {
@@ -12084,9 +12677,16 @@ body,
     width: 64px;
   }
 
+  /* 窄屏下两个封面操作按钮纵向堆叠、占满宽度，保证文字完整与触摸目标。 */
+  .work-cover-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .work-cover-btn-action {
-    height: 26px;
-    padding: 0 8px;
-    font-size: 10.5px;
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    font-size: 12px;
   }
 }
