@@ -1,8 +1,40 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type TouchEvent } from "react";
 import type { CreationMode } from "@jansee/contracts";
 import QRCode from "qrcode";
+import { Filmstrip } from "./Filmstrip";
 
 const AdminConsole = lazy(() => import("./AdminConsole").then((m) => ({ default: m.AdminConsole })));
+
+type ClientPlatform = "ios" | "android" | "desktop";
+
+/** 一行字轻提示统一 2.5 秒自动消失；重复设置会重置计时，传空串立即清空。 */
+const NOTICE_DURATION_MS = 2500;
+function useTimedNotice(): [string, (next: string) => void] {
+  const [value, setValue] = useState("");
+  const timerRef = useRef<number | undefined>(undefined);
+  const set = useCallback((next: string) => {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    setValue(next);
+    timerRef.current = next ? window.setTimeout(() => {
+      setValue("");
+      timerRef.current = undefined;
+    }, NOTICE_DURATION_MS) : undefined;
+  }, []);
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); }, []);
+  return [value, set];
+}
+
+// APK 发布地址：替换为正式下载地址后即可生效，面板与二维码共用此值。
+const ANDROID_APK_URL = "https://jansee.cn/download/jansee.apk";
+
+function detectClientPlatform(): ClientPlatform {
+  if (typeof navigator === "undefined") return "desktop";
+  const ua = navigator.userAgent;
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  if (/iPad|iPhone|iPod/i.test(ua) || (isMobile && /Macintosh/i.test(ua))) return "ios";
+  if (/Android/i.test(ua)) return "android";
+  return "desktop";
+}
 
 type Attachment = {
   name: string;
@@ -14,6 +46,8 @@ type Attachment = {
 export type WorkItem = {
   id: string;
   jobId: string;
+  // 引擎生成的纯净封面地址（无烧录台词、无 AI 角标）；旧作品为 null，回退到视频截帧。
+  coverUrl?: string | null;
   mimeType: string;
   sizeBytes: number;
   durationMs: number | null;
@@ -42,6 +76,7 @@ type ChatMessage = {
   creationScene?: "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut";
   creationMode?: CreationMode;
   attachments?: Attachment[];
+  isWorkbench?: boolean;
   plan?: string[];
   jobId?: string;
   jobStatus?: string;
@@ -94,14 +129,34 @@ type SpeechRecognitionLike = {
   interimResults: boolean;
   continuous: boolean;
   onresult: ((event: { resultIndex: number; results: ArrayLike<SpeechResult> }) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
 };
+
+function voiceErrorMessage(code?: string) {
+  switch (code) {
+    case "not-allowed":
+    case "service-not-allowed":
+      return "麦克风权限未开启，请在浏览器或系统设置里允许简兮使用麦克风后重试。";
+    case "no-speech":
+      return "没有听到声音，请靠近麦克风再试一次。";
+    case "audio-capture":
+      return "没有找到可用的麦克风，请检查设备后重试。";
+    case "network":
+      return "语音服务暂时连不上，请检查网络后重试。";
+    default:
+      return "语音输入暂不可用，请检查麦克风权限后重试。";
+  }
+}
 type SpeechWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionLike;
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  // 安卓 APK 的 WebView 注入原生语音识别桥；浏览器端走 Web Speech API。
+  JanseeVoice?: { start: () => void; cancel: () => void };
+  __janseeVoiceResult?: ((text: string) => void) | undefined;
+  __janseeVoiceError?: ((message: string) => void) | undefined;
 };
 
 const JOB_PROGRESS_LOGS: Record<string, Array<{ speaker: string; text: string }>> = {
@@ -187,50 +242,18 @@ export default function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const uploadPromisesRef = useRef<Map<string, Promise<string>>>(new Map());
-  const [fileError, setFileError] = useState("");
+  const [fileError, setFileError] = useTimedNotice();
+  // 游客点收费场景的轻提示：同样 2.5 秒自动消失，与创作框错误位分开显示。
+  const [guestTip, setGuestTip] = useTimedNotice();
+  // 底部思考气泡已下线，但 isDirectorThinking 仍用于提交防重入与按钮加载态。
   const [isDirectorThinking, setIsDirectorThinking] = useState(false);
-  const activeThinkingState = useMemo(() => {
-    if (isDirectorThinking) {
-      return {
-        speaker: "简兮团队",
-        text: "简兮团队正在分析素材特征，构思分镜脚本与台词...",
-      };
-    }
-    const activeJobMessage = [...messages].reverse().find(
-      (m) => m.jobId && m.jobStatus !== "preview" && !["completed", "failed", "cancelled"].includes(m.jobStatus ?? "")
-    );
-    if (activeJobMessage) {
-      const status = activeJobMessage.jobStatus;
-      if (status === "queued") {
-        return { speaker: "简兮导演", text: "正在统筹算力资源与排期..." };
-      }
-      if (status === "inspecting") {
-        return { speaker: "简兮美术师", text: "正在解析素材视觉特征与画面色彩基调..." };
-      }
-      if (status === "planning") {
-        return { speaker: "简兮导演", text: "正在编排镜头结构与下发流水线任务..." };
-      }
-      if (status === "rendering") {
-        return { speaker: "简兮制作团队", text: "正在进行分镜运镜转场与多轨混音合成..." };
-      }
-      if (status === "quality-check") {
-        return { speaker: "简兮质检师", text: "正在逐项核验音视频完整性与交付合规信息..." };
-      }
-      return { speaker: "简兮制作团队", text: "正在全力制作中，请稍候..." };
-    }
-    const speechCutActive = messages.some(
-      (m) => m.speechCutSessionId && ["analyzing", "producing"].includes(m.speechCutStatus ?? "")
-    );
-    if (speechCutActive) {
-      return { speaker: "简兮剪辑师", text: "正在进行高精度人声识别与停顿分析..." };
-    }
-    return null;
-  }, [isDirectorThinking, messages]);
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [listeningRemainingSeconds, setListeningRemainingSeconds] = useState(60);
+  const voiceTimerRef = useRef<number | null>(null);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeHeaderPanel, setActiveHeaderPanel] = useState<"works" | "login" | "recharge" | "orders" | "ledger" | "inbox" | "admin" | "admin-login" | null>(() => {
+  const [activeHeaderPanel, setActiveHeaderPanel] = useState<"works" | "login" | "recharge" | "orders" | "ledger" | "inbox" | "install" | "admin" | "admin-login" | null>(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (window.location.hostname.toLowerCase() === "admin.jansee.cn" || window.location.pathname.replace(/\/+$/, "") === "/admin" || params.get("admin") === "1" || window.location.hash === "#admin") {
@@ -288,6 +311,16 @@ export default function App() {
   }, []);
 
   const isEmpty = messages.length === 0;
+  // 游客（未登录或未绑定手机/邮箱）不展示积分与财务信息；注册/登录后才显示。
+  // 认证未完成（authUser 仍为 null）时同样按游客处理，避免身份确定前闪出积分。
+  const isGuestViewer = !authUser || authUser.isGuest === true;
+
+  // 游客默认落在免费场景，避免一进来就停在锁定的带货/门店上；认证完成前不判断，避免误伤登录用户。
+  useEffect(() => {
+    if (authResolved && isGuestViewer && (creationScene === "online-ecommerce" || creationScene === "physical-store")) {
+      setCreationScene("personal-creation");
+    }
+  }, [authResolved, isGuestViewer, creationScene]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -368,12 +401,12 @@ export default function App() {
       .then((payload) => {
         if (active && payload?.user) {
           setAuthUser(payload.user);
-          refreshWallet();
+          // 游客没有积分账户，不拉钱包，避免任何余额进入前端状态。
+          if (!payload.user.isGuest) void refreshWallet();
         }
       })
       .catch(() => undefined)
       .finally(() => { if (active) setAuthResolved(true); });
-    refreshWallet();
     return () => { active = false; };
   }, [refreshWallet]);
 
@@ -751,10 +784,16 @@ export default function App() {
     document.body.removeChild(a);
   }
 
+  // 游客点收费场景：不切换场景，弹登录面板 + 2.5 秒自动消失的轻提示。
+  function guideGuestToRegister(sceneLabel: string) {
+    setGuestTip(`${sceneLabel}为注册用户的付费功能，请先登录或注册`);
+    setActiveHeaderPanel("login");
+  }
+
   function handleWorkDownload(workId: string, filename: string) {
     if (!authUser || authUser.isGuest) {
       setPendingDownloadWork({ id: workId, filename });
-      setFileError("视频制作完成！请登录或注册账号后保存并下载高清原片。");
+      setGuestTip("视频制作完成！请登录或注册账号后保存并下载高清原片。");
       setActiveHeaderPanel("login");
       return;
     }
@@ -874,6 +913,11 @@ export default function App() {
     event?.preventDefault();
     const trimmed = draft.trim();
     if (isDirectorThinking) return;
+    // 服务端底线拦截之外的前端引导：游客即使停在默认的收费场景，也在发请求前就引导注册。
+    if (isGuestViewer && (creationScene === "online-ecommerce" || creationScene === "physical-store")) {
+      guideGuestToRegister(creationScene === "online-ecommerce" ? "带货视频" : "门店获客");
+      return;
+    }
     if (!files.length) { setFileError("请先上传图片或视频素材，导演才能结合实际素材制定方案。"); return; }
     if (!trimmed) { setFileError("请告诉导演你希望这支视频呈现什么内容或效果。"); return; }
     if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; setIsListening(false); }
@@ -890,7 +934,7 @@ export default function App() {
           const payload = await guestRes.json() as { user: AuthUser };
           currentAuthUser = payload.user;
           setAuthUser(payload.user);
-          void refreshWallet();
+          // 游客不拉钱包，避免游客态出现积分余额。
         }
       } catch {
         // 网络异常降级处理
@@ -917,7 +961,12 @@ export default function App() {
       text: submittingDraft,
       creationScene: submittingScene,
       creationMode: submittingMode,
-      attachments: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
+      // 带本地 blob 预览：工作台胶片面板直接渲染用户上传的素材缩略图，
+      // 不依赖后端下载路由（当前无 /api/assets/:id/download），刷新后失效可接受（仅制作中展示）。
+      attachments: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size, previewUrl: URL.createObjectURL(file) })),
+      // 用户一点创作就把这条消息当工作台载体：胶片面板见 isWorkbench 立即弹出，
+      // 不等 LLM 规划（jobId 要 20-34 秒后才有）。规划完成后把 jobId/进度挂到这条消息继续演进。
+      isWorkbench: true,
     };
     const baseMessages = [...messages, userMessage];
     const baseConversation: SavedConversation = {
@@ -956,6 +1005,7 @@ export default function App() {
 
     // 仅在调用 LLM 导演（三大生成场景）时展示多角色思考过程；纯一句话剪辑直通本地数控，无需漫长思考
     const isPureCut = submittingScene === "quick-cut";
+    const isFreeScene = submittingScene === "personal-creation" || submittingScene === "quick-cut";
     let intermediateFinished = isPureCut;
     const intermediateTimer1 = isPureCut ? 0 : window.setTimeout(() => {
       if (intermediateFinished) return;
@@ -1010,12 +1060,18 @@ export default function App() {
         } catch (uploadErr) {
           throw new Error(uploadErr instanceof Error ? uploadErr.message : "素材上传还没有完成，请在输入框确认素材状态后重新发送。");
         }
-        let attachments: Attachment[] = submittingFiles.map((file, index) => ({
-          name: file.name,
-          kind: mediaKind(file)!,
-          size: file.size,
-          assetId: assetIds[index]!,
-        }));
+        // 保留第 986 行已生成的本地 blob 预览，只补 assetId；重复 createObjectURL 会泄漏内存。
+        // 历史消息（刷新后恢复）没有 blob，则用 assetId 兜底（后端路由就绪后可显示）。
+        let attachments: Attachment[] = submittingFiles.map((file, index) => {
+          const prior = (messagesWithAck.find((message) => message.id === userMessage.id)?.attachments?.[index]) as Record<string, unknown> | undefined;
+          return {
+            name: file.name,
+            kind: mediaKind(file)!,
+            size: file.size,
+            assetId: assetIds[index]!,
+            ...(typeof prior?.previewUrl === "string" ? { previewUrl: prior.previewUrl } : {}),
+          };
+        });
         const baseMessagesWithAssets = messagesWithAck.map((message) => message.id === userMessage.id ? { ...message, attachments } : message);
         setConversations((current) => current.map((conversation) => conversation.id === conversationId
           ? { ...conversation, updatedAt: Date.now(), messages: baseMessagesWithAssets }
@@ -1068,21 +1124,24 @@ export default function App() {
             mode: submittingMode,
             prompt: submittingPrompt,
             aspectRatio: "9:16",
+            creationScene: submittingScene,
             assetIds,
           }),
         });
+        type PlanPayload = {
+          title: string;
+          concept: string;
+          scenes: Array<{ order: number; description: string }>;
+          style: string;
+          soundtrack: string;
+          anchor?: string;
+          voice_id?: string;
+          bgm_emotion?: string;
+        };
         let payload = await response.json() as {
-          plan?: {
-            title: string;
-            concept: string;
-            durationSeconds: number;
-            scenes: Array<{ order: number; description: string; durationSeconds: number }>;
-            style: string;
-            soundtrack: string;
-            anchor?: string;
-            voice_id?: string;
-            bgm_emotion?: string;
-          };
+          plan?: PlanPayload;
+          // 批量赛马：规划接口一次 LLM 调用产出的 N 版差异化方案
+          plans?: PlanPayload[];
           batch?: { total?: number };
           error?: { code?: string; message?: string };
         };
@@ -1090,12 +1149,16 @@ export default function App() {
         if (!response.ok && payload.error?.code === "ASSET_NOT_FOUND") {
           submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
           assetIds = await ensureUploads(submittingFiles);
-          attachments = submittingFiles.map((file, index) => ({
-            name: file.name,
-            kind: mediaKind(file)!,
-            size: file.size,
-            assetId: assetIds[index]!,
-          }));
+          attachments = submittingFiles.map((file, index) => {
+            const prior = (messagesWithAck.find((message) => message.id === userMessage.id)?.attachments?.[index]) as Record<string, unknown> | undefined;
+            return {
+              name: file.name,
+              kind: mediaKind(file)!,
+              size: file.size,
+              assetId: assetIds[index]!,
+              ...(typeof prior?.previewUrl === "string" ? { previewUrl: prior.previewUrl } : {}),
+            };
+          });
           response = await fetch("/api/v1/director/plan", {
             method: "POST",
             credentials: "include",
@@ -1104,6 +1167,7 @@ export default function App() {
               mode: submittingMode,
               prompt: submittingPrompt,
               aspectRatio: "9:16",
+              creationScene: submittingScene,
               assetIds,
             }),
           });
@@ -1112,6 +1176,8 @@ export default function App() {
 
         if (!response.ok || !payload.plan) throw new Error(payload.error?.message || "导演服务暂时不可用，请稍后重试。");
         const plan = payload.plan;
+        // 批量赛马新链路：规划接口一次调用返回 N 版方案；plans 缺失时回退单版（兼容旧服务端）。
+        const plans = (payload.plans && payload.plans.length ? payload.plans : [plan]) as PlanPayload[];
         // 多版成片（批量赛马）：版数来自服务端对用户文字/语音输入的解析，非滑动条
         const batchTotal = Math.max(1, Math.min(10, Math.floor(payload.batch?.total ?? 1)));
         // 方案确认环节已下线：方案生成后直接创建制作任务，进度像聊天一样逐条汇报。
@@ -1123,8 +1189,10 @@ export default function App() {
             mode: submittingMode,
             prompt: submittingPrompt,
             aspectRatio: "9:16",
+            creationScene: submittingScene,
             assetIds,
             directorPlan: plan as Record<string, unknown>,
+            ...(batchTotal > 1 && plans.length > 1 ? { directorPlans: plans } : {}),
             idempotencyKey: crypto.randomUUID(),
             ...(batchTotal > 1 ? { versions: batchTotal } : {}),
           }),
@@ -1143,8 +1211,10 @@ export default function App() {
               mode: submittingMode,
               prompt: submittingPrompt,
               aspectRatio: "9:16",
+              creationScene: submittingScene,
               assetIds,
               directorPlan: plan as Record<string, unknown>,
+              ...(batchTotal > 1 && plans.length > 1 ? { directorPlans: plans } : {}),
               idempotencyKey: crypto.randomUUID(),
               ...(batchTotal > 1 ? { versions: batchTotal } : {}),
             }),
@@ -1161,20 +1231,25 @@ export default function App() {
           : null;
         const planSite = (plan as Record<string, unknown>).site;
         const planList = [
-          ...plan.scenes.map((scene) => "镜头 " + scene.order + "（" + scene.durationSeconds + " 秒" + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "）：" + scene.description),
+          ...plan.scenes.map((scene) => "镜头 " + scene.order + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "：" + scene.description),
           ...(typeof planSite === "string" && planSite.trim() ? ["高奢英文署名：" + planSite.trim()] : []),
           "整体风格：" + plan.style,
           "配乐方向：" + plan.soundtrack,
           ...(directorRoleLine ? [directorRoleLine] : []),
           "BGM 情绪：" + (plan.bgm_emotion || "温和垫底") + "（两段式音量 0.10/0.22 避让人声）",
           "转场效果：0.7 秒柔和叠画（宪法级过渡）",
-          "总导演规划全片时长：" + plan.durationSeconds + " 秒",
+          "成片时长：按配音实测自动对齐",
         ];
+        // 工作台移交：用户消息不再显示面板（避免重复），把素材附件（含本地缩略图）
+        // 复制给带 jobId 的导演消息，让进度阶段胶片区继续显示用户上传的素材。
+        const baseMessagesForWorkbench = baseMessagesWithAssets.map((message) =>
+          message.id === userMessage.id ? { ...message, isWorkbench: false } : message);
+        const workbenchAttachments = attachments;
         if (batchTotal > 1 && createdJobs.length > 1) {
           // 批量赛马：方案一条 + 每版独立进度卡片（每条各自轮询各自的 jobId）。
           const planMessage: ChatMessage = {
             id: makeId(), role: "director",
-            text: "构思完成啦！为你规划了《" + plan.title + "》：" + plan.concept + " 接下来我会为你制作 " + createdJobs.length + " 版不同风格取向的成片（合计消耗 " + createdJobs.length * 200 + " 积分），哪个版本最先做好就第一时间发给你～",
+            text: "构思完成啦！为你规划了《" + plan.title + "》：" + plan.concept + " 接下来我会为你制作 " + createdJobs.length + " 版不同风格取向的成片" + (isFreeScene ? "（免费，不消耗积分）" : "（合计消耗 " + createdJobs.length * 200 + " 积分）") + "，哪个版本最先做好就第一时间发给你～",
             createdAt: Date.now(),
             plan: planList,
           };
@@ -1185,17 +1260,18 @@ export default function App() {
             jobId: job.id,
             jobStatus: job.status,
             jobProgress: job.progress,
-            jobDirectorPlan: plan as Record<string, unknown>,
+            jobDirectorPlan: ((plans[index] ?? plan) as unknown as Record<string, unknown>),
             creationScene: submittingScene,
+            attachments: workbenchAttachments,
           }));
-          const nextMessages = [...baseMessagesWithAssets, planMessage, ...versionMessages];
+          const nextMessages = [...baseMessagesForWorkbench, planMessage, ...versionMessages];
           setConversations((current) => current.map((conversation) => conversation.id === conversationId
             ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
             : conversation));
         } else {
           const directorMessage: ChatMessage = {
             id: makeId(), role: "director",
-            text: "构思完成啦！为你规划了《" + plan.title + "》：" + plan.concept + " 我现在就带领团队全力制作，做好了直接发在对话里（本次制作消耗 200 积分）～",
+            text: "构思完成啦！为你规划了《" + plan.title + "》：" + plan.concept + " 我现在就带领团队全力制作，做好了直接发在对话里" + (isFreeScene ? "（本次制作免费，不消耗积分）" : "（本次制作消耗 200 积分）") + "～",
             createdAt: Date.now(),
             plan: planList,
             jobId: createdJobs[0]!.id,
@@ -1203,8 +1279,9 @@ export default function App() {
             jobProgress: createdJobs[0]!.progress,
             jobDirectorPlan: plan as Record<string, unknown>,
             creationScene: submittingScene,
+            attachments: workbenchAttachments,
           };
-          const nextMessages = [...baseMessagesWithAssets, directorMessage];
+          const nextMessages = [...baseMessagesForWorkbench, directorMessage];
           setConversations((current) => current.map((conversation) => conversation.id === conversationId
             ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
             : conversation));
@@ -1212,16 +1289,13 @@ export default function App() {
       } else {
         // Local mock mode keeps the director preview usable without a running API.
         // It intentionally stops at a plan preview and never claims a rendered video exists.
-        const mockDurationSeconds = Math.max(12, submittingFiles.length * 3 + 6);
         const mockScenes = submittingFiles.map((file, index) => ({
           order: index + 1,
-          durationSeconds: 3,
           description: `展示素材 ${index + 1}：${file.name}，突出主体、质感与价格信息。`,
         }));
         const mockPlan = {
           title: "本地 Mock 导演预览",
           concept: `围绕“${submittingPrompt}”组织 ${submittingFiles.length} 个镜头，先完成卖点建立，再收束到行动引导。`,
-          durationSeconds: mockDurationSeconds,
           scenes: mockScenes,
           style: "明亮、克制、突出商品质感",
           soundtrack: "轻快、低存在感，避免压过人声",
@@ -1239,10 +1313,10 @@ export default function App() {
             previewUrl: URL.createObjectURL(file),
           })),
           plan: [
-            ...mockPlan.scenes.map((scene) => `镜头 ${scene.order}：${scene.durationSeconds} 秒：${scene.description}`),
+            ...mockPlan.scenes.map((scene) => `镜头 ${scene.order}：${scene.description}`),
             `整体风格：${mockPlan.style}`,
             `配乐方向：${mockPlan.soundtrack}`,
-            `总导演规划时长：${mockPlan.durationSeconds} 秒`,
+            `成片时长：按配音实测自动对齐`,
           ],
           jobStatus: "preview",
           jobProgress: 100,
@@ -1257,57 +1331,74 @@ export default function App() {
         if (textareaRef.current) textareaRef.current.style.height = "auto";
         return;
       }
-        /* Legacy API-only preview branch is unreachable in local mock mode.
-        const response = await fetch("/api/v1/director/plan", {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            mode: submittingMode,
-            prompt: submittingPrompt,
-            aspectRatio: "9:16",
-            assets: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
-          }),
-        });
-        const payload = await response.json() as {
-          plan?: {
-            title: string;
-            concept: string;
-            durationSeconds: number;
-            scenes: Array<{ order: number; description: string; durationSeconds: number }>;
-            style: string;
-            soundtrack: string;
-          };
-          error?: { message?: string };
+      /* Legacy API-only preview branch is unreachable in local mock mode.
+      const response = await fetch("/api/v1/director/plan", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: submittingMode,
+          prompt: submittingPrompt,
+          aspectRatio: "9:16",
+          assets: submittingFiles.map((file) => ({ name: file.name, kind: mediaKind(file)!, size: file.size })),
+        }),
+      });
+      const payload = await response.json() as {
+        plan?: {
+          title: string;
+          concept: string;
+          scenes: Array<{ order: number; description: string }>;
+          style: string;
+          soundtrack: string;
         };
-        if (!response.ok || !payload.plan) throw new Error(payload.error?.message || "导演服务暂时不可用，请稍后重试。");
-        const plan = payload.plan;
-        const previewSite = (plan as Record<string, unknown>).site;
-        const directorMessage: ChatMessage = {
-          id: makeId(), role: "director",
-          text: "初步构思好啦！这版方案命名为《" + plan.title + "》：" + plan.concept + " 这是为你量身规划的预览方案；登录后就可以正式进入成片流水线制作啦～",
-          createdAt: Date.now(),
-          plan: [
-            ...plan.scenes.map((scene) => "镜头 " + scene.order + "（" + scene.durationSeconds + " 秒" + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "）：" + scene.description),
-            ...(typeof previewSite === "string" && previewSite.trim() ? ["高奢英文署名：" + previewSite.trim()] : []),
-            "整体风格：" + plan.style,
-            "配乐方向：" + plan.soundtrack,
-            "总导演规划全片时长：" + plan.durationSeconds + " 秒",
-          ],
-        };
-        const nextMessages = [...messagesWithAck, directorMessage];
-        setConversations((current) => current.map((conversation) => conversation.id === conversationId
-          ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
-          : conversation));
-      }
-      */
+        error?: { message?: string };
+      };
+      if (!response.ok || !payload.plan) throw new Error(payload.error?.message || "导演服务暂时不可用，请稍后重试。");
+      const plan = payload.plan;
+      const previewSite = (plan as Record<string, unknown>).site;
+      const directorMessage: ChatMessage = {
+        id: makeId(), role: "director",
+        text: "初步构思好啦！这版方案命名为《" + plan.title + "》：" + plan.concept + " 这是为你量身规划的预览方案；登录后就可以正式进入成片流水线制作啦～",
+        createdAt: Date.now(),
+        plan: [
+          ...plan.scenes.map((scene) => "镜头 " + scene.order + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "：" + scene.description),
+          ...(typeof previewSite === "string" && previewSite.trim() ? ["高奢英文署名：" + previewSite.trim()] : []),
+          "整体风格：" + plan.style,
+          "配乐方向：" + plan.soundtrack,
+          "成片时长：按配音实测自动对齐",
+        ],
+      };
+      const nextMessages = [...messagesWithAck, directorMessage];
+      setConversations((current) => current.map((conversation) => conversation.id === conversationId
+        ? { ...conversation, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
+        : conversation));
+    }
+    */
       setDraft(""); setFiles([]);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "创作过程中遇到问题，请稍后重试。";
-      setConversations((current) => current.map((conversation) => conversation.id === conversationId
-        ? { ...conversation, updatedAt: Date.now(), messages: [...conversation.messages, { id: makeId(), role: "director" as const, text: "这次创作没能继续：" + reason }] }
-        : conversation));
+      const rawMessage = error instanceof Error ? error.message : "创作过程中遇到问题，请稍后重试。";
+      const isTimeout = /timed out|TIMEOUT|超时|不可用|DIRECTOR_ALL_MODELS_FAILED/i.test(rawMessage);
+      const friendlyNotice = isTimeout ? "网络偶发超时，点击重试" : ("这次创作没能继续：" + rawMessage);
+      setConversations((current) => current.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        // 发生异常时，将正在等待的用户消息解除 isWorkbench，避免工作台空转悬停
+        const clearedMessages = conversation.messages.map((m) =>
+          m.id === userMessage.id ? { ...m, isWorkbench: false } : m);
+        return {
+          ...conversation,
+          updatedAt: Date.now(),
+          messages: [
+            ...clearedMessages,
+            {
+              id: makeId(),
+              role: "director" as const,
+              text: friendlyNotice,
+              createdAt: Date.now(),
+            },
+          ],
+        };
+      }));
     } finally {
       intermediateFinished = true;
       window.clearTimeout(intermediateTimer1);
@@ -1372,18 +1463,75 @@ export default function App() {
     }
   }
 
-  function toggleVoiceInput() {
+  const stopVoiceInput = useCallback(() => {
+    if (voiceTimerRef.current) {
+      window.clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    const speechWindow = window as SpeechWindow;
+    speechWindow.JanseeVoice?.cancel();
+    speechWindow.__janseeVoiceResult = undefined;
+    speechWindow.__janseeVoiceError = undefined;
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // no-op
+      }
       recognitionRef.current = null;
-      setIsListening(false);
+    }
+    setIsListening(false);
+    setListeningRemainingSeconds(60);
+  }, []);
+
+  function beginVoiceSession() {
+    setIsListening(true);
+    setListeningRemainingSeconds(60);
+    if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current);
+    voiceTimerRef.current = window.setInterval(() => {
+      setListeningRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          stopVoiceInput();
+          return 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  function toggleVoiceInput() {
+    if (recognitionRef.current || isListening) {
+      stopVoiceInput();
       return;
     }
 
     const speechWindow = window as SpeechWindow;
+    if (speechWindow.JanseeVoice) {
+      setFileError("");
+      speechWindow.__janseeVoiceResult = (text) => {
+        const transcript = text.trim();
+        if (transcript) {
+          setDraft((current) => `${current}${current.trim() ? " " : ""}${transcript}`);
+        }
+        stopVoiceInput();
+      };
+      speechWindow.__janseeVoiceError = (message) => {
+        stopVoiceInput();
+        if (message.trim()) setFileError(message);
+      };
+      try {
+        beginVoiceSession();
+        speechWindow.JanseeVoice.start();
+      } catch {
+        stopVoiceInput();
+        setFileError("无法启动语音输入，请检查麦克风权限。");
+      }
+      return;
+    }
+
     const SpeechRecognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setFileError("当前浏览器暂不支持语音输入，请使用 Chrome 或 Edge。");
+      setFileError("当前浏览器不支持语音输入，可以点输入框后用系统键盘的麦克风按钮听写。");
       return;
     }
 
@@ -1391,7 +1539,10 @@ export default function App() {
     const recognition = new SpeechRecognition();
     recognition.lang = "zh-CN";
     recognition.interimResults = true;
-    recognition.continuous = true;
+    // iOS Safari 的连续识别很不稳定，单段识别更容易正常结束并回填文字。
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.platform)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    recognition.continuous = !isIOS;
     recognition.onresult = (event) => {
       let finalText = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -1402,23 +1553,20 @@ export default function App() {
         setDraft((current) => `${current}${current.trim() ? " " : ""}${finalText.trim()}`);
       }
     };
-    recognition.onerror = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-      setFileError("语音输入暂不可用，请检查麦克风权限。");
+    recognition.onerror = (event) => {
+      stopVoiceInput();
+      setFileError(voiceErrorMessage(event.error));
     };
     recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
+      stopVoiceInput();
     };
 
     try {
       recognitionRef.current = recognition;
+      beginVoiceSession();
       recognition.start();
-      setIsListening(true);
     } catch {
-      recognitionRef.current = null;
-      setIsListening(false);
+      stopVoiceInput();
       setFileError("无法启动语音输入，请检查浏览器麦克风权限。");
     }
   }
@@ -1528,90 +1676,38 @@ export default function App() {
                     </p>
 
 
-                    {/* 片场分镜手稿 / 胶片冲洗走带流 (Live Director Filmstrip) */}
-                    {message.jobId && !message.jobWorkId && message.jobStatus !== "failed" && (
-                      <div className="director-filmstrip-panel" aria-label="片场分镜手稿与冲洗监视舱">
-                        <div className="filmstrip-header">
-                          <div className="filmstrip-live-badge">
-                            <span className="filmstrip-rec-dot" />
-                            <span className="filmstrip-rec-text">REC 35MM · DIRECTING · {(message.creationScene ?? creationScene) === "online-ecommerce" ? "带货视频" : (message.creationScene ?? creationScene) === "physical-store" ? "门店获客" : (message.creationScene ?? creationScene) === "personal-creation" ? "个人创作" : "一句话剪辑"}</span>
-                          </div>
-                          <div className="filmstrip-meta-status">
-                            {message.jobStatus === "queued" && "排队调度中 · 准备算力"}
-                            {message.jobStatus === "inspecting" && "素材底片校验 · 构图分析"}
-                            {message.jobStatus === "planning" && "导演分镜执笔 · 台词显影"}
-                            {message.jobStatus === "rendering" && `多轨避让混音与转场压制 · ${Math.round(message.jobProgress ?? 45)}%`}
-                            {message.jobStatus === "quality-check" && "画质与音频合规复验 · 即将成片"}
-                          </div>
-                        </div>
-
-                        {/* 电影胶卷轨道 (Film Reel Strip) - 支持 1~9 镜头原生横滑走带 */}
-                        <div className="filmstrip-track-wrapper">
-                          <div className="filmstrip-track">
-                            {(message.attachments && message.attachments.length > 0
-                              ? message.attachments
-                              : Array.from({ length: 4 }, (_, i) => ({ id: `stub-${i}`, name: `镜头 0${i + 1}`, kind: "image" as const }))
-                            ).map((att, idx) => {
-                              const planScenes = (message.jobDirectorPlan?.scenes as Array<Record<string, unknown>>) || [];
-                              const scene = planScenes[idx];
-                              const speechLine = typeof scene?.line === "string" ? scene.line : "";
-                              const motion = typeof scene?.motion === "string" ? scene.motion : (idx === 0 ? "0.7s叠化转场" : "微距慢推");
-
-                              const attObj = att as Record<string, unknown>;
-                              const frameKey = (attObj.id as string) || (attObj.assetId as string) || `frame-${idx}`;
-                              const previewUrl = (attObj.previewUrl as string) || (attObj.url as string) || (attObj.assetId ? `/api/assets/${attObj.assetId}/download` : "");
-
-                              return (
-                                <div className="filmstrip-frame" key={frameKey}>
-                                  <div className="filmstrip-frame-perforations-top">
-                                    <span /><span /><span /><span />
-                                  </div>
-                                  <div className="filmstrip-thumbnail-box">
-                                    {previewUrl ? (
-                                      <img src={previewUrl} alt={`第 ${idx + 1} 镜头素材`} className="filmstrip-img" />
-                                    ) : (
-                                      <div className="filmstrip-thumb-placeholder">
-                                        <span className="frame-num">0{idx + 1}</span>
-                                      </div>
-                                    )}
-                                    <span className="filmstrip-frame-tag">SCENE 0{idx + 1}</span>
-                                  </div>
-                                  <div className="filmstrip-frame-perforations-bottom">
-                                    <span /><span /><span /><span />
-                                  </div>
-
-                                  {/* 导演手稿台词与运镜批注 */}
-                                  <div className="filmstrip-script-notes">
-                                    <div className="filmstrip-motion-tag">{motion}</div>
-                                    <div className="filmstrip-script-text">
-                                      {speechLine ? (
-                                        <span>“{speechLine}”</span>
-                                      ) : (
-                                        <span className="filmstrip-script-placeholder">台词执笔构思中…</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* 电影工业控制信息槽 (音色波形与 BGM 情绪) */}
-                        <div className="filmstrip-footer">
-                          <div className="filmstrip-sound-engine">
-                            <span className="sound-engine-dot" />
-                            <span className="sound-engine-label">
-                              VOICE: {String(message.jobDirectorPlan?.voice_id || "403011")}
-                              {message.jobDirectorPlan?.bgm_emotion ? ` · BGM [${String(message.jobDirectorPlan.bgm_emotion)}]` : " · 混音避让已就绪"}
-                            </span>
-                          </div>
-                          <div className="filmstrip-wave-bars" aria-hidden="true">
-                            <span /><span /><span /><span /><span />
-                          </div>
-                        </div>
-                      </div>
+                    {/* 片场分镜手稿 / 胶片冲洗走带流 (Live Director Filmstrip)
+                        点创作即弹出：用户消息带 isWorkbench（素材附件+本地缩略图），
+                        规划完成后移交 jobId 给导演消息继续演进进度，全程同一个面板。 */}
+                    {(message.isWorkbench || message.jobId) && message.jobStatus !== "failed" && (
+                      <Filmstrip message={message} fallbackScene={creationScene} />
                     )}
+
+                    {/* 任务失败：明确告知结果、不暴露内部错误、说明恢复方式与积分去向 */}
+                    {message.jobId && !message.jobWorkId && message.jobStatus === "failed" && (() => {
+                      const failedScene = message.creationScene ?? creationScene;
+                      const isPaidFailed = failedScene === "online-ecommerce" || failedScene === "physical-store";
+                      return (
+                        <div className="job-failure-notice" role="alert">
+                          <span className="job-failure-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 7.5v5.5" />
+                              <path d="M12 16.5h.01" />
+                            </svg>
+                          </span>
+                          <div className="job-failure-body">
+                            <div className="job-failure-title">这次没能完成</div>
+                            <p className="job-failure-desc">制作过程中遇到了临时问题，你的素材和创作内容都已保留。</p>
+                            <p className="job-failure-hint">
+                              {isPaidFailed
+                                ? "本次消耗的积分已退回，可调整描述或素材后重试。"
+                                : "本次为免费创作，不消耗积分，可调整描述或素材后重试。"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {message.jobWorkId ? (
                       <div className="job-delivery">
@@ -1624,15 +1720,6 @@ export default function App() {
                           onLoadedMetadata={(event) => { event.currentTarget.currentTime = 0.1; }}
                           aria-label="简兮成片视频播放器"
                         />
-                        <div className="job-delivery-notice-actions">
-                          <button
-                            type="button"
-                            className="job-delivery-action-primary"
-                            onClick={() => handleWorkDownload(message.jobWorkId!, `jansee-${message.jobWorkId}.mp4`)}
-                          >
-                            下载原片 MP4
-                          </button>
-                        </div>
                         {(() => {
                           const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
                           const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
@@ -1736,7 +1823,7 @@ export default function App() {
                                     disabled={message.speechCutSubmitting}
                                     onClick={() => confirmSpeechCut(message.id, message.speechCutSessionId!, selectedIds)}
                                   >
-                                    {message.speechCutSubmitting ? "正在提交…" : "确认精剪并开始制作（200 积分）"}
+                                    {message.speechCutSubmitting ? "正在提交…" : "确认精剪并开始制作（免费）"}
                                   </button>
                                   {message.speechCutError && <p role="alert" style={{ margin: "8px 0 0", color: "#a33", fontSize: "13px" }}>{message.speechCutError}</p>}
                                 </div>
@@ -1750,35 +1837,24 @@ export default function App() {
                 </div>
               </article>
             ))}
-            {activeThinkingState && (
-              <article className="message-row message-director message-thinking" aria-live="polite">
-                <div className="message-content">
-                  <div className="message-author">{activeThinkingState.speaker}</div>
-                  <div className="message-bubble thinking-bubble">
-                    <div className="thinking-indicator-content">
-                      <span className="thinking-dots" aria-hidden="true">
-                        <span className="thinking-dot" />
-                        <span className="thinking-dot" />
-                        <span className="thinking-dot" />
-                      </span>
-                      <span className="thinking-caption">{activeThinkingState.text}</span>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            )}
+            {/* 底部“正在全力制作中…”思考气泡已移除：工作台面板的红点呼吸与顶部阶段状态
+                已完整表达“正在工作”，再挂一条文字气泡属重复信息，增加等待焦虑。制作中
+                仍由工作台面板承载，用户不会失去进度反馈。 */}
           </div>
         )}
       </section>
 
       <footer className="composer-dock">
         <div className="creation-scene-picker" role="group" aria-label="选择创作场景">
+          {guestTip && <div className="guest-tip" role="status">{guestTip}</div>}
           <div className="creation-scene-options">
             <button
               type="button"
-              className={creationScene === "online-ecommerce" ? "is-selected" : ""}
+              className={`${creationScene === "online-ecommerce" ? "is-selected" : ""}${isGuestViewer ? " is-locked" : ""}`}
               aria-pressed={creationScene === "online-ecommerce"}
+              title={isGuestViewer ? "注册登录后可使用" : undefined}
               onClick={() => {
+                if (isGuestViewer) { guideGuestToRegister("带货视频"); return; }
                 setCreationScene("online-ecommerce");
                 setPlaceholderIndex((prev) => prev + 1);
                 setFileError("");
@@ -1788,9 +1864,11 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={creationScene === "physical-store" ? "is-selected" : ""}
+              className={`${creationScene === "physical-store" ? "is-selected" : ""}${isGuestViewer ? " is-locked" : ""}`}
               aria-pressed={creationScene === "physical-store"}
+              title={isGuestViewer ? "注册登录后可使用" : undefined}
               onClick={() => {
+                if (isGuestViewer) { guideGuestToRegister("门店获客"); return; }
                 setCreationScene("physical-store");
                 setPlaceholderIndex((prev) => prev + 1);
                 setFileError("");
@@ -1808,7 +1886,7 @@ export default function App() {
                 setFileError("");
               }}
             >
-              个人创作
+              个人创作 <span className="creation-scene-free-label" title="免费" aria-label="免费">免</span>
             </button>
             <button
               type="button"
@@ -1820,7 +1898,7 @@ export default function App() {
                 setFileError("");
               }}
             >
-              一句话剪辑 <span className="creation-scene-free-label">（免费）</span>
+              一句话剪辑 <span className="creation-scene-free-label" title="免费" aria-label="免费">免</span>
             </button>
           </div>
         </div>
@@ -1975,13 +2053,30 @@ export default function App() {
                 className={`voice-button ${isListening ? "is-listening" : ""}`}
                 type="button"
                 onClick={toggleVoiceInput}
-                aria-label={isListening ? "停止语音输入" : "语音输入"}
-                title={isListening ? "停止语音输入" : "语音输入"}
+                aria-label={isListening ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）` : "语音输入"}
+                title={isListening ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）` : "语音输入"}
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="3" width="6" height="12" rx="3" />
-                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" />
-                </svg>
+                {isListening ? (
+                  <div className="voice-countdown-indicator" aria-hidden="true">
+                    <svg className="voice-countdown-svg" viewBox="0 0 52 52">
+                      <circle className="voice-countdown-bg" cx="26" cy="26" r="23" />
+                      <circle
+                        className="voice-countdown-progress"
+                        cx="26"
+                        cy="26"
+                        r="23"
+                        strokeDasharray="144.51"
+                        strokeDashoffset={144.51 * (1 - listeningRemainingSeconds / 60)}
+                      />
+                    </svg>
+                    <span className="voice-countdown-number">{listeningRemainingSeconds}</span>
+                  </div>
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="12" rx="3" />
+                    <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" />
+                  </svg>
+                )}
               </button>
               <button className="send-button" type="submit" disabled={isDirectorThinking || (!draft.trim() && files.length === 0)} aria-label={isDirectorThinking ? "导演正在构思" : "发送消息"} title={isDirectorThinking ? "导演正在构思" : "发送"}>
                 {isDirectorThinking ? <span className="send-loading" aria-hidden="true">···</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>}
@@ -2013,16 +2108,16 @@ export default function App() {
               <button
                 className="drawer-credit-link"
                 type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("recharge"); }}
+                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel(isGuestViewer ? "login" : "recharge"); }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
                 <span>算力积分</span>
-                {walletCredits !== null && <span className="drawer-credit-value">{String(walletCredits)}分</span>}
+                {!isGuestViewer && walletCredits !== null && <span className="drawer-credit-value">{String(walletCredits)}分</span>}
               </button>
               <button
                 className="drawer-credit-link"
                 type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("orders"); }}
+                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel(isGuestViewer ? "login" : "orders"); }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V5a1.5 1.5 0 0 1 2-1.5Z" /><path d="M14.5 3.5V8H19M8 12h8M8 16h8" /></svg>
                 <span>订单记录</span>
@@ -2030,7 +2125,7 @@ export default function App() {
               <button
                 className="drawer-credit-link"
                 type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("ledger"); }}
+                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel(isGuestViewer ? "login" : "ledger"); }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5.5h16M4 12h16M4 18.5h16" /><circle cx="7" cy="5.5" r="1" /><circle cx="7" cy="12" r="1" /><circle cx="7" cy="18.5" r="1" /></svg>
                 <span>积分明细</span>
@@ -2050,6 +2145,14 @@ export default function App() {
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg>
                 <span>站内信</span>
+              </button>
+              <button
+                className="drawer-credit-link"
+                type="button"
+                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("install"); }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+                <span>安装 App</span>
               </button>
             </nav>
             <section className="drawer-recent-works" aria-label="最近作品">
@@ -2131,6 +2234,8 @@ export default function App() {
                 <BillingHistoryPanel key={authUser?.id ?? "guest"} user={authUser} kind="ledger" />
               ) : activeHeaderPanel === "inbox" ? (
                 <SiteInboxPanel user={authUser} onLogin={() => setActiveHeaderPanel("login")} />
+              ) : activeHeaderPanel === "install" ? (
+                <InstallAppPanel />
               ) : (
                 <AuthPanel
                   user={authUser}
@@ -2299,12 +2404,12 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
   const [editingDisplayName, setEditingDisplayName] = useState(false);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
   const [displayNameSaving, setDisplayNameSaving] = useState(false);
-  const [displayNameError, setDisplayNameError] = useState("");
+  const [displayNameError, setDisplayNameError] = useTimedNotice();
   const [code, setCode] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [sending, setSending] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useTimedNotice();
+  const [error, setError] = useTimedNotice();
   const [busy, setBusy] = useState(false);
   const [inviteQrDataUrl, setInviteQrDataUrl] = useState("");
   const [growth, setGrowth] = useState<{
@@ -2326,7 +2431,7 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
   const [withdrawals, setWithdrawals] = useState<Array<{ id: string; amountYuan: number; feeYuan: number; netAmountYuan: number; status: string; note?: string | null; createdAt: string; processedAt?: string | null; arrivalType?: string }>>([]);
   const [growthInvitees, setGrowthInvitees] = useState<Array<{ level: number; displayName: string; contact: string; joinedAt: string; hasPaid: boolean }>>([]);
   const [growthCommissions, setGrowthCommissions] = useState<Array<{ id: string; level: number; orderAmountYuan: number; rate: number; commissionYuan: number; status: string; createdAt: string; settledAt: string | null; source: string }>>([]);
-  const [growthNotice, setGrowthNotice] = useState("");
+  const [growthNotice, setGrowthNotice] = useTimedNotice();
   const [partnerProvince, setPartnerProvince] = useState("");
   const [partnerCity, setPartnerCity] = useState("");
   const isMockPreview = import.meta.env.DEV && user?.id === "local-preview-user";
@@ -3000,30 +3105,43 @@ function AuthPanel({ user, onSuccess, onProfileUpdated, onLogout, onWalletRefres
 }
 
 function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): {
+  title?: string;
   caption?: string;
   cover_title?: string;
   pinned_comment?: string;
   post_time?: string;
 } | null {
+  // 画面主标题 title 属于导演方案顶层字段，不在 publish 四件套里，单独带出。
+  let title = "";
+  const workPlan = work.directorPlan as Record<string, unknown> | undefined;
+  if (typeof workPlan?.title === "string" && workPlan.title.trim()) title = workPlan.title.trim();
+
+  // publish 四件套：优先作品自带，缺的再从对应对话的导演方案回填。
+  let base: NonNullable<WorkItem["publish"]> | null = null;
   if (work.publish && (work.publish.caption || work.publish.cover_title || work.publish.pinned_comment)) {
-    return work.publish;
+    base = work.publish;
   }
   for (const conv of conversations) {
     for (const msg of conv.messages) {
       if (msg.jobWorkId === work.id || (msg.jobId && msg.jobId === work.jobId)) {
-        const p = msg.jobDirectorPlan?.publish as Record<string, unknown> | undefined;
-        if (p && (p.caption || p.cover_title || p.pinned_comment || p.post_time)) {
-          const res: NonNullable<WorkItem["publish"]> = {};
-          if (typeof p.caption === "string") res.caption = p.caption;
-          if (typeof p.cover_title === "string") res.cover_title = p.cover_title;
-          if (typeof p.pinned_comment === "string") res.pinned_comment = p.pinned_comment;
-          if (typeof p.post_time === "string") res.post_time = p.post_time;
-          return res;
+        const plan = msg.jobDirectorPlan;
+        if (!title && typeof plan?.title === "string" && plan.title.trim()) title = plan.title.trim();
+        if (!base) {
+          const p = plan?.publish as Record<string, unknown> | undefined;
+          if (p && (p.caption || p.cover_title || p.pinned_comment || p.post_time)) {
+            const res: NonNullable<WorkItem["publish"]> = {};
+            if (typeof p.caption === "string") res.caption = p.caption;
+            if (typeof p.cover_title === "string") res.cover_title = p.cover_title;
+            if (typeof p.pinned_comment === "string") res.pinned_comment = p.pinned_comment;
+            if (typeof p.post_time === "string") res.post_time = p.post_time;
+            base = res;
+          }
         }
       }
     }
   }
-  return null;
+  if (!base && !title) return null;
+  return { ...(base ?? {}), ...(title ? { title } : {}) };
 }
 
 function WorksPanel({
@@ -3043,7 +3161,7 @@ function WorksPanel({
 }) {
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useTimedNotice();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string>("");
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
@@ -3063,18 +3181,31 @@ function WorksPanel({
       setCoverDataUrls((prev) => ({ ...prev, [workId]: dataUrl }));
       if (showFeedback) {
         setCopyFeedback("已将当前画面设为封面");
-        setTimeout(() => setCopyFeedback(""), 2000);
+        setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
       }
     } catch {
       // ignore cross-origin error if any
     }
   };
 
-  const downloadCover = (workId: string) => {
+  const downloadCover = (work: WorkItem) => {
+    const workId = work.id;
     if (!user || user.isGuest) {
       if (onRequestDownload) {
         onRequestDownload(workId, `jansee-cover-${workId}.png`);
       }
+      return;
+    }
+    // 新作品直接下载引擎生成的纯净封面（后端鉴权流）；旧作品回退到前端截帧。
+    if (work.coverUrl) {
+      const a = document.createElement("a");
+      a.href = work.coverUrl;
+      a.download = `jansee-cover-${workId}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setCopyFeedback("封面图片已开始下载");
+      setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
       return;
     }
     let dataUrl = coverDataUrls[workId];
@@ -3106,7 +3237,7 @@ function WorksPanel({
     a.click();
     document.body.removeChild(a);
     setCopyFeedback("封面图片已开始下载");
-    setTimeout(() => setCopyFeedback(""), 2000);
+    setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
   };
 
   useEffect(() => {
@@ -3208,12 +3339,13 @@ function WorksPanel({
                       event.currentTarget.currentTime = 0.1;
                     }}
                     onLoadedData={() => {
-                      if (!coverDataUrls[work.id]) {
+                      // 仅在旧作品没有纯净封面时才截帧兜底；新作品直接用引擎生成的封面。
+                      if (!work.coverUrl && !coverDataUrls[work.id]) {
                         setTimeout(() => captureFrameAsCover(work.id, false), 150);
                       }
                     }}
                     onSeeked={() => {
-                      if (!coverDataUrls[work.id]) {
+                      if (!work.coverUrl && !coverDataUrls[work.id]) {
                         captureFrameAsCover(work.id, false);
                       }
                     }}
@@ -3236,7 +3368,7 @@ function WorksPanel({
                   </button>
                 </div>
 
-                {publishKit && (publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (
+                {publishKit && (publishKit.title || publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (
                   <div className="work-publish-studio">
                     <div className="work-publish-studio-top">
                       <span className="work-publish-tag">短视频宣发套件</span>
@@ -3245,6 +3377,7 @@ function WorksPanel({
                         className="work-copy-btn work-copy-all-btn"
                         onClick={() => {
                           const blocks: string[] = [];
+                          if (publishKit.title) blocks.push(`【标题】\n${publishKit.title}`);
                           if (publishKit.cover_title) blocks.push(`【建议封面标题】\n${publishKit.cover_title}`);
                           if (publishKit.caption) blocks.push(`【发布文案与话题】\n${publishKit.caption}`);
                           if (publishKit.pinned_comment) blocks.push(`【黄金置顶评论】\n${publishKit.pinned_comment}`);
@@ -3256,11 +3389,27 @@ function WorksPanel({
                       </button>
                     </div>
 
+                    {publishKit.title && (
+                      <div className="work-publish-row">
+                        <div className="work-publish-label">标题</div>
+                        <div className="work-publish-content">
+                          <span className="work-publish-text">{publishKit.title}</span>
+                          <button
+                            type="button"
+                            className="work-copy-btn"
+                            onClick={() => copyText(`title-main-${work.id}`, publishKit.title!, "标题")}
+                          >
+                            {copiedKey === `title-main-${work.id}` ? "已复制" : "复制"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="work-publish-cover-card">
                       <div className="work-publish-cover-preview">
-                        {coverDataUrls[work.id] ? (
+                        {(coverDataUrls[work.id] || work.coverUrl) ? (
                           <img
-                            src={coverDataUrls[work.id]}
+                            src={coverDataUrls[work.id] || work.coverUrl!}
                             alt="建议视频封面"
                             className="work-cover-thumbnail"
                           />
@@ -3298,8 +3447,8 @@ function WorksPanel({
                         <div className="work-cover-actions">
                           <button
                             type="button"
-                            className="work-cover-btn-action"
-                            onClick={() => downloadCover(work.id)}
+                            className="work-cover-btn-action work-cover-btn-download"
+                            onClick={() => downloadCover(work)}
                           >
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
@@ -3308,9 +3457,9 @@ function WorksPanel({
                           </button>
                           <button
                             type="button"
-                            className="work-cover-btn-action"
+                            className="work-cover-btn-action work-cover-btn-capture"
                             onClick={() => captureFrameAsCover(work.id, true)}
-                            title="暂停在满意的画面后点击，可替换为新封面"
+                            title="从视频当前画面截一张图作为封面（旧作品适用；新作品自带纯净封面）"
                           >
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                               <circle cx="12" cy="12" r="3" />
@@ -3626,8 +3775,8 @@ function RechargePanel({
   const [loading, setLoading] = useState(false);
   const [checkout, setCheckout] = useState<{ orderId: string; payUrl: string; qrImageUrl: string; expiresAt?: string } | null>(null);
   const [checkoutVisible, setCheckoutVisible] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useTimedNotice();
+  const [error, setError] = useTimedNotice();
   const [pricingCatalog, setPricingCatalog] = useState<{ members: { id: string; priceYuan: number; strikeYuan: string }[]; boostPacks: { id: string; priceYuan: number; strikeYuan: string }[] } | null>(null);
 
   useEffect(() => {
@@ -3749,7 +3898,7 @@ function RechargePanel({
           <span>当前余额</span>
           <strong>{credits !== null ? credits.toLocaleString() : "—"}</strong>
           <span>积分</span>
-          <small>每生成 1 条成片消耗 200 积分</small>
+          <small>带货视频、门店获客每生成 1 条成片消耗 200 积分；个人创作与一句话剪辑免费</small>
           {membership?.active && <small className="credit-membership-status">当前会员：{membership.tierId.toUpperCase()} · 到期 {new Date(membership.expiresAt).toLocaleDateString("zh-CN")}</small>}
         </div>
 
@@ -3839,8 +3988,8 @@ function AdminLoginPanel({ onSuccess }: { onSuccess: (user: AuthUser) => void })
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [error, setError] = useTimedNotice();
+  const [notice, setNotice] = useTimedNotice();
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -3971,15 +4120,67 @@ type SiteInboxMessage = {
   readAt: string | null;
 };
 
+function InstallAppPanel() {
+  const [platform] = useState<ClientPlatform>(() => detectClientPlatform());
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [qrError, setQrError] = useState(false);
+  const pageUrl = typeof window !== "undefined" ? `${window.location.origin}/` : "https://jansee.cn/";
+
+  useEffect(() => {
+    // 安卓端只提供下载按钮，不生成二维码；二维码仅 PC 端使用。
+    if (platform === "android") return;
+    let active = true;
+    QRCode.toDataURL(pageUrl, {
+      width: 200,
+      margin: 1,
+      color: { dark: "#202124", light: "#FFFFFF" },
+    }).then((url) => { if (active) setQrDataUrl(url); }).catch(() => { if (active) setQrError(true); });
+    return () => { active = false; };
+  }, [platform, pageUrl]);
+
+  return (
+    <>
+      <h2 id="header-panel-title" className="visually-hidden">安装 App</h2>
+
+      {platform === "ios" ? (
+        <div className="install-section" role="tabpanel">
+          <p className="install-section-title">添加到主屏幕</p>
+          <p className="install-section-copy">iPhone 无需下载安装包。用 Safari 打开本页，按下面两步操作即可。</p>
+          <ol className="install-steps">
+            <li><span className="install-step-num">1</span><span>点击 Safari 底部的<strong>分享</strong>按钮（方框带向上箭头）</span></li>
+            <li><span className="install-step-num">2</span><span>在菜单里选择<strong>添加到主屏幕</strong>，确认后桌面就会出现简兮图标</span></li>
+          </ol>
+          <p className="install-note">请使用 Safari 浏览器操作，其他浏览器可能不支持添加到主屏幕。</p>
+        </div>
+      ) : platform === "android" ? (
+        <div className="install-section" role="tabpanel">
+          <p className="install-section-title">安装安卓客户端</p>
+          <p className="install-section-copy">下载安装包后按提示完成安装。若系统提示“未知来源”，请在设置中允许本应用安装。</p>
+          <a className="credit-buy-button install-download-button" href={ANDROID_APK_URL} download>下载 APK 安装包</a>
+        </div>
+      ) : (
+        <div className="install-section" role="tabpanel">
+          <p className="install-section-title">扫码在手机上打开</p>
+          <p className="install-section-copy">用手机扫描下方二维码打开简兮，再按提示添加到主屏幕或安装客户端。</p>
+          <div className="install-qr-block">
+            {qrDataUrl ? <img className="install-qr-image" src={qrDataUrl} alt="简兮手机版下载二维码" /> : <div className="install-qr-placeholder">{qrError ? "二维码生成失败，请用手机访问 jansee.cn" : "正在生成二维码…"}</div>}
+            <p className="install-qr-hint">支持 iPhone 与安卓手机</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function SiteInboxPanel({ user, onLogin }: { user: AuthUser | null; onLogin: () => void }) {
   const [messages, setMessages] = useState<SiteInboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useTimedNotice();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subject, setSubject] = useState("产品建议");
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTimedNotice();
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }

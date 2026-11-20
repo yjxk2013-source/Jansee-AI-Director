@@ -449,6 +449,7 @@ export function createOpenAICompatiblePlanner(config: {
   streamTimeoutMs?: number;
   maxTokens?: number;
   thinkingBudget?: number;
+  maxAttemptsPerModel?: number;
   fetchImpl?: typeof fetch;
 }): DirectorPlanner {
   const fetchImpl = config.fetchImpl ?? fetch;
@@ -502,23 +503,20 @@ export function createOpenAICompatiblePlanner(config: {
       const modelsAttempted: string[] = [];
       const modelAttempts: DirectorModelAttempt[] = [];
       let lastError: unknown;
+      const maxAttempts = Math.max(1, Math.min(2, Math.floor(config.maxAttemptsPerModel ?? 1)));
       for (const model of models) {
         if (!modelsAttempted.includes(model)) modelsAttempted.push(model);
-        // 每个模型最多尝试 2 次：LLM 输出有随机性（temperature 0.4），偶发脏 JSON/网络抖动
-        // 重试一次通常即可成功——这是赛马"每一条都出片"的关键保险，不是静默降级。
-        for (let modelAttempt = 1; modelAttempt <= 2; modelAttempt += 1) {
+        for (let modelAttempt = 1; modelAttempt <= maxAttempts; modelAttempt += 1) {
           if (modelAttempt > 1) await new Promise((resolve) => setTimeout(resolve, 1200));
           const attemptStartedAt = Date.now();
         const controller = new AbortController();
-        // 首包预算只约束"模型开始吐字"；一旦收到任意流式数据就解除，
-        // 后续完整方案生成改用更宽松的 streamTimeoutMs，避免把慢速主模型误判为不可用。
+        // 首包预算：首选 DeepSeek 25s 吐首字，备选 GLM 60s 吐首字。
+        // 一旦收到任意首包（无论是 reasoning 还是 content），立即彻底清除计时器，后续全程耐心等待，不限时。
         const firstPacketTimeoutMs = model === config.model
-          ? config.timeoutMs ?? 12_000
-          : config.fallbackTimeoutMs ?? config.timeoutMs ?? 12_000;
-        const streamTimeoutMs = config.streamTimeoutMs ?? 120_000;
+          ? (Number(config.timeoutMs) > 0 ? Number(config.timeoutMs) : 25_000)
+          : (Number(config.fallbackTimeoutMs) > 0 ? Number(config.fallbackTimeoutMs) : 60_000);
         let timeoutError: Error | undefined;
         let rejectTimeout!: (reason: Error) => void;
-        // fetch 实现可能完全忽略 abort signal，用竞态保证首包/流超时仍然硬生效。
         const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject; });
         const fireTimeout = (error: Error) => {
           timeoutError = error;
@@ -526,15 +524,9 @@ export function createOpenAICompatiblePlanner(config: {
           controller.abort();
         };
         let firstPacketReceived = false;
-        let timer = setTimeout(() => {
+        let timer: NodeJS.Timeout | null = setTimeout(() => {
           fireTimeout(new Error(`Director provider first token timed out after ${firstPacketTimeoutMs}ms`));
         }, firstPacketTimeoutMs);
-        const armStreamTimeout = () => {
-          clearTimeout(timer);
-          timer = setTimeout(() => {
-            fireTimeout(new Error(`Director provider stream timed out after ${streamTimeoutMs}ms`));
-          }, streamTimeoutMs);
-        };
         try {
           const response = await Promise.race([fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
             method: "POST",
@@ -598,10 +590,13 @@ export function createOpenAICompatiblePlanner(config: {
               choices?: Array<{ delta?: { content?: unknown; reasoning_content?: unknown } }>;
             };
             if (chunk.error) throw new Error(`Director provider stream error: ${typeof chunk.error === "string" ? chunk.error : (chunk.error.message ?? "unknown")}`);
-            // 思考模型的 reasoning_content 也是"吐字"：首包到达即停止首包计时。
+            // 思考模型的 reasoning_content 或 content 均代表首包到达：停止首包计时，后续不限时等待完整吐出。
             if (!firstPacketReceived) {
               firstPacketReceived = true;
-              armStreamTimeout();
+              if (timer) {
+                clearTimeout(timer);
+                timer = null;
+              }
             }
             if (typeof chunk.model === "string") streamedModel = chunk.model;
             if (chunk.usage) usage = chunk.usage;
@@ -609,7 +604,10 @@ export function createOpenAICompatiblePlanner(config: {
             if (typeof delta?.content === "string") content += delta.content;
           };
           while (true) {
-            const { value, done } = await Promise.race([reader.read(), timeoutPromise]);
+            // 首字到达后 timer 已销毁，timeoutPromise 不再触发超时中断，安心等待流完成。
+            const { value, done } = firstPacketReceived
+              ? await reader.read()
+              : await Promise.race([reader.read(), timeoutPromise]);
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
@@ -695,7 +693,10 @@ export function createOpenAICompatiblePlanner(config: {
             error: lastError instanceof Error ? lastError.message.slice(0, 240) : String(lastError).slice(0, 240),
           });
         } finally {
-          clearTimeout(timer);
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
         }
         }
       }
