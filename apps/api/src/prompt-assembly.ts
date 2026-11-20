@@ -1,7 +1,5 @@
 import { randomInt } from "node:crypto";
 import type { CreationMode } from "@jansee/contracts";
-// @ts-expect-error anchor-kit has no bundled type declarations
-import { rankAnchors, HOST_LIBRARY, LOCAL_ROLES, LOCAL_ROLE_COMPAT, getAnchor, getDna, compatAnchors, SELL_VARIANTS, ANCHOR_REDLINE_MD } from "@jansee/anchor-kit";
 import { detectUserVoiceIntent, CANTONESE_DIALECT, ENGLISH_VOICES, getAvailableTencentVoiceCandidates } from "@jansee/tts-kit";
 import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "./variant-rules.js";
 import type { DirectorPlanResolvedInput } from "./director.ts";
@@ -19,13 +17,13 @@ const CONSTITUTION_RULES = [
 const STORYBOARD_CORE_RULES = [
   "===== 分镜镜头与字数硬约束 =====",
   "1. 镜头数量绝对一致：输入有 N 个分镜素材，全局 narration 旁白必须且恰好由 N 句精炼台词组成（用标点隔开，按顺序严格对应第 1 到第 N 个分镜镜头），不多不少；scenes 数组包含对应的 N 个镜头节奏安排。",
-  "2. 时长与语速红线：中文标准播音语速约为 3.5 ~ 4.0 字/秒；每个分镜台词字数上限 = 镜头实测秒数 × 3.8（向下取整），绝对不能超出该镜头的物理时长。",
+  "2. 台词即时间：台词写多长，配音和镜头就多长；成片时长由 TTS 实测配音自然决定，严禁估算秒数、严禁输出任何时长字段；每句台词只需语义完整、适合口播。",
   "3. 纯文本原话：narration 中的每一句必须为主播口播台词原话，不得带运镜指示、动作提示或括号注释（如“（镜头拉近）”或“（微笑）”一律禁止）。",
 ].join("\n");
 
 // V4 电商带货专属人设与变体规则
 const SELL_PERSONA_RULES = [
-  "【带货主播人设】：千万级商业短视频导演兼成交型主播，深谙用户心理，擅长制造转化。台词口吻以「主播风格层」DNA 细则为准绳，你的台词就是观众听到的原话，严禁输出任何创作说明指令。",
+  "【带货主播人设】：千万级商业短视频导演兼成交型主播，深谙用户心理，擅长制造转化。你的台词就是观众听到的原话，严禁输出任何创作说明指令。",
   "【变体类型】：从 A-痛点直击型、B-反差对比型、C-福利低价型、D-场景代入型、E-证言型、F-紧迫逼单型、G-结果先行型、H-情感共鸣型、I-权威专业型、J-反转型/避坑型、K-教程演示型、L-信任测评型、M-数字冲击型、N-保障安心型 中选 1 种最契合的填入 variant_type。",
   "【变体选择逻辑】：高客单/需背书优先 I/N；低价秒杀引流优先 C/F；数字量化优先 M；避坑干货优先 J；效果明显优先 B；家居/穿搭优先 D；教程/步骤一律 K；送礼/女性向一律 H；功能解决痛点才选 A。",
 ].join("\n");
@@ -54,6 +52,16 @@ const LOCAL_REGEX = /(老店|老字号|餐馆|火锅|烤鸭|烧烤|烤肉|咖啡
  * 智能识别文本中的商业实体属性（区分线上电商带货与同城探店）
  */
 export type CreationScene = "online-ecommerce" | "physical-store" | "personal-creation";
+/** 用户可见的创作入口；quick-cut 不走 LLM 导演场景路由。 */
+export type CreationEntryScene = CreationScene | "quick-cut";
+
+const SCENE_MARKER_RE = /^\[User-selected creation scene:\s*(?:online-ecommerce|physical-store|personal-creation|quick-cut)\.?\]\s*\n?/i;
+
+/** 把前端明确选择的创作场景写成服务端可识别的提示词前缀（幂等，旧前缀会被替换）。 */
+export function withCreationSceneMarker(prompt: string, scene?: CreationEntryScene): string {
+  if (!scene || scene === "quick-cut") return prompt;
+  return `[User-selected creation scene: ${scene}.]\n${prompt.replace(SCENE_MARKER_RE, "")}`;
+}
 
 /** Resolve explicit composer choice before any keyword inference. */
 export function detectCreationScene(text = "", mode: CreationMode = "image-film"): CreationScene {
@@ -97,50 +105,9 @@ export function resolveDirectorRoute(input: DirectorPlanResolvedInput): Director
   const creationScene = detectCreationScene(input.prompt, input.mode);
   const scene = creationScene === "physical-store" ? "local" : "sell";
   const isPersonal = creationScene === "personal-creation";
-  // 普通任务由人设导演自主选择；仅批量赛马的服务端 variantOverride 锁定变体。
-  const decidedVariant = isPersonal ? null : input.variantOverride || null;
+  // 风格与变体完全交给 LLM，自主适配当前事实、受众与创作目标。
+  const decidedVariant = null;
   return { creationScene, scene, isPersonal, decidedVariant, sceneSource: userSelected ? "user-selected" : "keyword-inferred" };
-}
-
-/**
- * 组装主播/实体角色风格层
- */
-function buildAnchorBlock(scene: "sell" | "local", prompt: string, decidedVariant?: string): string[] {
-  if (scene === "local") {
-    const roleLines = (LOCAL_ROLES as Array<{ id: string; label: string; name: string; temperaments: string[] }> || []).map(
-      (r, i) => `${i + 1}. ${r.id}（${r.label}）· 调性：${r.name} · 推荐音色：${(r.temperaments || []).join(" / ")}`
-    );
-    const compatLines = Object.entries(LOCAL_ROLE_COMPAT || {}).map(([v, roles]) => `${v}：${(roles as string[]).join(" / ")}`);
-    return [
-      "===== 实体角色风格层（线下实体专属表达人格，严禁任何电商带货腔） =====",
-      "本片可选实体角色池（彻底禁止任何电商直播叫卖或喧闹催单，根据门店调性从下列 4 种实体角色中选 1 种）：",
-      ...roleLines,
-      "",
-      "【变体-实体角色兼容表】：",
-      ...compatLines,
-      "",
-      "【选定规则】按人设导演判定 variant_type 后，从兼容的实体角色中选 1 个填入 anchor 字段（可选：shopowner、local-friend、craftsman、budget-guide；注意：必须使用键名 anchor，禁止输出为 anchor_id）。",
-      "【线下实体绝对红线】：严禁在台词或文案中出现「现货直发 / 全国包邮 / 整箱囤货 / 拍下 / 下单 / 快递 / 顺丰」等任何电商词汇！无论素材是什么，必须写出同城烟火气与真实人均消费，引导同城顾客到店尝鲜与线下体验。",
-      "",
-    ];
-  }
-
-  const ranked = decidedVariant
-    ? rankAnchors({ variantType: decidedVariant, taskId: prompt }) || HOST_LIBRARY || []
-    : HOST_LIBRARY || [];
-  const poolLines = ranked.map((h: { id: string; name: string; temperaments?: string[] }, i: number) => {
-    return `${i + 1}. ${h.id}（风格锚点：${h.name}）· 推荐音色气质：${(h.temperaments || []).join(" / ")}`;
-  });
-
-  return [
-    "===== 主播风格层（本片台词的表达人格与营销穿透力） =====",
-    "本片候选主播池（推荐顺序如下，请根据商品调性与变体类型挑选契合的 anchor）：",
-    ...poolLines,
-    "",
-    "【选定规则】先按人设导演判定 variant_type，再从契合的主播中选 1 个填入 anchor 字段（注意：必须使用键名 anchor，禁止输出为 anchor_id）。",
-    ANCHOR_REDLINE_MD || "【红线】：主播姓名仅作为风格锚点参考，台词中严禁出现任何真实公众人物姓名。",
-    "",
-  ];
 }
 
 /**
@@ -172,7 +139,7 @@ function buildVoiceInstructions(prompt: string, creationScene: CreationScene): s
     lines.push("[普通话语言约束]：本次使用腾讯明确支持普通话的健康音色候选。");
   }
   if (userIntent.explicitTemperament) {
-    lines.push(`[音色倾向]：用户表达了「${userIntent.explicitTemperament}」倾向；优先参考候选顺序，但仍由你结合场景、人设 DNA 和内容决定最终音色。`);
+    lines.push(`[音色倾向]：用户表达了「${userIntent.explicitTemperament}」倾向；优先参考候选顺序，但仍由你结合场景、人设和内容决定最终音色。`);
   }
 
   lines.push("[真实腾讯 TTS 动态候选集]：以下数字均为腾讯官方 VoiceType，且在本次提示词组装时健康状态明确为 healthy。只能从本次候选集选择一个 voice_id，必须原样输出数字 ID；禁止输出别名、旧 ID 或自行编造 ID。");
@@ -185,7 +152,7 @@ function buildVoiceInstructions(prompt: string, creationScene: CreationScene): s
     }
     lines.push(`本次候选数量：${candidates.length}；候选上限：8。候选不足时只提供全部合格音色，不得跨语言或跨性别凑数。`);
   }
-  lines.push("[导演音色决策]：必须结合当前场景、人设 DNA、旁白情绪与内容表达，从本次候选中明确选择 voice_id；不得使用固定默认音色，不得总是选择候选列表第一项。不同任务应根据内容主动变化，不能为了省事反复复用同一个音色。voice_id 必须是上方列出的数字 ID。");
+  lines.push("[导演音色决策]：必须结合当前场景、人设、旁白情绪与内容表达，从本次候选中明确选择 voice_id；不得使用固定默认音色，不得总是选择候选列表第一项。不同任务应根据内容主动变化，不能为了省事反复复用同一个音色。voice_id 必须是上方列出的数字 ID。");
   lines.push("[语速控制]：必须输出 speech_speed，范围 0.85–1.25；1.00 为正常语速，低于 1.00 放慢，高于 1.00 加快。根据旁白情绪、信息密度和视频节奏选择，不得省略或超范围。");
   return lines;
 }
@@ -207,24 +174,60 @@ const CANDIDATE_EMOTIONS = [
  */
 export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): string {
   const { creationScene, scene, isPersonal, decidedVariant } = resolveDirectorRoute(input);
-  const personaRules = creationScene === "physical-store" ? LOCAL_PERSONA_RULES : creationScene === "online-ecommerce" ? SELL_PERSONA_RULES : "";
-  const anchorBlock = isPersonal
-    ? ["===== Personal creative direction =====", "Focus on the creator's own voice, knowledge, lifestyle or personal IP; do not use ecommerce host or store-tour personas."]
-    : buildAnchorBlock(scene, input.prompt, decidedVariant ?? undefined);
+  const personaRules = isPersonal
+    ? "Personal creator direction: preserve authentic personal expression without forced commercial language."
+    : scene === "local"
+      ? "Local content direction: use the supplied facts and freely choose the most authentic current expression for the venue and audience."
+      : "Commercial content direction: use the supplied facts and freely choose the freshest effective narrative, hook and voice for the audience.";
   const voiceBlock = buildVoiceInstructions(input.prompt, creationScene);
+
+  const batchVersions = Math.max(1, Math.floor(input.batchVersions ?? 1));
+  const planExample = {
+    operation: "standard 或 video-slice 或 keep-original",
+    sliceSeconds: 20,
+    title: "画面视觉主标题（4~6字最佳的凝练高奢短语，如「素履以往」「手作咖啡」「现烤蛋挞」，字数越少排版越大气高级，严禁冗长句子，严禁复制发布标题）",
+    concept: "结合变体与口播人设的情绪创作阐述（20~100字）",
+    note: "版式底部点睛说明行（6~16字，东方极简/品牌高奢短句，如「东方草本 匠心慢熬」「天然材质 触手生温」「寻味山野 一席清欢」，严禁句号，严禁写成英文水印套话如 JANSEE FILM，严禁复述旁白原文）",
+    narration: "完整的中文口播旁白原话（40~120字，必须由对应素材数量的N句精炼台词组成，第一句必须为黄金3秒抓人钩子，去播音腔，绝不复述用户制作指令）；台词写多长成片就多长，时长由TTS实测决定，不要输出任何时长字段",
+    scenes: [
+      { order: 1, description: "第1个镜头的视觉焦点安排", motion: "sweep_lr" },
+      { order: 2, description: "第2个镜头的视觉焦点安排", motion: "rise_up" },
+    ],
+    style: "简兮商业视觉流（叠化0.7s转场，人声音量0.10/0.22避让）",
+    soundtrack: "匹配内容调性与情绪的 BGM 说明",
+    voice_id: "真实腾讯 TTS VoiceType 数字 ID（例如 403010、402001、404000、402000）",
+    speech_speed: 1.0,
+    bgm_emotion: "从情绪池选 1 个",
+    variant_type: isPersonal ? "personal-creation" : "由导演根据当前事实与受众自主判断，不使用固定变体池",
+    packaging: { intro: true, subtitles: true, bgm: true },
+    publish: {
+      caption: "发布正文文案（≤150字，不复述旁白台词，文末带 3-5 个垂直长尾话题标签，如 #打工人救星 #私藏宝藏好物）",
+      cover_title: "平台发布爆款标题（10~25字，给抖音/小红书/视频号填写的引流标题，直击痛点与利益点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」）",
+      pinned_comment: "高转化置顶互动评论（≤50字，抛出互动问题或客观指引，拉升评论区停留互动）",
+      post_time: "黄金发布时段建议（一句话，如「晚间 19:30-21:30 黄金流量档」）",
+    },
+  };
+  const contractSections = batchVersions > 1
+    ? [
+        `仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 \`\`\`json），严禁前后缀解释。本次为批量赛马规划：顶层必须是 { "versions": [ ... ] }，versions 数组恰好包含 ${batchVersions} 个方案对象（数组顺序即版本顺序），每个对象字段与下方模板一致：`,
+        `批内差异化铁律（最高优先级）：${batchVersions} 个版本必须彼此明显不同——① variant_type 互不相同；② voice_id 严禁任何两版重复（每版从候选集中为该版单独挑选最契合的音色，性别与气质都要拉开）；③ bgm_emotion 尽量不重复；④ 台词的切入角度、开场钩子与情绪基调逐版拉开，让用户一眼听出是不同的成片。每个版本都独立满足全部创作规则（分镜数与素材数对齐、黄金3秒钩子、JSON 字段完整）。`,
+        JSON.stringify({ versions: [planExample, `……（共 ${batchVersions} 个版本对象，每个都是完整方案，字段与上方模板一致）`] }, null, 2),
+      ]
+    : [
+        "仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 ```json），严禁前后缀解释。字段列表：",
+        JSON.stringify(planExample, null, 2),
+      ];
 
   const sections: string[] = [
     `Director route: ${creationScene}. Constitution Director owns global rules; persona directors operate within its boundaries.`,
     "===== 简兮 AI 导演 · 全局宪法核心视听铁律 (Constitution Core) =====",
     "1. 素材与分镜对齐铁律：用户的 N 个实拍素材是唯一定格画面来源，输入 N 个素材必须且恰好规划 N 个分镜镜头，按视觉叙事顺序编排，严禁遗漏任何素材；",
-    "2. 时长与呼吸气口铁律：各分镜物理时长由台词人声实测与镜间呼吸停顿驱动，严禁凭空估算虚假时长；成片 durationSeconds 代表全片预计总时长（6~60秒）；",
+    "2. 时长由配音决定铁律：严禁输出任何时长字段或秒数字段；每句台词经 TTS 合成后的真实语音时长，就是对应镜头的画面时长，执行层据此逐镜对齐，严禁估算或指定秒数；",
     "3. 真实性绝对红线：只提炼用户明确给出的客观事实，严禁编造参数、价格、功效或权威背书；严禁出现「左下角」「小黄车」「点击链接」等虚构导流；",
     "4. 视听高级感铁律：死守无损物理安全区与 0 Emoji 规范；标题极简克制，副标留白点睛，正文旁白自然松弛。",
     CONSTITUTION_RULES,
     input.mode === "storyboard" ? STORYBOARD_CORE_RULES : "",
-    creationScene === "online-ecommerce" ? "[ROUTE] Ecommerce: use 14 ecommerce variants + ecommerce hosts only." : "",
-    creationScene === "physical-store" ? "[ROUTE] Local: use 8 local variants + store-tour hosts only." : "",
-    creationScene === "personal-creation" ? "[ROUTE] Personal creator path: Constitution Director directs knowledge, lifestyle, personal expression or personal IP. Do not use commercial variants or hosts." : "",
+    creationScene === "personal-creation" ? "[ROUTE] Personal creator path: Constitution Director directs knowledge, lifestyle, personal expression or personal IP. Do not use commercial variants." : "",
     `简兮总导演。Mode: ${input.mode === "image-film" ? "image film" : input.mode === "video-dub" ? "single video dub" : "storyboard"}. Scene: ${input.prompt.includes("online-ecommerce") ? "product sales" : input.prompt.includes("physical-store") ? "store attraction" : input.prompt.includes("personal-creation") ? "personal creation" : scene === "local" ? "local business" : "ecommerce"}.`,
     input.prompt.includes("personal-creation") ? "[SCENE] Personal: focus on creator expression, not selling." : "",
     input.prompt.includes("online-ecommerce") ? "[SCENE] Ecommerce: only use supplied product facts." : "",
@@ -240,51 +243,27 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "1. narration 字段是全片口播配音的唯一样本。如果用户输入提供了 N 个素材（无论是图片还是视频），narration 必须恰好由 N 句精炼台词组成，每句用标点符号（句号、感叹号或问号）清晰隔开；",
     "2. 每一句台词按顺序严格对应第 1 到第 N 个分镜素材，执行层会将每句话与对应分镜无缝绑定；",
     "3. 严禁单句长难句跨越多个分镜镜头，必须确保每一句话在当前镜头内语意完整、富有呼吸节奏；",
-    "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点与运镜节奏安排。",
+    "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点安排（只描述画面看点，不要写运镜动作）。",
+    "5. 运镜编排铁律：每个 scene 必须额外输出 motion 字段，且只能从下面这份【引擎支持的运镜 ID 清单】里选一个原样填入，严禁自造运镜词、严禁输出清单外的任何值：",
+    "   - sweep_lr：镜头横向平移，从左向右缓缓扫过（适合横向铺陈、多主体依次呈现）",
+    "   - sweep_rl：镜头横向平移，从右向左缓缓扫过（适合横向铺陈、反向节奏）",
+    "   - rise_up：镜头缓缓向上抬升（适合突出高度、纵深感、主体登场）",
+    "   - diagonal：镜头斜向平移（适合增加动感、打破呆板构图）",
+    "   运镜要服务于该镜内容：按情绪和画面看点为每个镜头编排，相邻镜头尽量不重复同一种运镜；motion 只填上面 4 个 ID 之一（如 \"motion\": \"rise_up\"），不要写中文描述。",
     "",
     "===== 场景人设与变体规则 =====",
-    isPersonal ? "【个人创作导演】围绕创作者本人表达、知识分享、生活记录或个人 IP 创作；不加入商品成交或门店引流话术。" : personaRules || (scene === "local" ? "【同城探店人设】：主打真实探店、烟火气、同城到店体验，绝对禁止电商网购与物流词汇！" : "【带货人设】：主打消费心理洞察、痛点共情、真实体验促单，明确变体类型与主播风格！"),
-    decidedVariant ? `【系统强信号锁定】：根据用户输入，系统已锁定变体类型为「${decidedVariant}」，请严格以此风格创作。` : "",
-    "",
-    ...anchorBlock,
+    personaRules,
     "",
     "===== 声音与视听节奏规范 =====",
     ...voiceBlock,
     `[背景音乐 BGM 情绪池]（从下列合法项选 1 个填入 bgm_emotion）：${CANDIDATE_EMOTIONS.join(" / ")}`,
-    "视听铁律：1.相邻分镜叠画转场0.7s（禁跳切）；2.两段式音量避让：口播段BGM=0.10，纯画面段BGM=0.22；3.packaging中intro/ending/subtitles/bgm默认全true；4.operation: standard/video-slice/keep-original。",
+    "视听铁律：1.相邻分镜叠画转场0.7s（禁跳切）；2.两段式音量避让：口播段BGM=0.10，纯画面段BGM=0.22；3.packaging 只需给 intro/subtitles/bgm（合规片尾由系统固定生成，无需你决定，也不要输出 ending 字段）；4.operation: standard/video-slice/keep-original。",
     "",
     "===== 发布方案规则 =====",
     "publish必填：caption(正文+3-5个精准长尾话题标签)、cover_title(10-25字爆款标题)、pinned_comment(互动引流或置顶问句)、post_time(建议发布时段)。严禁过时年份与虚构物流。",
     "",
     "===== 统一 JSON 输出格式契约 (Strict JSON Only) =====",
-    "仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 ```json），严禁前后缀解释。字段列表：",
-    JSON.stringify({
-      operation: "standard 或 video-slice 或 keep-original",
-      sliceSeconds: 20,
-      title: "画面视觉主标题（4~6字最佳的凝练高奢短语，如「素履以往」「手作咖啡」「现烤蛋挞」，字数越少排版越大气高级，严禁冗长句子，严禁复制发布标题）",
-      concept: "结合变体与主播风格的情绪创作阐述（20~100字）",
-      note: "版式底部点睛说明行（6~16字，东方极简/品牌高奢短句，如「东方草本 匠心慢熬」「天然材质 触手生温」「寻味山野 一席清欢」，严禁句号，严禁写成英文水印套话如 JANSEE FILM，严禁复述旁白原文）",
-      durationSeconds: 15,
-      narration: "完整的中文口播旁白原话（40~120字，必须由对应素材数量的N句精炼台词组成，第一句必须为黄金3秒抓人钩子，去播音腔，绝不复述用户制作指令）",
-      scenes: [
-        { order: 1, description: "第1个镜头的视觉焦点与运镜节奏安排", durationSeconds: 5 },
-        { order: 2, description: "第2个镜头的视觉焦点与运镜节奏安排", durationSeconds: 5 },
-      ],
-      style: "简兮商业视觉流（叠化0.7s转场，人声音量0.10/0.22避让）",
-      soundtrack: "匹配主播与调性的 BGM 说明",
-      anchor: isPersonal ? "none" : (scene === "local" ? "从上方实体角色中选1个填入其ID（如 shopowner、local-friend、craftsman、budget-guide；键名为 anchor）" : "从上方主播池中选1个填入其ID（如 yu-jie、b-tai、laoba-pingce 等；键名为 anchor）"),
-      voice_id: "真实腾讯 TTS VoiceType 数字 ID（例如 403010、402001、404000、402000）",
-      speech_speed: 1.0,
-      bgm_emotion: "从情绪池选 1 个",
-      variant_type: isPersonal ? "personal-creation" : (decidedVariant || `从当前场景变体池选1个精确填入：${(scene === "local" ? LOCAL_VARIANT_TYPES : SELL_VARIANT_TYPES).join(" / ")}`),
-      packaging: { intro: true, ending: true, subtitles: true, bgm: true },
-      publish: {
-        caption: "发布正文文案（≤150字，不复述旁白台词，文末带 3-5 个垂直长尾话题标签，如 #打工人救星 #私藏宝藏好物）",
-        cover_title: "平台发布爆款标题（10~25字，给抖音/小红书/视频号填写的引流标题，直击痛点与利益点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」）",
-        pinned_comment: "高转化置顶互动评论（≤50字，抛出互动问题或客观指引，拉升评论区停留互动）",
-        post_time: "黄金发布时段建议（一句话，如「晚间 19:30-21:30 黄金流量档」）",
-      },
-    }, null, 2),
+    ...contractSections,
   ];
 
   return sections.filter((s) => typeof s === "string" && s.trim().length > 0).join("\n");
@@ -294,23 +273,13 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
  * 组装动态 User Prompt
  */
 export function buildDirectorUserPrompt(input: DirectorPlanResolvedInput): string {
-  const isVideo = input.mode !== "image-film";
   const assetCount = input.assets.length;
 
+  // 导演只根据用户描述创作台词；素材数量只用于分镜一一对应。
+  // 文件名 / 类型 / 大小一律不进入提示词，避免模型从文件名臆测画面内容。
   return JSON.stringify({
     creationGoal: input.prompt,
-    mode: input.mode,
-    aspectRatio: input.aspectRatio,
-    mediaFacts: {
-      assetCount,
-      assetType: isVideo ? "实拍视频" : "实拍图片",
-      assets: input.assets.map((a, i) => ({
-        index: i + 1,
-        name: a.name,
-        kind: a.kind,
-        sizeBytes: a.size,
-      })),
-    },
+    assetCount,
     promptInstructions: [
       "请作为专业导演，提炼用户文案中的客观事实，匹配最精准的变体与主播人设，输出可直接交付并可执行的完整成片方案与发布四件套。",
       `分镜与台词精准对齐：本次任务共有 ${assetCount} 个实拍素材。请规划恰好 ${assetCount} 个分镜镜头（scenes 数组长度为 ${assetCount}，order 为 1 到 ${assetCount}）；全局 narration 旁白必须恰好由 ${assetCount} 句口播台词组成（用标点隔开），按顺序严格对应每个分镜镜头，严禁跨镜头长句。`,

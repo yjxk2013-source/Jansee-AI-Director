@@ -7,7 +7,7 @@ import type { MediaRenderer, RenderResult } from "./renderer.js";
 import type { JobStore, GenerationJobRecord } from "./jobs.js";
 import type { AssetStore, AssetRecord } from "./assets.js";
 import type { OutputStore } from "./outputs.js";
-import type { BillingStore } from "./billing.js";
+import { isFreeCreationEntry, type BillingStore } from "./billing.js";
 import { DirectorPlanSchema, isDirectorPlanCompatible, type DirectorPlanner } from "./director.js";
 import { resolveDirectorRoute } from "./prompt-assembly.js";
 import type { ProductionEngineRegistry } from "./engine-registry.js";
@@ -71,19 +71,20 @@ export async function processJob(
   context: WorkerContext,
 ): Promise<boolean> {
   const { jobStore, assetStore, storage, renderer, outputStore } = context;
-  const deleteSourceAssets = async () => {
-    if (!assetStore.findUserAssets || !assetStore.deleteAsset) return;
-    const assets = await assetStore.findUserAssets(job.userId, job.assetIds);
-    await Promise.allSettled(assets.map(async (asset) => {
-      const deleted = await assetStore.deleteAsset!(job.userId, asset.id);
-      if (deleted) await storage.deleteObject(deleted.storageKey);
-    }));
-  };
+  // E2E 计时起点 = 系统受理任务的时间（worker 领取任务、status→inspecting 时写入 started_at），
+  // 而不是用户点“开始创作”的 queued_at。并发受限时排在后面的任务会在队列里等待，
+  // 若用 queued_at 会把排队时间算进自己的耗时（第 3/4/5/6 条越来越大）。
+  // 历史数据可能没有 started_at，兜底回退 queued_at。
+  const e2eStartTime = (job.startedAt ?? job.queuedAt).getTime();
+  // 素材按 24 小时时效统一清理（与成片一致），不在任务完成时删除：
+  // 赛马多版共享同一批素材，提前删除会让后完成的任务拿不到素材或封面底图。
   const stagedStorageKeys: string[] = [];
   let outputsPublished = false;
   let leaseLost = false;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let activeJob = job;
+  // 免费入口任务从未冻结积分，不能走 completeJobAndSettle（生产库会因缺少 hold 抛 BILLING_HOLD_MISSING）。
+  const isFreeJob = isFreeCreationEntry(job.requestPayload?.creationScene);
   let llmDurationMs = 0;
   let rendererDurationMs = 0;
   let ffmpegDurationMs = 0;
@@ -157,17 +158,14 @@ export async function processJob(
       prompt: job.prompt,
       aspectRatio: job.aspectRatio,
       assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
-      ...(typeof activeJob.requestPayload?.variantOverride === "string" ? { variantOverride: activeJob.requestPayload.variantOverride } : {}),
     }, clientPlanParse!.data));
     if (hasValidClientPlan) {
       const plan = clientPlanParse!.data!;
       const planningInput = {
         mode: job.mode, prompt: job.prompt, aspectRatio: job.aspectRatio,
         assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
-        ...(typeof activeJob.requestPayload?.variantOverride === "string" ? { variantOverride: activeJob.requestPayload.variantOverride } : {}),
       };
       const route = resolveDirectorRoute(planningInput);
-      const anchorHit = isDirectorPlanCompatible(planningInput, plan);
       const sourceTelemetry = clientProviderTelemetry && typeof clientProviderTelemetry === "object"
         ? clientProviderTelemetry as Record<string, unknown> : {};
       const planningDurationMs = Array.isArray(sourceTelemetry.modelAttempts)
@@ -178,7 +176,7 @@ export async function processJob(
           }, 0)
         : 0;
       providerTelemetry = {
-        ...sourceTelemetry, scene: route.creationScene, sceneSource: route.sceneSource, anchorHit,
+        ...sourceTelemetry, scene: route.creationScene, sceneSource: route.sceneSource,
         variantMatched: route.decidedVariant ? plan.variant_type === route.decidedVariant : null,
         voiceId: plan.voice_id, voiceType: plan.voice_id,
         providerMode: sourceTelemetry.providerMode ?? "unreported",
@@ -199,8 +197,8 @@ export async function processJob(
           costSource: providerTelemetry.usageAvailable !== true ? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? "unconfigured" : "director_model_pricing",
           providerFailureReason: providerTelemetry.failureReason ?? null,
           scene: route.creationScene, sceneSource: route.sceneSource, lockedVariant: providerTelemetry.lockedVariant ?? null,
-          anchorHit, variantMatched: route.decidedVariant ? plan.variant_type === route.decidedVariant : null,
-          modelAttempts: providerTelemetry.modelAttempts ?? [], variantType: plan.variant_type ?? null, anchor: plan.anchor,
+          variantMatched: route.decidedVariant ? plan.variant_type === route.decidedVariant : null,
+          modelAttempts: providerTelemetry.modelAttempts ?? [], variantType: plan.variant_type ?? null,
           voiceId: plan.voice_id, voiceType: plan.voice_id, voiceCandidateIds: providerTelemetry.voiceCandidateIds ?? [],
           speechSpeed: plan.speech_speed ?? 1,
         },
@@ -208,19 +206,15 @@ export async function processJob(
       await jobStore.updateDirectorPlan?.(job.userId, job.id, directorPlan, context.workerId);
       activeJob = { ...job, directorPlan };
       ttsChars = typeof plan.narration === "string" ? Array.from(plan.narration).length : 0;
-      console.info(`[jansee-director] plan reused job=${job.id} scene=${route.creationScene}/${route.sceneSource} providerMode=${String(providerTelemetry.providerMode)} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic/unreported")} fallbackUsed=${providerTelemetry.fallbackUsed === true} anchor=${plan.anchor} anchorHit=${anchorHit} variant=${String(plan.variant_type ?? "none")} voiceType=${plan.voice_id} candidates=${JSON.stringify(providerTelemetry.voiceCandidateIds ?? [])} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
+      console.info(`[jansee-director] plan reused job=${job.id} scene=${route.creationScene}/${route.sceneSource} providerMode=${String(providerTelemetry.providerMode)} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic/unreported")} fallbackUsed=${providerTelemetry.fallbackUsed === true} variant=${String(plan.variant_type ?? "none")} voiceType=${plan.voice_id} candidates=${JSON.stringify(providerTelemetry.voiceCandidateIds ?? [])} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
     } else if (context.directorPlanner && !isServerValidatedSpeechCut) {
       const planStartedAt = Date.now();
-      // 批量赛马：v2..N 的 requestPayload 携带服务端排定的 variantOverride，补跑 LLM 时锁定各自变体。
-      const batchVariantOverride = typeof activeJob.requestPayload?.variantOverride === "string"
-        ? activeJob.requestPayload.variantOverride
-        : undefined;
+      // 批量赛马：每个版本都使用与单片一致的导演提示词独立补跑。
       const plan = await context.directorPlanner.createPlan({
         mode: job.mode,
         prompt: job.prompt,
         aspectRatio: job.aspectRatio,
         assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
-        ...(batchVariantOverride ? { variantOverride: batchVariantOverride } : {}),
       });
       llmDurationMs = Date.now() - planStartedAt;
       providerTelemetry = (plan as typeof plan & { _providerTelemetry?: Record<string, unknown> })._providerTelemetry ?? {};
@@ -251,11 +245,9 @@ export async function processJob(
           scene: providerTelemetry.scene ?? null,
           sceneSource: providerTelemetry.sceneSource ?? null,
           lockedVariant: providerTelemetry.lockedVariant ?? null,
-          anchorHit: providerTelemetry.anchorHit === true,
           variantMatched: typeof providerTelemetry.variantMatched === "boolean" ? providerTelemetry.variantMatched : null,
           modelAttempts: Array.isArray(providerTelemetry.modelAttempts) ? providerTelemetry.modelAttempts : [],
           variantType: plan.variant_type ?? null,
-          anchor: plan.anchor,
           voiceId: plan.voice_id,
           voiceType: plan.voice_id,
           speechSpeed: plan.speech_speed ?? 1,
@@ -263,7 +255,7 @@ export async function processJob(
       };
       await jobStore.updateDirectorPlan?.(job.userId, job.id, directorPlan, context.workerId);
       activeJob = { ...job, directorPlan };
-      console.info(`[jansee-director] plan ready job=${job.id} mode=${job.mode} scene=${String(providerTelemetry.scene ?? "unreported")}/${String(providerTelemetry.sceneSource ?? "unreported")} providerMode=${String(providerTelemetry.providerMode ?? "unreported")} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic")} fallbackUsed=${providerTelemetry.fallbackUsed === true} llmMs=${llmDurationMs} tokens=${Number(providerTelemetry.totalTokens ?? 0)} anchor=${plan.anchor} anchorHit=${providerTelemetry.anchorHit === true} variant=${String(plan.variant_type ?? "none")} lockedVariant=${String(providerTelemetry.lockedVariant ?? "none")} variantMatched=${providerTelemetry.variantMatched === true} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
+      console.info(`[jansee-director] plan ready job=${job.id} mode=${job.mode} scene=${String(providerTelemetry.scene ?? "unreported")}/${String(providerTelemetry.sceneSource ?? "unreported")} providerMode=${String(providerTelemetry.providerMode ?? "unreported")} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic")} fallbackUsed=${providerTelemetry.fallbackUsed === true} llmMs=${llmDurationMs} tokens=${Number(providerTelemetry.totalTokens ?? 0)} variant=${String(plan.variant_type ?? "none")} lockedVariant=${String(providerTelemetry.lockedVariant ?? "none")} variantMatched=${providerTelemetry.variantMatched === true} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
     }
 
     // 3. rendering (70%)
@@ -354,6 +346,7 @@ export async function processJob(
           ...(engineResult.ttsDurationMs !== undefined ? { ttsDurationMs: engineResult.ttsDurationMs } : {}),
           ...(engineResult.ffmpegDurationMs !== undefined ? { ffmpegDurationMs: engineResult.ffmpegDurationMs } : {}),
           ...(engineResult.subtitleTimeline ? { subtitleTimeline: engineResult.subtitleTimeline } : {}),
+          ...(engineResult.coverStorageKey ? { coverStorageKey: engineResult.coverStorageKey } : {}),
         };
         renderResults = [renderResult!];
       } finally {
@@ -430,6 +423,7 @@ export async function processJob(
         durationMs: output.durationMs,
         width: output.width,
         height: output.height,
+        ...(output.coverStorageKey ? { coverStorageKey: output.coverStorageKey } : {}),
         ...(context.workerId ? { workerId: context.workerId } : {}),
       });
     }
@@ -456,7 +450,7 @@ export async function processJob(
           ffmpegDurationMs,
           ttsDurationMs,
           rendererDurationMs,
-          e2eDurationMs: Date.now() - job.queuedAt.getTime(),
+          e2eDurationMs: Date.now() - e2eStartTime,
           ttsChars,
           providerMode: providerTelemetry.providerMode ?? previousTelemetry.providerMode ?? "unreported",
           requestedModel: providerTelemetry.requestedModel ?? previousTelemetry.requestedModel ?? null,
@@ -477,13 +471,14 @@ export async function processJob(
     }
     // Production PostgreSQL settles the hold and completes the job in one transaction.
     // This prevents a completed job with frozen credits, or a failed job whose credits were already charged.
-    if (context.billingStore?.completeJobAndSettle && context.workerId) {
+    if (isFreeJob) {
+      await jobStore.updateJobStatus?.(job.userId, job.id, "completed", 100, undefined, context.workerId);
+    } else if (context.billingStore?.completeJobAndSettle && context.workerId) {
       await context.billingStore.completeJobAndSettle(job.userId, job.id, context.workerId);
     } else {
       await context.billingStore?.settleCredits(job.userId, job.id);
       await jobStore.updateJobStatus?.(job.userId, job.id, "completed", 100, undefined, context.workerId);
     }
-    await deleteSourceAssets();
     return true;
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
@@ -500,7 +495,7 @@ export async function processJob(
           ffmpegDurationMs,
           ttsDurationMs,
           ttsChars,
-          e2eDurationMs: Date.now() - job.queuedAt.getTime(),
+          e2eDurationMs: Date.now() - e2eStartTime,
           providerMode: providerTelemetry.providerMode ?? previousTelemetry.providerMode ?? "unreported",
           requestedModel: providerTelemetry.requestedModel ?? previousTelemetry.requestedModel ?? null,
           selectedModel: providerTelemetry.selectedModel ?? previousTelemetry.selectedModel ?? null,
@@ -533,12 +528,11 @@ export async function processJob(
       if (statusError instanceof Error && statusError.message === "WORKER_LEASE_LOST") return false;
       throw statusError;
     }
-    await deleteSourceAssets();
     if (!outputsPublished && stagedStorageKeys.length) {
       await Promise.allSettled(stagedStorageKeys.map((key) => storage.deleteObject(key)));
     }
-    // 渲染失败，自动秒级解冻返还预留的 200 积分
-    await context.billingStore?.refundCredits(job.userId, job.id);
+    // 渲染失败，自动秒级解冻返还预留的 200 积分；免费入口没有冻结，无需返还。
+    if (!isFreeJob) await context.billingStore?.refundCredits(job.userId, job.id);
     return false;
   } finally {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -554,7 +548,10 @@ export function buildJobClaimSql(maxAttempts = WORKER_MAX_ATTEMPTS): string {
       OR (status IN ('inspecting', 'planning', 'rendering', 'quality-check')
           AND lease_expires_at IS NOT NULL AND lease_expires_at < now() AND attempt_count < ${maxAttempts})
     )
-      AND EXISTS (SELECT 1 FROM billing_ledger ledger WHERE ledger.job_id = generation_jobs.id AND ledger.type = 'hold')
+      AND (
+        EXISTS (SELECT 1 FROM billing_ledger ledger WHERE ledger.job_id = generation_jobs.id AND ledger.type = 'hold')
+        OR generation_jobs.request_payload->>'creationScene' IN ('personal-creation', 'quick-cut')
+      )
     ORDER BY
       (COALESCE((
         SELECT CASE membership.tier_id
@@ -667,8 +664,7 @@ export function startJobWorkerLoop(
   pollIntervalMs = 2_000,
   requestedConcurrency = Number(process.env.WORKER_CONCURRENCY ?? 2),
 ): { stop(): void } {
-  // V2 的实测基线：重型媒体任务最多同时执行 2 个。
-  // V4 单机 4C4G 不允许通过环境变量突破该上限；资源紧张时可降为 1。
+  // ffmpeg 6.1.3 修复后内存稳定，4C4G 实测可并行两条；默认并发 2，上限 2。
   const concurrency = Number.isFinite(requestedConcurrency)
     ? Math.max(1, Math.min(2, Math.floor(requestedConcurrency)))
     : 2;

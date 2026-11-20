@@ -6,17 +6,20 @@ import type { AssetStore } from "./assets.js";
 import { authenticatedUser } from "./assets.js";
 import { assertJobTransition } from "@jansee/domain";
 import type { BillingStore } from "./billing.js";
-import { GENERATION_COST_CREDITS } from "./billing.js";
+import { GENERATION_COST_CREDITS, isFreeCreationEntry } from "./billing.js";
 import { detectSensitiveTerms } from "./content-safety.js";
-import { BATCH_VERSION_LIMIT, assignBatchVariants, deriveBatchIdempotencyKey } from "./batch-versions.js";
-import { detectCreationScene, type CreationScene } from "./prompt-assembly.js";
+import { BATCH_VERSION_LIMIT, deriveBatchIdempotencyKey } from "./batch-versions.js";
+import { detectCreationScene, withCreationSceneMarker, type CreationEntryScene } from "./prompt-assembly.js";
 
 export const CreateJobRequestSchema = z.object({
   mode: z.enum(["image-film", "video-dub", "storyboard"]),
   prompt: z.string().trim().min(1).max(2_000),
   aspectRatio: z.enum(["9:16", "16:9", "1:1", "4:3"]).default("9:16"),
+  creationScene: z.enum(["online-ecommerce", "physical-store", "personal-creation", "quick-cut"]).optional(),
   assetIds: z.array(z.string().uuid()).min(1).max(9).refine((ids) => new Set(ids).size === ids.length, "素材不能重复"),
   directorPlan: z.record(z.string(), z.unknown()).optional(),
+  // 批量赛马：规划接口一次 LLM 调用产出的 N 版差异化方案，逐版对应一个任务（下标即版本序）。
+  directorPlans: z.array(z.record(z.string(), z.unknown())).max(BATCH_VERSION_LIMIT).optional(),
   idempotencyKey: z.string().uuid(),
   // 多版成片（批量赛马）：客户端由规划接口返回的 batch.total 透传；服务端在此校验上限
   versions: z.number().int().min(1).max(BATCH_VERSION_LIMIT).optional(),
@@ -30,11 +33,10 @@ export const CreateJobRequestSchema = z.object({
 });
 export type CreateJobRequest = z.infer<typeof CreateJobRequestSchema>;
 
-/** 批量赛马时服务端逐版构造的任务输入：batchIndex / variantOverride 仅由服务端注入（schema strict 拒绝客户端伪造）。 */
+  /** 批量赛马时服务端逐版构造的任务输入。 */
 export type CreateJobInput = CreateJobRequest & {
   batchIndex?: number;
-  variantOverride?: string;
-  creationScene?: CreationScene;
+  creationScene?: CreationEntryScene;
 };
 
 export interface GenerationJobRecord {
@@ -61,8 +63,6 @@ export interface GenerationJobRecord {
 export interface JobStore {
   createJob(userId: string, input: CreateJobInput): Promise<GenerationJobRecord>;
   findJobById(userId: string, jobId: string): Promise<GenerationJobRecord | null>;
-  /** 单用户在途任务门禁：存在 queued/inspecting/planning/rendering/quality-check 任务即返回该任务。 */
-  findUserActiveJob?(userId: string): Promise<GenerationJobRecord | null>;
   updateJobStatus?(userId: string, jobId: string, toStatus: JobStatus, progress?: number, error?: { code: string; message: string }, workerId?: string): Promise<GenerationJobRecord | null>;
   updateDirectorPlan?(userId: string, jobId: string, directorPlan: Record<string, unknown>, workerId?: string): Promise<void>;
   heartbeatJob?(userId: string, jobId: string, workerId: string, leaseSeconds?: number): Promise<boolean>;
@@ -96,7 +96,7 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     if (!parsed.success) {
       return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "生成任务参数不符合要求", requestId: request.id } });
     }
-    const contentHits = detectSensitiveTerms({ prompt: parsed.data.prompt, directorPlan: parsed.data.directorPlan });
+    const contentHits = detectSensitiveTerms({ prompt: parsed.data.prompt, directorPlan: parsed.data.directorPlan, directorPlans: parsed.data.directorPlans });
     if (contentHits.length > 0) {
       request.log.warn({ userId: user.id, scene: "jobs.create", hitCount: contentHits.length }, "blocked job content by local preflight");
       return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "内容可能涉及平台禁止内容或高风险宣传用语，请调整描述后重试", requestId: request.id } });
@@ -106,48 +106,33 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
       return reply.code(400).send({ error: { code: "UNTRUSTED_SPEECH_CUT_PLAN", message: "语音精剪必须先完成服务端分析并确认建议" } });
     }
 
-    if (options.assetStore.findUserAssets) {
-      const owned = await options.assetStore.findUserAssets(user.id, parsed.data.assetIds);
-      if (owned.length !== parsed.data.assetIds.length) {
-        return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "指定的部分素材不存在或不属于当前账号", requestId: request.id } });
-      }
-      const kinds = new Set(owned.map((a) => a.mediaType));
-      if (kinds.size !== 1) {
-        return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "一次创作只能使用同一类素材", requestId: request.id } });
-      }
-      if (parsed.data.mode === "image-film" && owned.some((a) => a.mediaType !== "image")) {
-        return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "图片成片只接受图片素材", requestId: request.id } });
-      }
-      if (parsed.data.mode !== "image-film" && owned.some((a) => a.mediaType !== "video")) {
-        return reply.code(400).send({ error: { code: "INVALID_JOB_REQUEST", message: "视频创作只接受视频素材", requestId: request.id } });
-      }
+    // 入口场景以客户端明确选择为准；旧客户端没有该字段时仍按提示词前缀/关键词推断。
+    const creationScene: CreationEntryScene = parsed.data.creationScene ?? detectCreationScene(parsed.data.prompt, parsed.data.mode);
+    const isFreeEntry = isFreeCreationEntry(creationScene);
+    // 游客（未绑定手机/邮箱）不带可消费积分：收费场景直接引导注册，防止匿名会话白嫖付费产能。
+    // 资格检查必须在素材归属/计费检查之前——先问资格，再查资源。
+    if (!isFreeEntry && !user.phone && !user.email) {
+      return reply.code(401).send({
+        error: {
+          code: "GUEST_PAID_SCENE_BLOCKED",
+          message: "带货视频/门店获客为付费功能，请先注册登录后再使用；个人创作与一句话剪辑无需注册即可体验",
+          requestId: request.id,
+        },
+      });
     }
 
-    // 多版成片（批量赛马）：personal 场景没有变体体系，强制降为单版（防客户端伪造 versions）。
-    const creationScene = detectCreationScene(parsed.data.prompt, parsed.data.mode);
-    const versions = creationScene === "personal-creation"
+    // 素材归属/类型一致性校验已移除：素材为用户自行上传、成片只交付提交者，无需在提交环节做归属检查。
+
+    // 多版成片（批量赛马）：免费入口没有变体体系，强制降为单版（防客户端用 versions 放大免费额度）。
+    const versions = isFreeEntry
       ? 1
       : Math.max(1, Math.min(BATCH_VERSION_LIMIT, parsed.data.versions ?? 1));
+    // 把场景前缀写回任务提示词，worker/renderer 复用同一事实来源；quick-cut 由 requestPayload 标记。
+    const storedPrompt = withCreationSceneMarker(parsed.data.prompt, creationScene);
 
-    // 单用户在途任务门禁：最多 1 个进行中任务（对齐 V2 防算力独占；批量请求自身产出 N 个在途任务，只在创建前检查一次）。
-    // 同一幂等键的重试放行：createJob 按 user_id+idempotency_key 幂等去重，返回的是同一个任务。
-    if (versions === 1 && options.jobStore.findUserActiveJob) {
-      const activeJob = await options.jobStore.findUserActiveJob(user.id);
-      if (activeJob && activeJob.idempotencyKey !== parsed.data.idempotencyKey) {
-        return reply.code(409).send({
-          error: {
-            code: "ACTIVE_JOB_EXISTS",
-            message: "您已有正在制作中的视频任务，请稍候完成后再提交新任务",
-            activeJobId: activeJob.id,
-            requestId: request.id,
-          },
-        });
-      }
-    }
-
-    // 计费检查：每版成片预冻结 200 积分（第一阶段：预冻结），N 版共 N×200。
-    const requiredCredits = GENERATION_COST_CREDITS * versions;
-    if (options.billingStore) {
+    // 计费检查：个人创作/一句话剪辑入口免费；其余场景每版预冻结 200 积分，N 版共 N×200。
+    const requiredCredits = isFreeEntry ? 0 : GENERATION_COST_CREDITS * versions;
+    if (options.billingStore && !isFreeEntry) {
       const wallet = await options.billingStore.getWallet(user.id);
       if (wallet.availableCredits < requiredCredits) {
         return reply.code(402).send({
@@ -174,21 +159,21 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     });
 
     if (versions === 1) {
-      const job = await options.jobStore.createJob(user.id, { ...parsed.data, creationScene });
-      if (options.billingStore) {
+      const job = await options.jobStore.createJob(user.id, { ...parsed.data, prompt: storedPrompt, creationScene });
+      if (options.billingStore && !isFreeEntry) {
         await options.billingStore.holdCredits(user.id, job.id, GENERATION_COST_CREDITS);
       }
       return reply.code(201).send({ job: jobSummary(job) });
     }
 
     // 批量赛马：一次请求连续创建 N 个独立任务（各自幂等键、各自冻结 200 积分、独立生命周期）。
-    // v1 复用客户端 directorPlan（一条成片一次 LLM）；v2..N 剥掉方案由 worker 补跑 LLM，并注入轮转变体实现批内差异化。
-    const scene = creationScene === "physical-store" ? "local" : "sell";
-    const variantAssignments = assignBatchVariants(parsed.data.prompt, scene, versions);
-    const batchBaseInput: Omit<CreateJobRequest, "directorPlan"> & { creationScene: CreationScene } = {
+    // 新链路：规划接口一次 LLM 调用产出 N 版差异化方案，每版任务直接携带各自方案，worker 不再补跑。
+    // 方案缺失的版本由 Worker 使用与单片一致的导演提示词独立补跑。
+    const clientPlans = Array.isArray(parsed.data.directorPlans) ? parsed.data.directorPlans : [];
+    const batchBaseInput: Omit<CreateJobRequest, "directorPlan" | "directorPlans"> & { creationScene: CreationEntryScene } = {
       creationScene,
       mode: parsed.data.mode,
-      prompt: parsed.data.prompt,
+      prompt: storedPrompt,
       aspectRatio: parsed.data.aspectRatio,
       assetIds: parsed.data.assetIds,
       idempotencyKey: parsed.data.idempotencyKey,
@@ -197,18 +182,19 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     const created: Array<{ job: GenerationJobRecord; billed: boolean }> = [];
     try {
       for (let index = 0; index < versions; index += 1) {
-        const variantOverride = variantAssignments[index];
-        const input: CreateJobInput = index === 0
-          ? { ...parsed.data, creationScene }
-          : {
-              ...batchBaseInput,
-              idempotencyKey: deriveBatchIdempotencyKey(parsed.data.idempotencyKey, index + 1),
-              batchIndex: index + 1,
-              ...(variantOverride ? { variantOverride } : {}),
-            };
+        const planForVersion = clientPlans[index] ?? (index === 0 ? parsed.data.directorPlan : undefined);
+        const input: CreateJobInput = {
+          ...batchBaseInput,
+          idempotencyKey: index === 0
+            ? parsed.data.idempotencyKey
+            : deriveBatchIdempotencyKey(parsed.data.idempotencyKey, index + 1),
+          batchIndex: index + 1,
+          ...(planForVersion ? { directorPlan: planForVersion } : {}),
+        };
         const job = await options.jobStore.createJob(user.id, input);
         created.push({ job, billed: false });
-        if (options.billingStore) {
+        // 只有带货视频/门店获客收费；免费入口即使将来放开多版也绝不冻结积分。
+        if (options.billingStore && !isFreeEntry) {
           await options.billingStore.holdCredits(user.id, job.id, GENERATION_COST_CREDITS);
           created[created.length - 1]!.billed = true;
         }

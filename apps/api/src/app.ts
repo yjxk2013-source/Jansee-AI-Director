@@ -9,6 +9,7 @@ import rateLimit from "@fastify/rate-limit";
 import QRCode from "qrcode";
 import { DirectorPlanRequestSchema, type DirectorPlanner } from "./director.js";
 import { parseBatchVersions } from "./batch-versions.js";
+import { withCreationSceneMarker } from "./prompt-assembly.js";
 import { detectSensitiveTerms } from "./content-safety.js";
 import { registerAuthRoutes, type AuthStore } from "./auth.js";
 import { registerAssetRoutes, authenticatedUser, type AssetStore } from "./assets.js";
@@ -121,7 +122,6 @@ export function buildApp(config: AppConfig): FastifyInstance {
       jobStore: config.jobStore,
       speechCutStore: config.speechCutStore,
       storage: config.mediaStorage,
-      ...(config.billingStore ? { billingStore: config.billingStore } : {}),
       allowedOrigins: config.allowedOrigins,
       analyzeVideo: config.speechCutAnalyzer,
       detectSuggestions: config.speechCutSuggestionDetector,
@@ -443,8 +443,10 @@ export function buildApp(config: AppConfig): FastifyInstance {
     }
     const parsed = DirectorPlanRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: "INVALID_DIRECTOR_REQUEST", message: "创作需求或素材信息不符合要求", requestId: request.id } });
+    // 前端明确选择的入口场景优先写入提示词前缀，保证导演路由与用户所见场景一致。
+    const planningPrompt = withCreationSceneMarker(parsed.data.prompt, parsed.data.creationScene);
 
-    const promptHits = detectSensitiveTerms(parsed.data.prompt);
+    const promptHits = detectSensitiveTerms(planningPrompt);
     if (promptHits.length > 0) {
       request.log.warn({ userId: user?.id ?? null, scene: "director.plan", hitCount: promptHits.length }, "blocked content by local preflight");
       return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "内容可能涉及平台禁止内容或高风险宣传用语，请调整描述后重试", requestId: request.id } });
@@ -484,22 +486,28 @@ export function buildApp(config: AppConfig): FastifyInstance {
       request.log.warn({ userId: user?.id ?? null, scene: "director.assets", hitCount: assetNameHits.length }, "blocked asset name by local preflight");
       return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "素材文件名包含平台禁止内容或高风险宣传用语，请调整文件名后重试", requestId: request.id } });
     }    try {
+      // 多版成片（批量赛马）：版数先由用户文字/语音转写文本解析；规划接口只生成首版。
+      // 后续版本由各自 Worker 使用单版提示词独立补跑，避免一次 LLM 输出 N 份 JSON 造成整批失败。
+      const batch = parseBatchVersions(planningPrompt, parsed.data.mode);
       const generatedPlan = await config.directorPlanner.createPlan({
         mode: parsed.data.mode,
-        prompt: parsed.data.prompt,
+        prompt: planningPrompt,
         aspectRatio: parsed.data.aspectRatio,
         assets: resolvedAssets,
       });
-      const generatedHits = detectSensitiveTerms(generatedPlan);
-      if (generatedHits.length > 0) {
-        request.log.warn({ userId: user?.id ?? null, scene: "director.output", hitCount: generatedHits.length }, "blocked generated content by local preflight");
-        return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "生成内容包含平台禁止内容或高风险宣传用语，已阻止继续制作，请调整要求后重试", requestId: request.id } });
+      const generatedPlans = [generatedPlan];
+      // 内容安检逐版执行：任何一版命中即整体拦截，不放行带风险内容的部分版本。
+      for (const generatedPlan of generatedPlans) {
+        const generatedHits = detectSensitiveTerms(generatedPlan);
+        if (generatedHits.length > 0) {
+          request.log.warn({ userId: user?.id ?? null, scene: "director.output", hitCount: generatedHits.length }, "blocked generated content by local preflight");
+          return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "生成内容包含平台禁止内容或高风险宣传用语，已阻止继续制作，请调整要求后重试", requestId: request.id } });
+        }
       }
-      // 保留服务端导演遥测，随方案传给任务创建接口；Worker 会先剥离并单独校验方案字段。
-      const plan = { ...generatedPlan } as Record<string, unknown>;
-      // 多版成片（批量赛马）：由用户文字/语音转写文本解析版数，客户端据此提示 N×200 积分并提交 versions=N
-      const batch = parseBatchVersions(parsed.data.prompt, parsed.data.mode);
-      return reply.send({ plan, batch: { total: batch.total } });
+      // 保留服务端导演遥测（_providerTelemetry 随每版方案下传，任务创建后由 Worker 剥离并校验）。
+      // plan 字段返回首版，兼容旧客户端；plans 为批量赛马的全量版本。
+      const plans = generatedPlans as unknown as Array<Record<string, unknown>>;
+      return reply.send({ plans, plan: plans[0], batch: { total: batch.total } });
     } catch (error) {
       request.log.error({ err: error }, "director planning failed");
       return reply.code(502).send({ error: { code: "DIRECTOR_PROVIDER_ERROR", message: "导演方案暂时生成失败，请稍后重试", requestId: request.id } });

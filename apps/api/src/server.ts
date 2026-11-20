@@ -79,6 +79,8 @@ const directorPlanner = directorBaseUrl && directorApiKey && directorModel ? cre
   fallbackModels: directorFallbackModels,
   timeoutMs: Number(process.env.DIRECTOR_TIMEOUT_MS ?? 12_000),
   fallbackTimeoutMs: Number(process.env.DIRECTOR_FALLBACK_TIMEOUT_MS ?? 18_000),
+  // 首包到达后等待完整方案的独立上限；避免慢速 Thinking 模型被首包预算误杀。
+  streamTimeoutMs: Number(process.env.DIRECTOR_STREAM_TIMEOUT_MS ?? 120_000),
   maxTokens: Number(process.env.DIRECTOR_MAX_TOKENS ?? 1_200),
   thinkingBudget: Number(process.env.DIRECTOR_THINKING_BUDGET ?? 512),
 }) : undefined;
