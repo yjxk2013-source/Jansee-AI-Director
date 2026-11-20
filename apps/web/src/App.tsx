@@ -242,6 +242,12 @@ export default function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const uploadPromisesRef = useRef<Map<string, Promise<string>>>(new Map());
+  // 素材上传进度状态：记录每个文件当前上传百分比（0-100），100 之后自动移除
+  const [uploadProgresses, setUploadProgresses] = useState<Record<string, number>>({});
+  const isAnyFileUploading = files.some((file) => {
+    const p = uploadProgresses[fileKey(file)];
+    return typeof p === "number" && p < 100;
+  });
   const [fileError, setFileError] = useTimedNotice();
   // 游客点收费场景的轻提示：同样 2.5 秒自动消失，与创作框错误位分开显示。
   const [guestTip, setGuestTip] = useTimedNotice();
@@ -753,14 +759,67 @@ export default function App() {
     if (!batch.length) return;
     const formData = new FormData();
     batch.forEach((file) => formData.append("files", file));
-    const request = (async () => {
-      const response = await fetch("/api/v1/assets", { method: "POST", credentials: "include", body: formData });
-      const payload = await response.json().catch(() => ({})) as { assets?: Array<{ assetId: string }>; error?: { message?: string } };
-      if (!response.ok || !payload.assets || payload.assets.length !== batch.length) {
-        throw new Error(payload.error?.message || "素材上传失败，请检查登录状态或稍后重试。");
-      }
-      return payload.assets;
-    })();
+
+    // 初始上传进度设为 5%，显示顺时针进度环
+    setUploadProgresses((prev) => {
+      const next = { ...prev };
+      batch.forEach((f) => { next[fileKey(f)] = 5; });
+      return next;
+    });
+
+    const request = new Promise<Array<{ assetId: string }>>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/v1/assets");
+      xhr.withCredentials = true;
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.min(96, Math.max(8, Math.round((event.loaded / event.total) * 100)));
+          setUploadProgresses((prev) => {
+            const next = { ...prev };
+            batch.forEach((f) => { next[fileKey(f)] = percent; });
+            return next;
+          });
+        }
+      };
+
+      xhr.onload = () => {
+        try {
+          const payload = JSON.parse(xhr.responseText || "{}") as { assets?: Array<{ assetId: string }>; error?: { message?: string } };
+          if (xhr.status >= 200 && xhr.status < 300 && payload.assets && payload.assets.length === batch.length) {
+            // 上传成功：冲刺到 100%，并在短暂动效后自动消除进度环
+            setUploadProgresses((prev) => {
+              const next = { ...prev };
+              batch.forEach((f) => { next[fileKey(f)] = 100; });
+              return next;
+            });
+            window.setTimeout(() => {
+              setUploadProgresses((prev) => {
+                const next = { ...prev };
+                batch.forEach((f) => { delete next[fileKey(f)]; });
+                return next;
+              });
+            }, 300);
+            resolve(payload.assets);
+          } else {
+            reject(new Error(payload.error?.message || "素材上传失败，请检查登录状态或稍后重试。"));
+          }
+        } catch (e) {
+          reject(e);
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("网络异常，素材上传失败，请重试。"));
+      };
+
+      xhr.onabort = () => {
+        reject(new Error("素材上传已中断，请重试。"));
+      };
+
+      xhr.send(formData);
+    });
+
     batch.forEach((file, index) => {
       const key = fileKey(file);
       uploadPromisesRef.current.set(key, request.then((assets) => {
@@ -769,6 +828,11 @@ export default function App() {
         return asset.assetId;
       }).catch((error) => {
         uploadPromisesRef.current.delete(key);
+        setUploadProgresses((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
         setFileError(error instanceof Error ? error.message : "素材上传失败，请重试。");
         throw error;
       }));
@@ -805,6 +869,11 @@ export default function App() {
     if (removed) {
       const key = fileKey(removed);
       uploadPromisesRef.current.delete(key);
+      setUploadProgresses((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     }
     setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
     setFileError("");
@@ -913,6 +982,10 @@ export default function App() {
     event?.preventDefault();
     const trimmed = draft.trim();
     if (isDirectorThinking) return;
+    if (isAnyFileUploading) {
+      setFileError("素材还在上传中，请稍候片刻…");
+      return;
+    }
     // 服务端底线拦截之外的前端引导：游客即使停在默认的收费场景，也在发请求前就引导注册。
     if (isGuestViewer && (creationScene === "online-ecommerce" || creationScene === "physical-store")) {
       guideGuestToRegister(creationScene === "online-ecommerce" ? "带货视频" : "门店获客");
@@ -1459,7 +1532,9 @@ export default function App() {
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      submitMessage();
+      if (!isAnyFileUploading) {
+        submitMessage();
+      }
     }
   }
 
@@ -2003,6 +2078,25 @@ export default function App() {
                       <video src={previewUrls[index]} muted playsInline preload="metadata" aria-label={`视频预览：${file.name}`} draggable={false} />
                     )}
                     <span className="pending-order">{index + 1}</span>
+                    {(() => {
+                      const progress = uploadProgresses[fileKey(file)];
+                      if (typeof progress !== "number" || progress >= 100) return null;
+                      return (
+                        <div className="attachment-upload-ring-layer" aria-label={`素材上传中 ${progress}%`}>
+                          <svg className="attachment-upload-ring-svg" viewBox="0 0 40 40">
+                            <circle className="attachment-upload-ring-bg" cx="20" cy="20" r="16" />
+                            <circle
+                              className="attachment-upload-ring-progress"
+                              cx="20"
+                              cy="20"
+                              r="16"
+                              strokeDasharray="100.53"
+                              strokeDashoffset={100.53 * (1 - progress / 100)}
+                            />
+                          </svg>
+                        </div>
+                      );
+                    })()}
                   </div>
 
 
@@ -2090,8 +2184,25 @@ export default function App() {
                   </svg>
                 )}
               </button>
-              <button className="send-button" type="submit" disabled={isDirectorThinking || (!draft.trim() && files.length === 0)} aria-label={isDirectorThinking ? "导演正在构思" : "发送消息"} title={isDirectorThinking ? "导演正在构思" : "发送"}>
-                {isDirectorThinking ? <span className="send-loading" aria-hidden="true">···</span> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>}
+              <button
+                className={`send-button ${isAnyFileUploading ? "is-uploading" : ""}`}
+                type="submit"
+                disabled={isDirectorThinking || isAnyFileUploading || (!draft.trim() && files.length === 0)}
+                aria-label={isDirectorThinking ? "导演正在构思" : isAnyFileUploading ? "素材上传中" : "发送消息"}
+                title={isDirectorThinking ? "导演正在构思" : isAnyFileUploading ? "素材上传中，上传完成后可发送" : "发送"}
+              >
+                {isDirectorThinking ? (
+                  <span className="send-loading" aria-hidden="true">···</span>
+                ) : isAnyFileUploading ? (
+                  <div className="send-button-uploading-indicator" aria-hidden="true">
+                    <svg className="send-upload-ring-svg" viewBox="0 0 24 24">
+                      <circle className="send-upload-ring-bg" cx="12" cy="12" r="9" />
+                      <circle className="send-upload-ring-spin" cx="12" cy="12" r="9" />
+                    </svg>
+                  </div>
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
+                )}
               </button>
             </div>
           </div>

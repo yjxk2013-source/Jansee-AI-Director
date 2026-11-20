@@ -673,6 +673,80 @@ textarea:focus-visible {
   object-fit: cover;
 }
 
+/* 素材上传顺时针环形进度遮罩 */
+.attachment-upload-ring-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 17, 21, 0.55);
+  backdrop-filter: blur(1.5px);
+  z-index: 3;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.attachment-upload-ring-svg {
+  width: 32px;
+  height: 32px;
+  transform: rotate(-90deg); /* 从顶部 12 点钟方向顺时针旋转 */
+}
+
+.attachment-upload-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 3;
+}
+
+.attachment-upload-ring-progress {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s ease-out;
+}
+
+/* 发送按钮素材上传中轻量锁定与微动效 */
+.send-button.is-uploading {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.send-button-uploading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.send-upload-ring-svg {
+  width: 18px;
+  height: 18px;
+  animation: send-spin 1s linear infinite;
+}
+
+.send-upload-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 2.5;
+}
+
+.send-upload-ring-spin {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 56.54;
+  stroke-dashoffset: 42;
+}
+
+@keyframes send-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .pending-order {
   position: absolute;
   left: 4px;
@@ -7494,6 +7568,80 @@ body,
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 素材上传顺时针环形进度遮罩 */
+.attachment-upload-ring-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 17, 21, 0.55);
+  backdrop-filter: blur(1.5px);
+  z-index: 3;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.attachment-upload-ring-svg {
+  width: 32px;
+  height: 32px;
+  transform: rotate(-90deg); /* 从顶部 12 点钟方向顺时针旋转 */
+}
+
+.attachment-upload-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 3;
+}
+
+.attachment-upload-ring-progress {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s ease-out;
+}
+
+/* 发送按钮素材上传中轻量锁定与微动效 */
+.send-button.is-uploading {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.send-button-uploading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.send-upload-ring-svg {
+  width: 18px;
+  height: 18px;
+  animation: send-spin 1s linear infinite;
+}
+
+.send-upload-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 2.5;
+}
+
+.send-upload-ring-spin {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 56.54;
+  stroke-dashoffset: 42;
+}
+
+@keyframes send-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .pending-order {
