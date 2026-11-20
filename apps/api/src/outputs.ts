@@ -123,7 +123,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     try {
       const filePath = await options.storage.getFilePath(output.coverStorageKey);
       const fileStat = await stat(filePath);
-      reply.header("cache-control", "private, max-age=3600");
+      reply.header("cache-control", "private, max-age=604800, immutable");
       reply.header("content-type", "image/jpeg");
       reply.header("content-length", fileStat.size);
       return reply.send(createReadStream(filePath));
@@ -154,9 +154,36 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       try { await options.outputStore.incrementDownloadCount(user.id, output.id); }
       catch { /* 统计失败不影响作品下载 */ }
     }
-    reply.header("cache-control", "private, no-store");
+
+    const fileSize = fileStat.size;
+    const rangeHeader = request.headers.range;
+
+    // 支持移动端和现代浏览器标准的 HTTP 206 字节分片请求 (Range)
+    if (rangeHeader && !isDownload) {
+      const parts = rangeHeader.replace(/bytes=/, "").split("-");
+      const startStr = parts[0] ?? "";
+      const endStr = parts[1] ?? "";
+      const start = parseInt(startStr, 10);
+      const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
+
+      if (isNaN(start) || start >= fileSize || (parts[1] && end >= fileSize) || start > end) {
+        reply.header("content-range", `bytes */${fileSize}`);
+        return reply.code(416).send();
+      }
+
+      const chunkSize = end - start + 1;
+      reply.code(206);
+      reply.header("content-range", `bytes ${start}-${end}/${fileSize}`);
+      reply.header("accept-ranges", "bytes");
+      reply.header("content-length", chunkSize);
+      reply.header("content-type", output.mimeType || "video/mp4");
+      reply.header("cache-control", "private, max-age=604800, immutable");
+      return reply.send(createReadStream(filePath, { start, end }));
+    }
+
+    reply.header("cache-control", isDownload ? "private, no-cache" : "private, max-age=604800, immutable");
     reply.header("content-type", output.mimeType || "video/mp4");
-    reply.header("content-length", fileStat.size);
+    reply.header("content-length", fileSize);
     reply.header("accept-ranges", "bytes");
     return reply.send(createReadStream(filePath));
   });

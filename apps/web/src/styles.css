@@ -12371,6 +12371,14 @@ body,
   color: var(--jansee-text-muted, #80868b);
 }
 
+.work-card-player {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000000;
+}
+
 .work-card-player video {
   width: 100%;
   max-height: 260px;
@@ -12378,6 +12386,78 @@ body,
   background: #000000;
   object-fit: contain;
   display: block;
+}
+
+.work-card-cover-container {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: #0d0e11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.work-card-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.work-card-cover-fallback {
+  width: 48px;
+  height: 48px;
+  color: #3c4043;
+}
+
+.work-card-cover-fallback svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.work-card-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  transition: background 0.2s ease;
+}
+
+.work-card-cover-container:hover .work-card-play-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.work-card-play-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(32, 33, 36, 0.85);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.work-card-play-icon svg {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+}
+
+.work-card-cover-container:hover .work-card-play-icon {
+  transform: scale(1.08);
+  background: rgba(0, 0, 0, 0.95);
 }
 
 .work-card-actions {

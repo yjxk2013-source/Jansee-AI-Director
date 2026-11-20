@@ -1379,17 +1379,17 @@ export default function App() {
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : "创作过程中遇到问题，请稍后重试。";
       const isTimeout = /timed out|TIMEOUT|超时|不可用|DIRECTOR_ALL_MODELS_FAILED/i.test(rawMessage);
-      const friendlyNotice = isTimeout ? "网络偶发超时，点击重试" : ("这次创作没能继续：" + rawMessage);
+      const friendlyNotice = isTimeout ? "网络偶发超时，点击下方重试" : ("这次创作没能继续：" + rawMessage);
       setConversations((current) => current.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
-        // 发生异常时，将正在等待的用户消息解除 isWorkbench，避免工作台空转悬停
-        const clearedMessages = conversation.messages.map((m) =>
-          m.id === userMessage.id ? { ...m, isWorkbench: false } : m);
+        // 发生异常时保留工作台载体与素材，标记 jobStatus: "failed"，让失败通知与重试卡片稳定呈现
+        const updatedMessages = conversation.messages.map((m) =>
+          m.id === userMessage.id ? { ...m, isWorkbench: true, jobStatus: "failed", jobError: friendlyNotice } : m);
         return {
           ...conversation,
           updatedAt: Date.now(),
           messages: [
-            ...clearedMessages,
+            ...updatedMessages,
             {
               id: makeId(),
               role: "director" as const,
@@ -1684,7 +1684,7 @@ export default function App() {
                     )}
 
                     {/* 任务失败：明确告知结果、不暴露内部错误、说明恢复方式与积分去向 */}
-                    {message.jobId && !message.jobWorkId && message.jobStatus === "failed" && (() => {
+                    {message.jobStatus === "failed" && !message.jobWorkId && (() => {
                       const failedScene = message.creationScene ?? creationScene;
                       const isPaidFailed = failedScene === "online-ecommerce" || failedScene === "physical-store";
                       return (
@@ -1698,12 +1698,24 @@ export default function App() {
                           </span>
                           <div className="job-failure-body">
                             <div className="job-failure-title">这次没能完成</div>
-                            <p className="job-failure-desc">制作过程中遇到了临时问题，你的素材和创作内容都已保留。</p>
+                            <p className="job-failure-desc">{message.jobError || "制作过程中遇到了临时问题，你的素材和创作内容都已保留。"}</p>
                             <p className="job-failure-hint">
                               {isPaidFailed
                                 ? "本次消耗的积分已退回，可调整描述或素材后重试。"
                                 : "本次为免费创作，不消耗积分，可调整描述或素材后重试。"}
                             </p>
+                            <div style={{ marginTop: "10px" }}>
+                              <button
+                                type="button"
+                                className="composer-button"
+                                style={{ padding: "6px 16px", fontSize: "13px", height: "auto" }}
+                                onClick={() => {
+                                  if (message.text) setDraft(message.text);
+                                }}
+                              >
+                                恢复素材与文案重试
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -3164,6 +3176,7 @@ function WorksPanel({
   const [error, setError] = useTimedNotice();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string>("");
+  const [activePlayWorkId, setActivePlayWorkId] = useState<string | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const [coverDataUrls, setCoverDataUrls] = useState<Record<string, string>>({});
 
@@ -3329,28 +3342,64 @@ function WorksPanel({
                 </div>
 
                 <div className="work-card-player">
-                  <video
-                    ref={(el) => { videoRefs.current[work.id] = el; }}
-                    src={`/api/v1/works/${work.id}/stream`}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    onLoadedMetadata={(event) => {
-                      event.currentTarget.currentTime = 0.1;
-                    }}
-                    onLoadedData={() => {
-                      // 仅在旧作品没有纯净封面时才截帧兜底；新作品直接用引擎生成的封面。
-                      if (!work.coverUrl && !coverDataUrls[work.id]) {
-                        setTimeout(() => captureFrameAsCover(work.id, false), 150);
-                      }
-                    }}
-                    onSeeked={() => {
-                      if (!work.coverUrl && !coverDataUrls[work.id]) {
-                        captureFrameAsCover(work.id, false);
-                      }
-                    }}
-                    aria-label={titleLabel}
-                  />
+                  {activePlayWorkId === work.id ? (
+                    <video
+                      ref={(el) => { videoRefs.current[work.id] = el; }}
+                      src={`/api/v1/works/${work.id}/stream`}
+                      controls
+                      autoPlay
+                      playsInline
+                      preload="auto"
+                      poster={work.coverUrl || coverDataUrls[work.id] || undefined}
+                      onPause={() => {
+                        // 暂停保留当前播放器状态
+                      }}
+                      onEnded={() => {
+                        // 播放结束保留当前画面
+                      }}
+                      aria-label={titleLabel}
+                    />
+                  ) : (
+                    <div
+                      className="work-card-cover-container"
+                      onClick={() => {
+                        setActivePlayWorkId(work.id);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`播放 ${titleLabel}`}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setActivePlayWorkId(work.id);
+                        }
+                      }}
+                    >
+                      {work.coverUrl || coverDataUrls[work.id] ? (
+                        <img
+                          src={work.coverUrl || coverDataUrls[work.id]}
+                          alt={titleLabel}
+                          loading="lazy"
+                          className="work-card-cover-img"
+                        />
+                      ) : (
+                        <div className="work-card-cover-fallback">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="m21 15-5-5L5 21" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="work-card-play-overlay">
+                        <div className="work-card-play-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="work-card-actions">
