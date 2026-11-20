@@ -77,8 +77,8 @@ const directorPlanner = directorBaseUrl && directorApiKey && directorModel ? cre
   apiKey: directorApiKey,
   model: directorModel,
   fallbackModels: directorFallbackModels,
-  timeoutMs: Number(process.env.DIRECTOR_TIMEOUT_MS ?? 12_000),
-  fallbackTimeoutMs: Number(process.env.DIRECTOR_FALLBACK_TIMEOUT_MS ?? 18_000),
+  timeoutMs: Number(process.env.DIRECTOR_TIMEOUT_MS ?? 25_000),
+  fallbackTimeoutMs: Number(process.env.DIRECTOR_FALLBACK_TIMEOUT_MS ?? 60_000),
   // 首包到达后等待完整方案的独立上限；避免慢速 Thinking 模型被首包预算误杀。
   streamTimeoutMs: Number(process.env.DIRECTOR_STREAM_TIMEOUT_MS ?? 120_000),
   maxTokens: Number(process.env.DIRECTOR_MAX_TOKENS ?? 1_200),
@@ -148,16 +148,16 @@ if (databasePool) {
 const database = databasePool ? { isHealthy: () => checkDatabase(databasePool), close: () => databasePool.end() } : undefined;
 const mediaStorage = mediaDriver === "cos"
   ? (process.env.COS_SECRET_ID && process.env.COS_SECRET_KEY && process.env.COS_BUCKET && process.env.COS_REGION && mediaCacheRoot
-      ? createTencentCosObjectStorage({
-          secretId: process.env.COS_SECRET_ID,
-          secretKey: process.env.COS_SECRET_KEY,
-          bucket: process.env.COS_BUCKET,
-          region: process.env.COS_REGION,
-          cacheRoot: mediaCacheRoot,
-          maxObjectBytes: maxMediaObjectBytes,
-          minFreeBytes: minMediaFreeBytes,
-        })
-      : undefined)
+    ? createTencentCosObjectStorage({
+      secretId: process.env.COS_SECRET_ID,
+      secretKey: process.env.COS_SECRET_KEY,
+      bucket: process.env.COS_BUCKET,
+      region: process.env.COS_REGION,
+      cacheRoot: mediaCacheRoot,
+      maxObjectBytes: maxMediaObjectBytes,
+      minFreeBytes: minMediaFreeBytes,
+    })
+    : undefined)
   : mediaRoot
     ? createLocalObjectStorage({ rootDir: mediaRoot, maxObjectBytes: maxMediaObjectBytes, minFreeBytes: minMediaFreeBytes })
     : undefined;
