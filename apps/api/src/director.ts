@@ -616,7 +616,14 @@ export function createOpenAICompatiblePlanner(config: {
           const parsed = { ...rawPlan };
           normalizeDirectorVoiceId(parsed);
           // A clear slicing request is a deterministic operation decision, even if the LLM omits it.
-          if (deterministicOperation) parsed.operation = deterministicOperation;
+          if (deterministicOperation) {
+            parsed.operation = deterministicOperation;
+          } else {
+            // 用户没有要求保留原声或切片，禁止 LLM 自行决定 keep-original 导致静默跳过 TTS 与字幕
+            if (parsed.operation === "keep-original") {
+              parsed.operation = "standard";
+            }
+          }
           if (deterministicOperation === "video-slice") parsed.sliceSeconds = parseSliceSeconds(input.prompt);
           if (!parsed.packaging || typeof parsed.packaging !== "object") {
             parsed.packaging = { intro: true, subtitles: true, bgm: true };

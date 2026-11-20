@@ -183,7 +183,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
 
   const batchVersions = Math.max(1, Math.floor(input.batchVersions ?? 1));
   const planExample = {
-    operation: "standard 或 video-slice 或 keep-original",
+    operation: "standard (默认) 或 video-slice (仅当用户明确要求截取高光切片时)",
     sliceSeconds: 20,
     title: "画面视觉主标题（4~6字最佳的凝练高奢短语，如「素履以往」「手作咖啡」「现烤蛋挞」，字数越少排版越大气高级，严禁冗长句子，严禁复制发布标题）",
     concept: "结合变体与口播人设的情绪创作阐述（20~100字）",
@@ -270,7 +270,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "===== 声音与视听节奏规范 =====",
     ...voiceBlock,
     `[背景音乐 BGM 情绪池]（从下列合法项选 1 个填入 bgm_emotion）：${CANDIDATE_EMOTIONS.join(" / ")}`,
-    "视听铁律：1.相邻分镜叠画转场0.7s（禁跳切）；2.两段式音量避让：口播段BGM=0.10，纯画面段BGM=0.22；3.packaging 只需给 intro/subtitles/bgm（合规片尾由系统固定生成，无需你决定，也不要输出 ending 字段）；4.operation: standard/video-slice/keep-original。",
+    "视听铁律：1.相邻分镜叠画转场0.7s（禁跳切）；2.两段式音量避让：口播段BGM=0.10，纯画面段BGM=0.22；3.packaging 只需给 intro/subtitles/bgm（合规片尾由系统固定生成，无需你决定，也不要输出 ending 字段）；4.operation: standard（默认口播成片）/ video-slice（视频高光切片）。除非用户在文案中明确指示「保留原声/不配音」，否则严禁输出 keep-original。",
     "",
     "===== 发布方案规则 =====",
     "publish必填：caption(正文+3-5个精准长尾话题标签)、cover_title(10-25字爆款标题)、pinned_comment(互动引流或置顶问句)、post_time(建议发布时段)。严禁过时年份与虚构物流。",
