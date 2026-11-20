@@ -221,10 +221,13 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
   const sections: string[] = [
     `Director route: ${creationScene}. Constitution Director owns global rules; persona directors operate within its boundaries.`,
     "===== 简兮 AI 导演 · 全局宪法核心视听铁律 (Constitution Core) =====",
-    "1. 素材与分镜对齐铁律：用户的 N 个实拍素材是唯一定格画面来源，输入 N 个素材必须且恰好规划 N 个分镜镜头，按视觉叙事顺序编排，严禁遗漏任何素材；",
-    "2. 时长由配音决定铁律：严禁输出任何时长字段或秒数字段；每句台词经 TTS 合成后的真实语音时长，就是对应镜头的画面时长，执行层据此逐镜对齐，严禁估算或指定秒数；",
-    "3. 真实性绝对红线：只提炼用户明确给出的客观事实，严禁编造参数、价格、功效或权威背书；严禁出现「左下角」「小黄车」「点击链接」等虚构导流；",
-    "4. 视听高级感铁律：死守无损物理安全区与 0 Emoji 规范；标题极简克制，副标留白点睛，正文旁白自然松弛。",
+    input.mode === "image-film"
+      ? "1. 图片与分镜对齐律：输入 N 张图片素材，规划 N 个分镜镜头，按视觉叙事顺序编排；全局 narration 旁白必须由 N 句精炼台词组成（每句用标点隔开，严格对应第 1 到第 N 个分镜镜头），每句台词经 TTS 实测后的真实时长决定对应图片的画面展示时长；"
+      : input.mode === "video-dub"
+        ? "1. 视频配音时长对齐律：视频画面有其原生真实时长，成片总时长由源视频决定；全局 narration 旁白必须根据视频原生时长创作完整、丰满、连贯的口播文案（包含黄金开场抓人、核心卖点阐述与行动引导），分句输出，字数严格匹配视频时长（口播语速约 3.5~4.5 字/秒），严禁只敷衍写一两句导致整片大段冷场空放BGM；"
+        : "1. 多视频分镜对齐律：输入 N 个视频素材，规划 N 个分镜镜头；全局 narration 旁白按顺序严格对应各分镜视觉焦点，每句台词经 TTS 实测后决定该镜头的剪辑呼吸；",
+    "2. 真实性绝对红线：只提炼用户明确给出的客观事实，严禁编造参数、价格、功效或权威背书；严禁出现「左下角」「小黄车」「点击链接」等虚构导流；",
+    "3. 视听高级感铁律：死守无损物理安全区与 0 Emoji 规范；标题极简克制，副标留白点睛，正文旁白自然松弛。",
     CONSTITUTION_RULES,
     input.mode === "storyboard" ? STORYBOARD_CORE_RULES : "",
     creationScene === "personal-creation" ? "[ROUTE] Personal creator path: Constitution Director directs knowledge, lifestyle, personal expression or personal IP. Do not use commercial variants." : "",
@@ -239,15 +242,25 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "3. 单一卖点刺穿（USP）：只聚焦讲透 1-2 个核心卖点，不盲目罗列；",
     "4. 事实红线：只用用户明确提供的事实，严禁编造参数/价格/功效/资质背书；禁止从文件名推测画面内容；",
     "",
-    "===== 成片旁白与分镜节奏对齐律（极其重要） =====",
-    "1. narration 字段是全片口播配音的唯一样本。如果用户输入提供了 N 个素材（无论是图片还是视频），narration 必须恰好由 N 句精炼台词组成，每句用标点符号（句号、感叹号或问号）清晰隔开；",
-    "2. 每一句台词按顺序严格对应第 1 到第 N 个分镜素材，执行层会将每句话与对应分镜无缝绑定；",
-    "3. 严禁单句长难句跨越多个分镜镜头，必须确保每一句话在当前镜头内语意完整、富有呼吸节奏；",
-    "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点安排（只描述画面看点，不要写运镜动作）。",
-    "5. 运镜编排铁律：每个 scene 必须额外输出 motion 字段，且只能从下面这份【引擎支持的运镜 ID 清单】里选一个原样填入，严禁自造运镜词、严禁输出清单外的任何值：",
-    "   - sweep_lr：镜头横向平移，从左向右缓缓扫过（适合横向铺陈、多主体依次呈现）",
-    "   - sweep_rl：镜头横向平移，从右向左缓缓扫过（适合横向铺陈、反向节奏）",
-    "   - rise_up：镜头缓缓向上抬升（适合突出高度、纵深感、主体登场）",
+    "===== 成片旁白与分镜节奏编排规范 =====",
+    ...(input.mode === "video-dub"
+      ? [
+          "1. 视频配音模式说明：本任务为单段已有视频配音，画面原生时长是固定的。narration 是全片主播口播台词，必须按自然表达断句（由标点符号清晰隔开），紧密围绕画面展现商业价值或探店亮点；",
+          "2. 台词体量与时长严格契合：按自然语速约 4 字/秒，台词总字数应充分铺满视频时长（留出开头与结尾各约 1 秒自然呼吸与 BGM 垫底），切忌只写一两句短语；",
+          "3. scenes 数组输出 1 个主体镜头描述（order: 1, description: 针对全片核心画面的视觉呈现总结，motion: sweep_lr）。",
+        ]
+      : [
+          "1. narration 字段是全片口播配音的唯一样本。如果用户输入提供了 N 个素材，narration 必须恰好由 N 句精炼台词组成，每句用标点符号（句号、感叹号或问号）清晰隔开；",
+          "2. 每一句台词按顺序严格对应第 1 到第 N 个分镜素材，执行层会将每句话与对应分镜无缝绑定；",
+          "3. 严禁单句长难句跨越多个分镜镜头，必须确保每一句话在当前镜头内语意完整、富有呼吸节奏；",
+          "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点安排（只描述画面看点，不要写运镜动作）。",
+          "5. 运镜编排铁律：每个 scene 必须额外输出 motion 字段，且只能从下面这份【引擎支持的运镜 ID 清单】里选一个原样填入，严禁自造运镜词、严禁输出清单外的任何值：",
+          "   - sweep_lr：镜头横向平移，从左向右缓缓扫过（适合横向铺陈、多主体依次呈现）",
+          "   - sweep_rl：镜头横向平移，从右向左缓缓扫过（适合横向铺陈、反向节奏）",
+          "   - rise_up：镜头缓缓向上抬升（适合突出高度、纵深感、主体登场）",
+          "   - diagonal：镜头斜向平移（适合增加动感、打破呆板构图）",
+          "   运镜要服务于该镜内容：按情绪和画面看点为每个镜头编排，相邻镜头尽量不重复同一种运镜；motion 只填上面 4 个 ID 之一（如 \"motion\": \"rise_up\"），不要写中文描述。",
+        ]),
     "   - diagonal：镜头斜向平移（适合增加动感、打破呆板构图）",
     "   运镜要服务于该镜内容：按情绪和画面看点为每个镜头编排，相邻镜头尽量不重复同一种运镜；motion 只填上面 4 个 ID 之一（如 \"motion\": \"rise_up\"），不要写中文描述。",
     "",
@@ -274,17 +287,43 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
  */
 export function buildDirectorUserPrompt(input: DirectorPlanResolvedInput): string {
   const assetCount = input.assets.length;
+  const isVideoDub = input.mode === "video-dub";
+  const videoDurationSec = isVideoDub && typeof input.assets[0]?.durationSec === "number" && input.assets[0].durationSec > 0
+    ? Math.round(input.assets[0].durationSec)
+    : null;
 
-  // 导演只根据用户描述创作台词；素材数量只用于分镜一一对应。
-  // 文件名 / 类型 / 大小一律不进入提示词，避免模型从文件名臆测画面内容。
+  const promptInstructions: string[] = [
+    "请作为专业导演，提炼用户文案中的客观事实，匹配最精准的变体与主播人设，输出可直接交付并可执行的完整成片方案与发布四件套。",
+  ];
+
+  if (isVideoDub) {
+    if (videoDurationSec) {
+      const minChars = Math.max(30, Math.round(videoDurationSec * 3.2));
+      const maxChars = Math.min(600, Math.max(minChars + 20, Math.round(videoDurationSec * 4.2)));
+      promptInstructions.push(
+        `【视频配音专属指令】：当前用户提供了一段实拍视频，视频真实时长约为 ${videoDurationSec} 秒。`,
+        `请为全片规划自然流畅、有呼吸感的完整口播解说，全局 narration 旁白推荐总字数约 ${minChars}~${maxChars} 字，分成若干句口播台词（用标点清晰隔开），紧密贴合 ${videoDurationSec} 秒的画面展现节奏。`,
+        "切忌只写一两句简短台词导致视频剩下大量冷场与纯BGM！台词需包含抓人的黄金3秒钩子、核心看点/卖点阐述与收尾行动引导。",
+      );
+    } else {
+      promptInstructions.push(
+        "【视频配音专属指令】：当前用户提供了一段实拍视频进行配音。请为整段视频创作完整、有起承转合的口播旁白，分句输出（用标点清晰隔开），字数适中（通常 50~120 字），切忌只写一两句简短台词。",
+      );
+    }
+  } else {
+    promptInstructions.push(
+      `分镜与台词精准对齐：本次任务共有 ${assetCount} 个实拍素材。请规划恰好 ${assetCount} 个分镜镜头（scenes 数组长度为 ${assetCount}，order 为 1 到 ${assetCount}）；全局 narration 旁白必须恰好由 ${assetCount} 句口播台词组成（用标点隔开），按顺序严格对应每个分镜镜头，严禁跨镜头长句。`,
+    );
+  }
+
+  promptInstructions.push(
+    "切记：第一句台词必须是抓人的黄金3秒钩子，去播音腔，不要编造用户未提及的任何数据或事实！",
+    "标题与说明行规范：title 必须为 4~6 字高级主标题（不可写成引流长句）；note 为 6~16 字调性说明行（不可复述旁白，不可写套话，不可留空）；publish.cover_title 为 10~25 字爆款发布标题。",
+  );
+
   return JSON.stringify({
     creationGoal: input.prompt,
     assetCount,
-    promptInstructions: [
-      "请作为专业导演，提炼用户文案中的客观事实，匹配最精准的变体与主播人设，输出可直接交付并可执行的完整成片方案与发布四件套。",
-      `分镜与台词精准对齐：本次任务共有 ${assetCount} 个实拍素材。请规划恰好 ${assetCount} 个分镜镜头（scenes 数组长度为 ${assetCount}，order 为 1 到 ${assetCount}）；全局 narration 旁白必须恰好由 ${assetCount} 句口播台词组成（用标点隔开），按顺序严格对应每个分镜镜头，严禁跨镜头长句。`,
-      "切记：第一句台词必须是抓人的黄金3秒钩子，去播音腔，不要编造用户未提及的任何数据或事实！",
-      "标题与说明行规范：title 必须为 4~6 字高级主标题（不可写成引流长句）；note 为 6~16 字调性说明行（不可复述旁白，不可写套话，不可留空）；publish.cover_title 为 10~25 字爆款发布标题。",
-    ],
+    promptInstructions,
   }, null, 2);
 }

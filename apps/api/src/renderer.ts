@@ -266,12 +266,16 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
         const outputKey = `users/${job.userId}/outputs/${job.id}`;
         try {
           const scene = renderScene;
+          const sentences = narration.split(/(?<=[。！？；，、\n])/).map((part) => part.trim()).filter(Boolean);
+          const shots = sentences.length > 0
+            ? sentences.map((line) => ({ line, pause_after: 0.25 }))
+            : [{ line: narration, pause_after: 0.25 }];
           const cut: Record<string, unknown> = {
             title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 30),
             intro_title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 30),
             intro_en: "JANSEE",
             intro_note: "AI DIRECTOR",
-            shots: [{ line: narration, pause_after: 0.25 }],
+            shots,
             bgm_emotion: typeof plan?.bgm_emotion === "string" ? plan.bgm_emotion : "warm",
             bgm_on: (plan?.packaging as Record<string, unknown> | undefined)?.bgm !== false && plan?.bgm_on !== false,
             speech_speed: speechSpeed,

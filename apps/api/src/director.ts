@@ -55,6 +55,7 @@ export interface DirectorPlanResolvedInput {
     name: string;
     kind: "image" | "video";
     size: number;
+    durationSec?: number;
   }>;
   /** 批量赛马兜底：worker 补跑时服务端排定的变体类型，锁定本次规划风格（批内逐版不同）。 */
   /** 批量赛马：本次规划要求一次 LLM 调用产出的方案数（>1 时走 versions 数组契约，批内差异化由 LLM 统筹）。 */

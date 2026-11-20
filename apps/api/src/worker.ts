@@ -20,7 +20,7 @@ import path from "node:path";
 // @ts-expect-error video-creator exports its mature JavaScript slicer
 import { prepareSlicer, composeSlicer, videoDurationSec } from "@jansee/video-creator/video/slicer.js";
 // @ts-expect-error ffmpeg-kit exposes media probing helpers
-import { probeVideoSize, hasAudioStream } from "@jansee/ffmpeg-kit/probe.mjs";
+import { probeVideoSize, hasAudioStream, probeDurationSec } from "@jansee/ffmpeg-kit/probe.mjs";
 // @ts-expect-error Auto-QC is a JavaScript workspace package
 import { performAutoQc } from "@jansee/ffmpeg-kit/autoQc.mjs";
 // @ts-expect-error publish-kit is a JavaScript workspace package
@@ -209,12 +209,25 @@ export async function processJob(
       console.info(`[jansee-director] plan reused job=${job.id} scene=${route.creationScene}/${route.sceneSource} providerMode=${String(providerTelemetry.providerMode)} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic/unreported")} fallbackUsed=${providerTelemetry.fallbackUsed === true} variant=${String(plan.variant_type ?? "none")} voiceType=${plan.voice_id} candidates=${JSON.stringify(providerTelemetry.voiceCandidateIds ?? [])} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
     } else if (context.directorPlanner && !isServerValidatedSpeechCut) {
       const planStartedAt = Date.now();
+      const resolvedPlanningAssets = await Promise.all(assets.map(async (asset) => {
+        let durationSec: number | undefined;
+        if (asset.mediaType === "video" && context.storage) {
+          try {
+            const filePath = await context.storage.getFilePath(asset.storageKey);
+            const probed = probeDurationSec(filePath);
+            if (Number.isFinite(probed) && probed > 0) durationSec = probed;
+          } catch {
+            // 时长探测失败忽略
+          }
+        }
+        return { name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes, ...(durationSec !== undefined ? { durationSec } : {}) };
+      }));
       // 批量赛马：每个版本都使用与单片一致的导演提示词独立补跑。
       const plan = await context.directorPlanner.createPlan({
         mode: job.mode,
         prompt: job.prompt,
         aspectRatio: job.aspectRatio,
-        assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
+        assets: resolvedPlanningAssets,
       });
       llmDurationMs = Date.now() - planStartedAt;
       providerTelemetry = (plan as typeof plan & { _providerTelemetry?: Record<string, unknown> })._providerTelemetry ?? {};

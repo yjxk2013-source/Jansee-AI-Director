@@ -27,6 +27,8 @@ import { GENERATION_COST_CREDITS } from "./billing.js";
 import { getPricingCatalog } from "./pricing.js";
 import { registerSiteAnalyticsRoutes } from "./site-analytics.js";
 import { registerConversationRoutes } from "./conversations.js";
+// @ts-expect-error ffmpeg-kit probe module is ESM
+import { probeDurationSec } from "@jansee/ffmpeg-kit/probe.mjs";
 
 export interface AppConfig {
   allowedOrigins: string[];
@@ -471,10 +473,20 @@ export function buildApp(config: AppConfig): FastifyInstance {
         return reply.code(400).send({ error: { code: "INVALID_DIRECTOR_REQUEST", message: "视频创作只接受视频素材", requestId: request.id } });
       }
       const assetMap = new Map(ownedAssets.map((a) => [a.id, a]));
-      resolvedAssets = parsed.data.assetIds.map((id) => {
+      resolvedAssets = await Promise.all(parsed.data.assetIds.map(async (id) => {
         const item = assetMap.get(id)!;
-        return { name: item.originalName, kind: item.mediaType, size: item.sizeBytes };
-      });
+        let durationSec: number | undefined;
+        if (item.mediaType === "video" && config.mediaStorage) {
+          try {
+            const filePath = await config.mediaStorage.getFilePath(item.storageKey);
+            const probed = probeDurationSec(filePath);
+            if (Number.isFinite(probed) && probed > 0) durationSec = probed;
+          } catch {
+            // 时长探测失败不阻断规划，回退到无时长规划
+          }
+        }
+        return { name: item.originalName, kind: item.mediaType, size: item.sizeBytes, ...(durationSec !== undefined ? { durationSec } : {}) };
+      }));
     }
 
     if (resolvedAssets.length === 0) {
