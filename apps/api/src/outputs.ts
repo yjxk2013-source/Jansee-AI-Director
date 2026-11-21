@@ -127,7 +127,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
         ttlSeconds: 3600,
       });
       reply.header("cache-control", "private, no-cache");
-      return reply.redirect(302, signedUrl);
+      return reply.redirect(signedUrl, 302);
     }
 
     try {
@@ -167,13 +167,12 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     // 若当前存储驱动支持直接生成带鉴权的高速下载/播放 URL（如腾讯云 COS），
     // 直接 302 重定向至对象存储直链，绕开服务器 3Mbps 带宽瓶颈，实现极速加载与满速下载。
     if (typeof options.storage.createSignedUrl === "function") {
-      const filename = isDownload ? `jansee_${output.id.slice(0, 8)}.mp4` : undefined;
       const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
-        downloadFilename: filename,
+        ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
         ttlSeconds: isDownload ? 600 : 3600,
       });
       reply.header("cache-control", "private, no-cache");
-      return reply.redirect(302, signedUrl);
+      return reply.redirect(signedUrl, 302);
     }
 
     const filePath = await options.storage.getFilePath(output.storageKey);
