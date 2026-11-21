@@ -941,13 +941,33 @@ export default function App() {
     });
   }
 
+  // 优雅的通用文件下载（支持同源与跨域 CDN，避免直接在浏览器中跳转播放）
+  async function downloadBlobFromUrl(url: string, filename: string) {
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("下载请求失败");
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+    } catch {
+      // 网络或 CORS 回退：直接 a.click
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  }
+
   function triggerDownloadFile(workId: string, filename: string) {
-    const a = document.createElement("a");
-    a.href = `/api/v1/works/${encodeURIComponent(workId)}/stream?download=1`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    void downloadBlobFromUrl(`/api/v1/works/${encodeURIComponent(workId)}/stream?download=1`, filename);
   }
 
   // 游客点收费场景：不切换场景，弹登录面板 + 2.5 秒自动消失的轻提示。
@@ -3432,6 +3452,7 @@ function WorksPanel({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string>("");
   const [activePlayWorkId, setActivePlayWorkId] = useState<string | null>(null);
+  const [previewingCoverUrl, setPreviewingCoverUrl] = useState<string | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const cardContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [coverDataUrls, setCoverDataUrls] = useState<Record<string, string>>({});
@@ -3480,7 +3501,7 @@ function WorksPanel({
     }
   };
 
-  const downloadCover = (work: WorkItem) => {
+  const downloadCover = async (work: WorkItem) => {
     const workId = work.id;
     if (!user || user.isGuest) {
       if (onRequestDownload) {
@@ -3490,14 +3511,28 @@ function WorksPanel({
     }
     // 新作品直接下载引擎生成的纯净封面（后端鉴权流）；旧作品回退到前端截帧。
     if (work.coverUrl) {
-      const a = document.createElement("a");
-      a.href = work.coverUrl;
-      a.download = `jansee-cover-${workId}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
       setCopyFeedback("封面图片已开始下载");
       setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
+      try {
+        const res = await fetch(work.coverUrl, { credentials: "include" });
+        if (!res.ok) throw new Error();
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = `jansee-cover-${workId}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objUrl), 30_000);
+      } catch {
+        const a = document.createElement("a");
+        a.href = work.coverUrl;
+        a.download = `jansee-cover-${workId}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
       return;
     }
     let dataUrl = coverDataUrls[workId];
@@ -3737,7 +3772,15 @@ function WorksPanel({
                     )}
 
                     <div className="work-publish-cover-card">
-                      <div className="work-publish-cover-preview">
+                      <div
+                        className="work-publish-cover-preview"
+                        style={{ cursor: (coverDataUrls[work.id] || work.coverUrl) ? "pointer" : "default" }}
+                        onClick={() => {
+                          const url = coverDataUrls[work.id] || work.coverUrl;
+                          if (url) setPreviewingCoverUrl(url);
+                        }}
+                        title={(coverDataUrls[work.id] || work.coverUrl) ? "点击查看大图" : undefined}
+                      >
                         {(coverDataUrls[work.id] || work.coverUrl) ? (
                           <img
                             src={coverDataUrls[work.id] || work.coverUrl!}
@@ -3785,18 +3828,6 @@ function WorksPanel({
                               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                             </svg>
                             下载封面图
-                          </button>
-                          <button
-                            type="button"
-                            className="work-cover-btn-action work-cover-btn-capture"
-                            onClick={() => captureFrameAsCover(work.id, true)}
-                            title="从视频当前画面截一张图作为封面（旧作品适用；新作品自带纯净封面）"
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <circle cx="12" cy="12" r="3" />
-                              <path d="M4 7h4l2-3h4l2 3h4a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2z" />
-                            </svg>
-                            截取当前播放帧
                           </button>
                         </div>
                       </div>
@@ -3850,6 +3881,57 @@ function WorksPanel({
           <span className="panel-empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z" /></svg></span>
           <strong>暂无成片</strong>
           <span>你还没有制作成片，快去让简兮导演为你制作第一支商业视频吧！</span>
+        </div>
+      )}
+      {previewingCoverUrl && (
+        <div
+          className="payment-dialog-overlay"
+          onClick={() => setPreviewingCoverUrl(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="查看封面大图"
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "min(90vw, 420px)",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              background: "#141517",
+              borderRadius: "14px",
+              padding: "16px",
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.4)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="payment-dialog-close"
+              aria-label="关闭预览"
+              onClick={() => setPreviewingCoverUrl(null)}
+              style={{
+                top: "-12px",
+                right: "-12px",
+                background: "#252629",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.2)",
+              }}
+            >
+              ×
+            </button>
+            <img
+              src={previewingCoverUrl}
+              alt="封面预览大图"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "75vh",
+                objectFit: "contain",
+                borderRadius: "8px",
+              }}
+            />
+          </div>
         </div>
       )}
       <button className="panel-primary-action" type="button" onClick={onNew}>开始新创作</button>

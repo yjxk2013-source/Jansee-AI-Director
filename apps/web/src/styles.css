@@ -11585,11 +11585,14 @@ body,
   line-height: 1.4;
   color: #e5e7eb;
   min-height: 32px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  max-height: 84px;
+  overflow-y: auto;
   word-break: break-all;
+  scrollbar-width: none;
+}
+
+.filmstrip-script-text::-webkit-scrollbar {
+  display: none;
 }
 
 .filmstrip-script-placeholder {
