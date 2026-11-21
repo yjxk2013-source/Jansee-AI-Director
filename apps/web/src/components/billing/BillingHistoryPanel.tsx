@@ -35,9 +35,9 @@ export function BillingHistoryPanel({ user, kind }: { user: AuthUser | null; kin
       if (!response.ok) {
         throw new Error(
           payload.error?.message ||
-            (response.status === 401
-              ? "登录状态已失效，请重新登录。"
-              : response.status >= 500
+          (response.status === 401
+            ? "登录状态已失效，请重新登录。"
+            : response.status >= 500
               ? "服务器暂时无法读取交易记录，请稍后重试。"
               : "暂时无法读取交易记录，请稍后重试。")
         );
@@ -151,7 +151,7 @@ export function BillingHistoryPanel({ user, kind }: { user: AuthUser | null; kin
   const isOrderExpired = (order: BillingOrder) =>
     order.status === "pending" &&
     Date.parse(order.paymentExpiresAt || new Date(Date.parse(order.createdAt) + 30 * 60 * 1000).toISOString()) <=
-      statusClock;
+    statusClock;
   const ledgerType: Record<BillingLedgerEntry["type"], string> = {
     grant: "积分赠送",
     hold: "制作冻结",
@@ -203,106 +203,106 @@ export function BillingHistoryPanel({ user, kind }: { user: AuthUser | null; kin
             <div className="billing-history-list">
               {kind === "orders"
                 ? (visibleRows as BillingOrder[]).map((order) => (
-                    <article className="billing-history-row" key={order.id}>
-                      <div className="billing-history-main">
-                        <strong>{order.packageName}</strong>
-                        <span>{order.id}</span>
-                        <small>{new Date(order.createdAt).toLocaleString("zh-CN")}</small>
-                      </div>
-                      <div className="billing-history-value">
-                        <strong>¥{Number(order.amountYuan).toFixed(2)}</strong>
-                        <span
-                          className={
-                            "billing-status billing-status-" + (isOrderExpired(order) ? "closed" : order.status)
-                          }
+                  <article className="billing-history-row" key={order.id}>
+                    <div className="billing-history-main">
+                      <strong>{order.packageName}</strong>
+                      <span>{order.id}</span>
+                      <small>{new Date(order.createdAt).toLocaleString("zh-CN")}</small>
+                    </div>
+                    <div className="billing-history-value">
+                      <strong>¥{Number(order.amountYuan).toFixed(2)}</strong>
+                      <span
+                        className={
+                          "billing-status billing-status-" + (isOrderExpired(order) ? "closed" : order.status)
+                        }
+                      >
+                        {isOrderExpired(order) ? "已失效" : orderStatus[order.status] || "状态未知"}
+                      </span>
+                      <small>{Number(order.credits).toLocaleString()} 积分</small>
+                      {order.status === "pending" && !isOrderExpired(order) && (
+                        <button
+                          type="button"
+                          className="billing-order-resume"
+                          disabled={resumingOrderId === order.id}
+                          onClick={() => void resumePayment(order.id)}
                         >
-                          {isOrderExpired(order) ? "已失效" : orderStatus[order.status] || "状态未知"}
-                        </span>
-                        <small>{Number(order.credits).toLocaleString()} 积分</small>
-                        {order.status === "pending" && !isOrderExpired(order) && (
+                          {resumingOrderId === order.id ? "正在发起付款…" : "继续付款"}
+                        </button>
+                      )}
+                      {isOrderExpired(order) && (
+                        <small className="billing-order-expired">付款时间已结束，请重新创建订单</small>
+                      )}
+                      {order.status === "paid" && (
+                        <>
+                          <small>如需退款或处理订单问题，请发送站内信联系简兮管理员，由人工核实处理。</small>
                           <button
                             type="button"
                             className="billing-order-resume"
-                            disabled={resumingOrderId === order.id}
-                            onClick={() => void resumePayment(order.id)}
+                            onClick={async () => {
+                              const message = window.prompt("请填写退款原因或订单问题");
+                              if (!message?.trim()) return;
+                              try {
+                                const response = await fetch("/api/v1/support/messages", {
+                                  method: "POST",
+                                  credentials: "include",
+                                  headers: {
+                                    "content-type": "application/json",
+                                    accept: "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    orderId: order.id,
+                                    subject: "退款/订单处理申请",
+                                    message: message.trim(),
+                                  }),
+                                });
+                                const payload = (await response.json().catch(() => ({}))) as {
+                                  error?: { message?: string };
+                                };
+                                if (!response.ok) throw new Error(payload.error?.message || "站内信发送失败");
+                                window.alert("站内信已发送，管理员核实后会处理。");
+                              } catch (cause) {
+                                window.alert(cause instanceof Error ? cause.message : "站内信发送失败");
+                              }
+                            }}
                           >
-                            {resumingOrderId === order.id ? "正在发起付款…" : "继续付款"}
+                            发送站内信
                           </button>
-                        )}
-                        {isOrderExpired(order) && (
-                          <small className="billing-order-expired">付款时间已结束，请重新创建订单</small>
-                        )}
-                        {order.status === "paid" && (
-                          <>
-                            <small>如需退款或处理订单问题，请发送站内信联系简兮管理员，由人工核实处理。</small>
-                            <button
-                              type="button"
-                              className="billing-order-resume"
-                              onClick={async () => {
-                                const message = window.prompt("请填写退款原因或订单问题");
-                                if (!message?.trim()) return;
-                                try {
-                                  const response = await fetch("/api/v1/support/messages", {
-                                    method: "POST",
-                                    credentials: "include",
-                                    headers: {
-                                      "content-type": "application/json",
-                                      accept: "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                      orderId: order.id,
-                                      subject: "退款/订单处理申请",
-                                      message: message.trim(),
-                                    }),
-                                  });
-                                  const payload = (await response.json().catch(() => ({}))) as {
-                                    error?: { message?: string };
-                                  };
-                                  if (!response.ok) throw new Error(payload.error?.message || "站内信发送失败");
-                                  window.alert("站内信已发送，管理员核实后会处理。");
-                                } catch (cause) {
-                                  window.alert(cause instanceof Error ? cause.message : "站内信发送失败");
-                                }
-                              }}
-                            >
-                              发送站内信
-                            </button>
-                          </>
-                        )}
-                        {order.status === "refund_requested" && (
-                          <small className="billing-refund-window">购买积分已暂时预留，等待商户后台完成真实退款</small>
-                        )}
-                      </div>
-                    </article>
-                  ))
+                        </>
+                      )}
+                      {order.status === "refund_requested" && (
+                        <small className="billing-refund-window">购买积分已暂时预留，等待商户后台完成真实退款</small>
+                      )}
+                    </div>
+                  </article>
+                ))
                 : (visibleRows as BillingLedgerEntry[]).map((entry) => (
-                    <article className="billing-history-row" key={entry.id}>
-                      <div className="billing-history-main">
-                        <strong>{ledgerSourceLabel(entry)}</strong>
-                        <span>{entry.description}</span>
-                        <small>
-                          {new Date(entry.createdAt).toLocaleString("zh-CN")}
-                          {entry.orderId ? ` · 订单 ${entry.orderId}` : ""}
-                        </small>
-                      </div>
-                      <div className="billing-history-value">
-                        <strong
-                          className={
-                            ["hold", "settle"].includes(entry.type) ||
+                  <article className="billing-history-row" key={entry.id}>
+                    <div className="billing-history-main">
+                      <strong>{ledgerSourceLabel(entry)}</strong>
+                      <span>{entry.description}</span>
+                      <small>
+                        {new Date(entry.createdAt).toLocaleString("zh-CN")}
+                        {entry.orderId ? ` · 订单 ${entry.orderId}` : ""}
+                      </small>
+                    </div>
+                    <div className="billing-history-value">
+                      <strong
+                        className={
+                          ["hold", "settle"].includes(entry.type) ||
                             (entry.type === "refund" && Boolean(entry.orderId))
-                              ? "billing-amount-negative"
-                              : "billing-amount-positive"
-                          }
-                        >
-                          {["hold", "settle"].includes(entry.type) ||
+                            ? "billing-amount-negative"
+                            : "billing-amount-positive"
+                        }
+                      >
+                        {["hold", "settle"].includes(entry.type) ||
                           (entry.type === "refund" && Boolean(entry.orderId))
-                            ? "−"
-                            : "+"}
-                          {Math.abs(Number(entry.amount)).toLocaleString()} 积分
-                        </strong>
-                      </div>
-                    </article>
-                  ))}
+                          ? "−"
+                          : "+"}
+                        {Math.abs(Number(entry.amount)).toLocaleString()} 积分
+                      </strong>
+                    </div>
+                  </article>
+                ))}
             </div>
             {rows.length > 3 && (
               <div className="billing-history-pagination">
