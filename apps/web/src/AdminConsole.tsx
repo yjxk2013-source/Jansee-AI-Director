@@ -1,189 +1,28 @@
 import { useState, useEffect } from "react";
+import type {
+  AdminInboxMessage,
+  AdminOverviewStats,
+  AdminPricingCatalog,
+  AdminPricingPlan,
+  CityPartner,
+  DirectorJobInsight,
+  PartnerPayoutProfile,
+  PartnerWithdrawal,
+  ServerHealthData,
+  SiteAnalyticsData,
+  SupportMessage,
+  UserAnalyticsData,
+  AdminConsoleProps,
+} from "./types/admin";
+import { AdminMetricStrip } from "./components/admin/tabs/AdminMetricStrip";
+import { AdminPricingTab } from "./components/admin/tabs/AdminPricingTab";
+import { AdminServerTab } from "./components/admin/tabs/AdminServerTab";
+import { AdminUsersTab } from "./components/admin/tabs/AdminUsersTab";
+import { AdminDirectorJobsTab } from "./components/admin/tabs/AdminDirectorJobsTab";
+import { AdminPartnerFinanceTab } from "./components/admin/tabs/AdminPartnerFinanceTab";
+import { AdminInboxTab } from "./components/admin/tabs/AdminInboxTab";
+import { AdminOverviewTab } from "./components/admin/tabs/AdminOverviewTab";
 
-interface AdminPricingPlan { id: string; name: string; priceYuan: number; strikeYuan: string; }
-interface AdminPricingCatalog {
-  members: AdminPricingPlan[];
-  boostPacks: AdminPricingPlan[];
-  sync?: { status: string; source: string; lastSyncedAt: string | null; productName?: string; priceVersions?: Record<string, number>; message?: string };
-}
-
-interface AdminOverviewStats {
-  totalUsers: number;
-  todayRevenueYuan: number;
-  todayNewUsers: number;
-  todayCompletedJobs: number;
-  todayFailedJobs: number;
-  jobSuccessRate: number;
-  avgE2eDurationSec: number;
-  p50E2eDurationSec: number;
-  p90E2eDurationSec: number;
-  p99E2eDurationSec: number;
-  avgLlmDurationSec: number;
-  avgTtsDurationSec: number;
-  avgFfmpegDurationSec: number;
-  avgRendererDurationSec: number;
-  avgSceneScore: number;
-  sceneScoreDataAvailable: boolean;
-  totalJobs: number;
-  failedJobs: number;
-  directorTelemetryAvailable: boolean;
-  directorCalls: number;
-  primaryModelSuccessRate: number;
-  fallbackModelRate: number;
-  heuristicFallbackRate: number;
-  totalTokensUsed: number;
-  tokenUsageRecords: number;
-  totalTtsChars: number;
-  qualityCheckedJobs: number;
-  qualityPassedJobs: number;
-  qualityPassRate: number;
-  totalCostEstimateYuan: number;
-  variantHitRate: number;
-  revenueDataAvailable?: boolean;
-  costDataAvailable?: boolean;
-  databaseDataAvailable?: boolean;
-}
-
-interface DirectorJobInsight {
-  jobId: string;
-  userId: string;
-  status: "queued" | "inspecting" | "planning" | "rendering" | "quality-check" | "completed" | "failed";
-  aspectRatio: string;
-  e2eDurationMs: number;
-  llmDurationMs: number;
-  ffmpegDurationMs: number;
-  rendererDurationMs: number;
-  ttsDurationMs: number;
-  variantDirectorHit: boolean;
-  variantType: string;
-  variantTemplate: string;
-  lockedVariant: string;
-  variantMatched: boolean | null;
-  voiceId: string;
-  scene: string;
-  sceneSource: string;
-  sceneType: string;
-  sceneScore: number;
-  sceneAlignmentReason: string;
-  tokensUsed: number;
-  ttsChars: number;
-  costEstimateYuan: number;
-  tokenUsageAvailable: boolean;
-  providerMode: string;
-  requestedModel: string;
-  selectedModel: string;
-  modelsAttempted: string[];
-  modelAttempts: Array<{ model: string; durationMs: number; ok: boolean; error?: string }>;
-  costSource: string;
-  qualityPassed: boolean;
-  failureStage: string;
-  creditsCharged: number;
-  errorCode?: string | null;
-  errorMessage?: string | null;
-  createdAt: string;
-  finishedAt?: string | null;
-}
-
-interface PartnerPayoutProfile {
-  userId: string;
-  channel: string;
-  accountLast4: string;
-  displayName: string;
-  contact: string;
-  province: string | null;
-  city: string | null;
-  updatedAt: string;
-}
-interface CityPartner {
-  userId: string;
-  displayName: string;
-  contact: string;
-  province: string | null;
-  city: string | null;
-  activatedAt: string;
-  directInvites: number;
-  secondLevelInvites: number;
-  pendingCommissionYuan: number;
-  settledCommissionYuan: number;
-  reservedWithdrawalYuan: number;
-  withdrawableYuan: number;
-  payoutVerificationStatus: string;
-  payoutAccountLast4: string | null;
-}
-interface PartnerWithdrawal {
-  id: string;
-  userId: string;
-  displayName: string;
-  contact: string;
-  amountYuan: number;
-  feeYuan: number;
-  netAmountYuan: number;
-  status: string;
-  note: string | null;
-  externalReference: string | null;
-  payoutChannel: string;
-  accountLast4: string | null;
-  createdAt: string;
-  processedAt: string | null;
-}
-interface SupportMessage {
-  id: string;
-  userId: string;
-  orderId: string | null;
-  displayName: string;
-  contact: string;
-  subject: string;
-  message: string;
-  status: "unread" | "read" | "resolved";
-  createdAt: string;
-}
-interface AdminInboxMessage {
-  id: string;
-  subject: string;
-  body: string;
-  category: "welcome" | "features" | "notice";
-  status: "draft" | "published";
-  createdAt: string;
-  updatedAt: string;
-  publishedAt: string | null;
-}
-interface UserAnalyticsData {
-  summary: { totalUsers: number; activeUsers: number; todayNewUsers: number; last7Days: number; last30Days: number; geoUsers: number; unknownRegionUsers: number };
-  trend: { day: string; registrations: number; completedJobs: number; revenueYuan: number }[];
-  regions: { province: string; users: number; cities: { city: string; users: number }[] }[];
-  users: { id: string; displayName: string; contact: string; status: string; createdAt: string; province: string | null; city: string | null; region: string; credits: number; completedJobs: number; downloads: number }[];
-  total: number;
-  limit: number;
-  offset: number;
-  regionDataAvailable: boolean;
-}
-interface SiteAnalyticsData {
-  summary: { pv: number; uv: number; days: number };
-  series: { day: string; pv: number; uv: number }[];
-  dimensions: { pages: Record<string, number>; sources: Record<string, number>; regions: Record<string, number>; devices: Record<string, number>; browsers: Record<string, number> };
-  note: string;
-}
-interface ServerHealthData {
-  sampledAt: string;
-  host: { platform: string; architecture: string; hostname: string; cpuCores: number; uptimeSeconds: number };
-  cpu: { usagePercent: number | null; loadAverage: number[] };
-  memory: { totalBytes: number; freeBytes: number; usedBytes: number; usedPercent: number; processRssBytes: number; processHeapUsedBytes: number };
-  disk: { totalBytes: number; freeBytes: number; usedBytes: number; usedPercent: number | null } | null;
-  mediaStorage?: {
-    driver: string;
-    bucket: string | null;
-    region: string | null;
-    activeOutputsCount: number;
-    activeOutputsBytes: number;
-    activeAssetsCount: number;
-    activeAssetsBytes: number;
-    totalBytes: number;
-  } | null;
-  services: Record<string, { status: string; detail: string }>;
-}
-interface AdminConsoleProps {
-  onClose: () => void;
-}
 
 export function AdminConsole({ onClose }: AdminConsoleProps) {
   const [loadedStats, setLoadedStats] = useState<AdminOverviewStats | null>(null);
@@ -768,662 +607,135 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
         </header>
 
         {/* 核心指标卡片条 */}
-        {(
-          <section className="admin-metric-strip">
-            <div className="admin-metric-card">
-              <span className="metric-label">今日已支付净额</span>
-              <span className="metric-value">{stats.revenueDataAvailable === false ? statsUnavailableLabel : `¥${stats.todayRevenueYuan.toFixed(2)}`}</span>
-              <span className="metric-sub">{stats.databaseDataAvailable === false ? statsUnavailableHint : "OPCPAY 支付状态核验 · SKU下单价 − 已登记退款"}</span>
-              <button className="admin-inline-link" onClick={() => void recordManualRefund()}>登记人工退款</button>
-            </div>
-            <div className="admin-metric-card highlight">
-              <span className="metric-label">今日交付成片</span>
-              <span className="metric-value">{stats.databaseDataAvailable === false ? statsUnavailableLabel : stats.todayCompletedJobs}</span>
-              <span className="metric-sub">{stats.databaseDataAvailable === false ? statsUnavailableHint : `累计任务 ${stats.totalJobs} 单`}</span>
-            </div>
-            <div className="admin-metric-card">
-              <span className="metric-label">出片成功率</span>
-              <span className="metric-value">{stats.databaseDataAvailable === false ? statsUnavailableLabel : `${stats.jobSuccessRate}%`}</span>
-              <span className="metric-sub">{stats.databaseDataAvailable === false ? statsUnavailableHint : `失败任务 ${stats.failedJobs} 单`}</span>
-            </div>
-            <div className="admin-metric-card">
-              <span className="metric-label">平均交付耗时</span>
-              <span className="metric-value">{stats.databaseDataAvailable === false ? statsUnavailableLabel : stats.avgE2eDurationSec > 0 ? `${stats.avgE2eDurationSec}s` : "暂无数据"}</span>
-              <span className="metric-sub">{stats.databaseDataAvailable === false ? statsUnavailableHint : `P90 ${stats.p90E2eDurationSec > 0 ? `${stats.p90E2eDurationSec}s` : "—"}`}</span>
-            </div>
-            <div className="admin-metric-card">
-              <span className="metric-label">累计用户</span>
-              <span className="metric-value">{stats.databaseDataAvailable === false ? statsUnavailableLabel : stats.totalUsers.toLocaleString("zh-CN")}</span>
-              <span className="metric-sub">{stats.databaseDataAvailable === false ? statsUnavailableHint : `今日新增 ${stats.todayNewUsers} 人`}</span>
-            </div>
-          </section>
-        )}
+
+
+        {/* 核心指标卡片条 */}
+        <AdminMetricStrip
+          stats={stats}
+          statsUnavailableLabel={statsUnavailableLabel}
+          statsUnavailableHint={statsUnavailableHint}
+          recordManualRefund={recordManualRefund}
+        />
 
         {/* 内容主体区域 */}
         <div className="admin-body">
           {activeTab === "pricing" && (
-            <div className="overview-viewport admin-pricing-viewport">
-              <section className="overview-card admin-pricing-hero">
-                <div>
-                  <span className="admin-eyebrow">JANSEE / COMMERCE CONTROL</span>
-                  <h2>{"\u4ef7\u683c\u540c\u6b65"}</h2>
-                  <p>OPCPAY 是唯一价格来源。你只需在 OPCPAY 修改售价，简兮会自动读取并更新前端与新订单报价。</p>
-                  <div className="admin-pricing-sync-status">
-                    <strong>{pricingCatalog?.sync?.status === "synced" ? "OPCPAY 已连接 · 价格同步正常" : pricingCatalog?.sync?.status === "error" ? "价格同步异常" : "等待首次同步"}</strong>
-                    <span>{pricingCatalog?.sync?.lastSyncedAt ? `最近同步：${new Date(pricingCatalog.sync.lastSyncedAt).toLocaleString("zh-CN")}` : "尚无成功同步记录"}</span>
-                    {pricingCatalog?.sync?.message && <small>{pricingCatalog.sync.message}</small>}
-                  </div>
-                </div>
-              </section>
-              {!pricingCatalog ? (
-                <section className="overview-card"><p>{"\u6b63\u5728\u8bfb\u53d6\u4ef7\u683c\u914d\u7f6e..."}</p></section>
-              ) : ([
-                { key: "members" as const, title: "\u4f1a\u5458\u5957\u9910", items: pricingCatalog.members },
-                { key: "boostPacks" as const, title: "\u7b97\u529b\u52a0\u6cb9\u5305", items: pricingCatalog.boostPacks },
-              ]).map((group) => (
-                <section className={`overview-card admin-pricing-section admin-pricing-section-${group.key}`} key={group.key}>
-                  <div className="admin-pricing-section-head"><h3>{group.title}</h3><span>{group.items.length} {"\u4e2a\u5546\u54c1"}</span></div>
-                  <div className="admin-pricing-table">
-                    {group.items.map((plan) => (
-                      <div className="admin-pricing-row" key={plan.id}>
-                        <div className="admin-pricing-product"><strong>{plan.name}</strong><small>{plan.id}</small></div>
-                        <div className="admin-pricing-current"><small>OPCPAY 当前售价</small><strong>¥{plan.priceYuan.toFixed(2)}</strong></div>
-                        <div className="admin-pricing-current admin-pricing-display-price"><small>Display original price (editable)</small><input aria-label={`${plan.name} display original price`} inputMode="decimal" value={strikePriceDrafts[plan.id] ?? plan.strikeYuan.replace(/^\u00a5/, "")} onChange={(event) => setStrikePriceDrafts((current) => ({ ...current, [plan.id]: event.target.value }))} /><button type="button" disabled={strikePriceSavingId === plan.id || (strikePriceDrafts[plan.id] ?? plan.strikeYuan) === plan.strikeYuan} onClick={() => void saveStrikePrice(group.key, plan)}>{strikePriceSavingId === plan.id ? "Saving?" : "Save"}</button></div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
-              <p className="admin-pricing-footnote">OPCPAY 改价后，前端会在下一次自动刷新时更新；新订单按最新价格创建。已创建订单保留原金额，若 OPCPAY 已调整对应 SKU 价格，旧订单支付会被安全拦截，需重新下单。</p>
-            </div>
+            <AdminPricingTab
+              pricingCatalog={pricingCatalog}
+              strikePriceDrafts={strikePriceDrafts}
+              setStrikePriceDrafts={setStrikePriceDrafts}
+              strikePriceSavingId={strikePriceSavingId}
+              saveStrikePrice={saveStrikePrice}
+            />
           )}
+
           {activeTab === "server" && (
-            <div className="admin-server-viewport">
-              <section className="admin-server-hero">
-                <div>
-                  <span className="admin-eyebrow">JANSEE / INFRASTRUCTURE MONITOR</span>
-                  <h2>让每一项服务，都保持稳定运转。</h2>
-                  <p>服务器资源、核心依赖与导演生产链路的实时健康状态。</p>
-                </div>
-                <div className="admin-server-live">
-                  <i className={serverHealth ? "is-live" : "is-waiting"} />
-                  <span>{serverHealth ? "监控已连接" : "等待连接"}</span>
-                  <small>{serverHealth?.sampledAt ? new Date(serverHealth.sampledAt).toLocaleTimeString("zh-CN") + " 更新" : "尚无采样"}</small>
-                  <button onClick={() => void fetchServerHealth()} disabled={serverHealthBusy}>{serverHealthBusy ? "刷新中…" : "立即刷新"}</button>
-                </div>
-              </section>
-
-              {serverHealthError && <div className="admin-data-note" role="status">{serverHealthError}。请确认 API 服务已启动并且当前账号拥有管理员权限。</div>}
-
-              <section className="admin-server-metrics">
-                <article className="admin-server-metric">
-                  <span>CPU 使用率</span>
-                  <strong>{serverHealth?.cpu.usagePercent === null || serverHealth?.cpu.usagePercent === undefined ? "采样中" : serverHealth.cpu.usagePercent + "%"}</strong>
-                  <div className="admin-server-meter"><i style={{ width: `${serverHealth?.cpu.usagePercent ?? 0}%` }} /></div>
-                  <small>{serverHealth ? `${serverHealth.host.cpuCores} 核处理器 · 主机负载 ${serverHealth.cpu.loadAverage.map((v) => v.toFixed(2)).join(" / ")}` : "等待服务器数据"}</small>
-                </article>
-                <article className="admin-server-metric">
-                  <span>内存占用</span>
-                  <strong>{serverHealth ? serverHealth.memory.usedPercent + "%" : "—"}</strong>
-                  <div className="admin-server-meter"><i style={{ width: `${serverHealth?.memory.usedPercent ?? 0}%` }} /></div>
-                  <small>{serverHealth ? `${(serverHealth.memory.usedBytes / 1024 ** 3).toFixed(2)} GB / ${(serverHealth.memory.totalBytes / 1024 ** 3).toFixed(2)} GB · API 进程 ${(serverHealth.memory.processRssBytes / 1024 ** 2).toFixed(0)} MB` : "等待服务器数据"}</small>
-                </article>
-                <article className="admin-server-metric">
-                  <span>磁盘使用率</span>
-                  <strong>{serverHealth?.disk?.usedPercent == null ? "不可读取" : serverHealth.disk.usedPercent + "%"}</strong>
-                  <div className="admin-server-meter"><i style={{ width: `${serverHealth?.disk?.usedPercent ?? 0}%` }} /></div>
-                  <small>{serverHealth?.disk ? `${(serverHealth.disk.usedBytes / 1024 ** 3).toFixed(1)} GB 已用 · ${(serverHealth.disk.freeBytes / 1024 ** 3).toFixed(1)} GB 可用` : "磁盘统计暂不可用"}</small>
-                </article>
-                <article className="admin-server-metric">
-                  <span>服务器运行时间</span>
-                  <strong>{serverHealth ? `${Math.floor(serverHealth.host.uptimeSeconds / 86400)} 天` : "—"}</strong>
-                  <div className="admin-server-uptime">{serverHealth ? `${Math.floor(serverHealth.host.uptimeSeconds % 86400 / 3600)} 小时 ${Math.floor(serverHealth.host.uptimeSeconds % 3600 / 60)} 分钟` : "等待服务器数据"}</div>
-                  <small>{serverHealth ? `${serverHealth.host.platform} · ${serverHealth.host.architecture} · ${serverHealth.host.hostname}` : "主机信息"}</small>
-                </article>
-                <article className="admin-server-metric">
-                  <span>{serverHealth?.mediaStorage?.driver === "cos" ? "腾讯云 COS 占用" : "媒体存储占用"}</span>
-                  <strong>
-                    {serverHealth?.mediaStorage
-                      ? serverHealth.mediaStorage.totalBytes >= 1024 ** 3
-                        ? `${(serverHealth.mediaStorage.totalBytes / 1024 ** 3).toFixed(2)} GB`
-                        : `${(serverHealth.mediaStorage.totalBytes / 1024 ** 2).toFixed(1)} MB`
-                      : "—"}
-                  </strong>
-                  <div className="admin-server-meter">
-                    <i style={{ width: serverHealth?.mediaStorage ? "100%" : "0%", background: "#39a68b" }} />
-                  </div>
-                  <small>
-                    {serverHealth?.mediaStorage
-                      ? `${serverHealth.mediaStorage.activeOutputsCount} 个成片 (${(serverHealth.mediaStorage.activeOutputsBytes / 1024 ** 2).toFixed(1)} MB) · ${serverHealth.mediaStorage.activeAssetsCount} 个素材 · ${serverHealth.mediaStorage.driver === "cos" ? (serverHealth.mediaStorage.bucket || "COS 已连接") : "本地存储"}`
-                      : "等待存储数据"}
-                  </small>
-                </article>
-              </section>
-
-              <section className="admin-server-panel">
-                <div className="admin-server-panel-head"><div><span className="admin-eyebrow">RESOURCE TREND / LIVE SESSION</span><h3>资源使用趋势</h3><p>每 15 秒采集一次；页面打开期间保留最近 24 个采样点。</p></div><span className="admin-server-auto">自动刷新 · 15 秒</span></div>
-                {serverHealthHistory.length >= 2 ? (
-                  <div className="admin-server-chart">
-                    <div className="admin-server-chart-legend"><span><i className="cpu" />CPU</span><span><i className="memory" />内存</span><span><i className="disk" />磁盘</span></div>
-                    <svg viewBox="0 0 900 180" preserveAspectRatio="none" role="img" aria-label="服务器资源使用趋势">
-                      <path d="M12 12 H888 M12 90 H888 M12 168 H888" stroke="#eceaf5" strokeDasharray="4 6" fill="none" />
-                      <polyline points={serverHealthHistory.map((point, index) => `${12 + index * (876 / Math.max(1, serverHealthHistory.length - 1))},${168 - point.cpu * 1.56}`).join(" ")} fill="none" stroke="#766de0" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                      <polyline points={serverHealthHistory.map((point, index) => `${12 + index * (876 / Math.max(1, serverHealthHistory.length - 1))},${168 - point.memory * 1.56}`).join(" ")} fill="none" stroke="#39a68b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                      <polyline points={serverHealthHistory.map((point, index) => `${12 + index * (876 / Math.max(1, serverHealthHistory.length - 1))},${168 - point.disk * 1.56}`).join(" ")} fill="none" stroke="#d5a04c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="admin-server-chart-axis"><span>最早采样</span><span>最近采样</span></div>
-                  </div>
-                ) : <div className="admin-server-chart-empty">正在积累采样数据。保持此页面打开约 30 秒，即可看到 CPU、内存和磁盘变化曲线。</div>}
-              </section>
-
-              <section className="admin-server-panel">
-                <div className="admin-server-panel-head"><div><span className="admin-eyebrow">SERVICE HEALTH / DEPENDENCIES</span><h3>服务健康检查</h3><p>区分主机资源与具体依赖故障，不把单项服务异常误判成整台服务器宕机。</p></div></div>
-                <div className="admin-server-services">
-                  {([
-                    ["api", "API 服务", "管理接口响应检查"],
-                    ["database", "V4 数据库", "数据库连接与查询"],
-                    ["worker", "成片任务 Worker", "后台任务执行进程"],
-                    ["director", "AI 导演模型", "模型 API 配置状态"],
-                    ["tts", "TTS 语音服务", "语音服务凭据配置"],
-                    ["ffmpeg", "FFmpeg 引擎", "本机执行文件检测"],
-                    ["media", "素材存储", "本地 / 云端存储初始化"],
-                    ["payment", "OPCPAY 支付", "支付服务启动状态"],
-                  ] as const).map(([key, title, subtitle]) => {
-                    const service = serverHealth?.services[key];
-                    const status = service?.status ?? "unknown";
-                    const label = status === "healthy" ? "运行正常" : status === "configured" ? "已配置" : status === "not_configured" ? "未配置" : status === "unavailable" ? "不可用" : "待检测";
-                    return <article className={`admin-server-service ${status}`} key={key}>
-                      <div className="admin-server-service-top"><span className="admin-server-service-icon">{key === "database" ? "DB" : key === "worker" ? "WK" : key === "director" ? "AI" : key === "payment" ? "¥" : key === "ffmpeg" ? "FX" : key === "tts" ? "VO" : key === "media" ? "ST" : "API"}</span><span className={`admin-server-status ${status}`}>{label}</span></div>
-                      <strong>{title}</strong><small>{subtitle}</small><p>{service?.detail ?? "等待后端健康检查数据"}</p>
-                    </article>;
-                  })}
-                </div>
-                <div className="admin-server-footnote">安全说明：此监控接口仅管理员登录后可访问；不会返回环境变量、密钥、数据库连接串或原始用户 IP。导演与 TTS 显示配置状态，不会为了监控而发起计费调用。</div>
-              </section>
-            </div>
+            <AdminServerTab
+              serverHealth={serverHealth}
+              serverHealthBusy={serverHealthBusy}
+              serverHealthError={serverHealthError}
+              serverHealthHistory={serverHealthHistory}
+              fetchServerHealth={fetchServerHealth}
+            />
           )}
+
           {activeTab === "users" && (
-            <div className="admin-users-viewport">
-              <section className="admin-users-hero">
-                <div>
-                  <span className="admin-eyebrow">JANSEE / AUDIENCE INTELLIGENCE</span>
-                  <h2>每一次注册，都是简兮向前的一步。</h2>
-                  <p>看见用户从哪里来、何时加入，以及增长正在发生的方向。</p>
-                </div>
-                <div className="admin-users-total">
-                  <span>COMMUNITY SIZE</span>
-                  <strong>{userAnalytics ? userAnalytics.summary.totalUsers.toLocaleString("zh-CN") : "—"}</strong>
-                  <small>累计注册用户</small>
-                </div>
-              </section>
-
-              <section className="admin-user-kpis">
-                <article><span>今日新朋友</span><strong>{userAnalytics?.summary.todayNewUsers ?? "—"}</strong><small>今天加入简兮的人</small></article>
-                <article><span>近 7 天</span><strong>{userAnalytics?.summary.last7Days ?? "—"}</strong><small>最近一周新增用户</small></article>
-                <article><span>近 30 天</span><strong>{userAnalytics?.summary.last30Days ?? "—"}</strong><small>最近一个月新增用户</small></article>
-                <article><span>正常账号</span><strong>{userAnalytics?.summary.activeUsers ?? "—"}</strong><small>当前状态正常的账号</small></article>
-              </section>
-
-              <section className="admin-user-chart-card admin-site-analytics-card">
-                <div className="admin-user-card-heading">
-                  <div><span className="admin-eyebrow">SITE TRAFFIC / VERIFIED HUMAN VISITS</span><h3>网站真实访问</h3><p>来自 V2 真人访问聚合；不把爬虫、机房原始请求或 Nginx 请求量当作访客。</p></div>
-                  <span className="admin-chart-legend">{siteAnalytics?.summary.days ?? 0} 天历史数据</span>
-                </div>
-                <div className="admin-user-kpis">
-                  <article><span>真实浏览 PV</span><strong>{siteAnalytics ? siteAnalytics.summary.pv.toLocaleString("zh-CN") : "—"}</strong><small>通过 V2 访客过滤后的页面浏览</small></article>
-                  <article><span>真实访客 UV</span><strong>{siteAnalytics ? siteAnalytics.summary.uv.toLocaleString("zh-CN") : "—"}</strong><small>按匿名访客标识去重</small></article>
-                  <article><span>日均 PV</span><strong>{siteAnalytics?.summary.days ? Math.round(siteAnalytics.summary.pv / siteAnalytics.summary.days).toLocaleString("zh-CN") : "—"}</strong><small>按已导入的统计日期计算</small></article>
-                  <article><span>访问来源</span><strong>{siteAnalytics ? Object.keys(siteAnalytics.dimensions.sources).length : "—"}</strong><small>搜索引擎、外部网站及直接访问</small></article>
-                </div>
-                <div className="admin-region-list">
-                  <div className="admin-user-card-heading"><div><span className="admin-eyebrow">TRAFFIC SOURCES</span><h3>访客从哪里来</h3></div></div>
-                  {siteAnalytics ? Object.entries(siteAnalytics.dimensions.sources).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([source, count]) => (
-                    <div className="admin-region-row" key={source}>
-                      <div className="admin-region-label"><strong>{source}</strong><span>{count} 次</span></div>
-                      <div className="admin-region-track"><i style={{ width: `${Math.max(3, count / Math.max(1, ...Object.values(siteAnalytics.dimensions.sources)) * 100)}%` }} /></div>
-                    </div>
-                  )) : <div className="admin-users-empty">网站访问统计暂不可用。</div>}
-                </div>
-                <p className="admin-region-foot">{siteAnalytics?.note ?? "网站访问统计尚未载入。"}</p>
-              </section>
-
-              <section className="admin-user-chart-card">
-                <div className="admin-user-card-heading">
-                  <div><span className="admin-eyebrow">GROWTH / LAST 30 DAYS</span><h3>用户增长的轨迹</h3><p>每天新加入的用户，让增长被看见。</p></div>
-                  <span className="admin-chart-legend"><i />每日新增</span>
-                </div>
-                {userAnalytics && userTrend.length > 0 ? (
-                  <div className="admin-user-line-chart">
-                    <div className="admin-chart-y-labels"><span>{trendMax}</span><span>{Math.round(trendMax / 2)}</span><span>0</span></div>
-                    <svg viewBox="0 0 900 205" preserveAspectRatio="none" role="img" aria-label="最近30天用户注册趋势">
-                      <defs><linearGradient id="userGrowthFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#8179e8" stopOpacity=".22" /><stop offset="100%" stopColor="#8179e8" stopOpacity="0" /></linearGradient></defs>
-                      <path d="M18 176 H882 M18 105 H882 M18 34 H882" stroke="#e9e7f3" strokeDasharray="4 6" fill="none" />
-                      <polygon points={`18,176 ${trendPoints} 882,176`} fill="url(#userGrowthFill)" />
-                      <polyline points={trendPoints} fill="none" stroke="#7169d7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                      {userTrend.map((point, index) => {
-                        const x = userTrend.length <= 1 ? 450 : 18 + index * (864 / (userTrend.length - 1));
-                        const y = 176 - (point.registrations / trendMax) * 142;
-                        return <circle key={point.day} cx={x} cy={y} r="3" fill="#7169d7" stroke="#fff" strokeWidth="2"><title>{point.day} · 新增 {point.registrations} 人</title></circle>;
-                      })}
-                    </svg>
-                    <div className="admin-chart-x-labels"><span>{userTrend[0]?.day ?? ""}</span><span>{userTrend[Math.floor(userTrend.length / 2)]?.day ?? ""}</span><span>{userTrend[userTrend.length - 1]?.day ?? ""}</span></div>
-                  </div>
-                ) : <div className="admin-users-empty">注册趋势数据暂不可用，连接用户数据库后会在这里呈现。</div>}
-              </section>
-
-              <div className="admin-user-insights-grid">
-                <section className="admin-user-chart-card">
-                  <div className="admin-user-card-heading"><div><span className="admin-eyebrow">WHERE USERS ARE</span><h3>用户所在的城市</h3><p>按注册时 IP 归属地统计，属于近似地域。</p></div><strong>{userAnalytics?.summary.geoUsers ?? "—"} <small>已识别</small></strong></div>
-                  {userAnalytics?.regions.length ? <div className="admin-region-list">
-                    {userAnalytics.regions.map((region) => <div className="admin-region-row" key={region.province}>
-                      <div className="admin-region-label"><strong>{region.province}</strong><span>{region.users} 位用户</span></div>
-                      <div className="admin-region-track"><i style={{width:`${Math.max(3, region.users / maxProvinceUsers * 100)}%`}} /></div>
-                      <div className="admin-region-cities">{region.cities.slice(0, 5).map((city) => `${city.city} ${city.users}`).join("　·　")}</div>
-                    </div>)}
-                  </div> : <div className="admin-users-empty">暂时还没有可识别的省市记录。新用户注册后会自动按 IP 归属地记录；历史用户不会被猜测填充。</div>}
-                  <div className="admin-region-foot">地区待识别：{userAnalytics?.summary.unknownRegionUsers ?? "—"} 人 · 识别依赖离线 IP 地理数据库</div>
-                </section>
-
-                <section className="admin-user-chart-card admin-user-region-summary">
-                  <span className="admin-eyebrow">REGION COVERAGE</span>
-                  <h3>地域覆盖</h3>
-                  <strong>{userAnalytics ? (userAnalytics.summary.totalUsers ? Math.round(userAnalytics.summary.geoUsers / userAnalytics.summary.totalUsers * 100) : 0) : "—"}{userAnalytics ? "%" : ""}</strong>
-                  <p>已识别注册地区的用户占比</p>
-                  <div className="admin-region-coverage"><i style={{width:`${userAnalytics?.summary.totalUsers ? userAnalytics.summary.geoUsers / userAnalytics.summary.totalUsers * 100 : 0}%`}} /></div>
-                  <small>地域定位为 IP 近似归属，不代表用户常住地。</small>
-                </section>
-              </div>
-
-              <section className="admin-user-chart-card admin-user-table-card">
-                <div className="admin-user-card-heading"><div><span className="admin-eyebrow">MEMBERS / DIRECTORY</span><h3>认识每一位用户</h3><p>最近注册的账号 · 共 {userAnalytics?.total ?? "—"} 位</p></div>
-                  <div className="admin-user-search-actions"><input className="admin-user-search" value={userKeyword} onChange={(event) => setUserKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void searchUsers(); }} placeholder="搜索昵称、账号、地区或 ID" /><button className="admin-user-search-button" disabled={userListBusy} onClick={searchUsers}>{userListBusy ? "读取中…" : "搜索用户"}</button></div>
-                </div>
-                <div className="admin-user-table-scroll">
-                  <table className="admin-user-table"><thead><tr><th>用户</th><th>注册地区</th><th>加入时间</th><th>剩余积分</th><th>出片条数</th><th>下载条数</th><th>账号状态</th><th>操作</th></tr></thead>
-                    <tbody>{visibleUsers.map((user) => <tr key={user.id}>
-                      <td><strong>{user.displayName}</strong><small>{user.contact || user.id}</small></td>
-                      <td>{user.region || "地区待识别"}</td>
-                      <td>{new Date(user.createdAt).toLocaleString("zh-CN")}</td>
-                      <td>{user.credits.toLocaleString("zh-CN")}</td>
-                      <td>{user.completedJobs.toLocaleString("zh-CN")}</td>
-                      <td>{user.downloads.toLocaleString("zh-CN")}</td>
-                      <td><span className={`admin-user-status ${user.status === "active" ? "is-active" : "is-paused"}`}>{user.status === "active" ? "正常" : user.status === "suspended" ? "已停用" : user.status}</span></td>
-                      <td><button className="admin-user-credit-btn" onClick={() => openCreditAdjustment(user)}>调整积分</button></td>
-                    </tr>)}
-                    {!visibleUsers.length && <tr><td colSpan={8} className="admin-users-empty">没有找到匹配的用户记录</td></tr>}</tbody>
-                  </table>
-                </div>
-                <div className="admin-user-table-foot">当前展示 {userAnalytics?.users.length ?? 0} / {userAnalytics?.total ?? 0} 位匹配用户。联系方式已脱敏。</div>
-                {userAnalytics && userAnalytics.users.length < userAnalytics.total && <button className="admin-load-more-users" disabled={userListBusy} onClick={loadMoreUsers}>{userListBusy ? "正在读取…" : "继续查看更早注册的用户"}</button>}
-              </section>
-            </div>
+            <AdminUsersTab
+              userAnalytics={userAnalytics}
+              siteAnalytics={siteAnalytics}
+              loading={loading}
+              trendMax={trendMax}
+              userTrend={userTrend}
+              trendPoints={trendPoints}
+              completedTrendPoints={completedTrendPoints}
+              revenueTrendPoints={revenueTrendPoints}
+              userKeyword={userKeyword}
+              setUserKeyword={setUserKeyword}
+              userListBusy={userListBusy}
+              searchUsers={searchUsers}
+              loadMoreUsers={loadMoreUsers}
+              visibleUsers={visibleUsers}
+              maxProvinceUsers={maxProvinceUsers}
+              openCreditAdjustment={openCreditAdjustment}
+            />
           )}
 
           {activeTab === "director-jobs" && (
-            <div className="director-jobs-viewport">
-              <section className="director-exec-summary" aria-label="导演交付经营指标">
-                <div className="director-exec-summary-heading"><div><h2>导演交付效能</h2><p>只呈现交付结果与业务表现，不展示用户原始描述或系统内部指令</p></div></div>
-                <div className="director-exec-metrics">
-                  <div><span>累计任务</span><strong>{loadedStats ? loadedStats.totalJobs.toLocaleString("zh-CN") : "\u2014"}</strong></div>
-                  <div><span>交付成功率</span><strong>{loadedStats ? loadedStats.jobSuccessRate.toFixed(1) + "%" : "\u2014"}</strong></div>
-                  <div><span>平均交付耗时</span><strong>{loadedStats && loadedStats.avgE2eDurationSec > 0 ? loadedStats.avgE2eDurationSec.toFixed(1) + "s" : "\u2014"}</strong></div>
-                  <div><span>今日成功交付</span><strong>{loadedStats ? loadedStats.todayCompletedJobs.toLocaleString("zh-CN") : "\u2014"}</strong></div>
-                </div>
-              </section>
-              <div className="admin-filter-bar">
-                <div className="filter-group"><span className="filter-title">交付状态</span>
-                  {["all", "completed", "failed", "rendering"].map((status) => <button key={status} className={"filter-chip " + (filterStatus === status ? "active" : "")} onClick={() => setFilterStatus(status)}>{status === "all" ? "全部" : status === "completed" ? "已交付" : status === "failed" ? "交付失败" : "处理中"}</button>)}
-                </div>
-                <div className="filter-group"><span className="filter-title">业务场景</span>
-                  {[
-                    { value: "all", label: "全部场景" },
-                    { value: "online-ecommerce", label: "线上电商" },
-                    { value: "physical-store", label: "线下商家" },
-                    { value: "personal-creation", label: "个人创作" },
-                    { value: "quick-cut", label: "一句话剪辑" },
-                    { value: "未分类", label: "未分类" },
-                  ].map((scene) => <button key={scene.value} className={"filter-chip " + (filterScene === scene.value ? "active" : "")} onClick={() => setFilterScene(scene.value)}>{scene.label}</button>)}
-                </div>
-              </div>
-              <div className="job-insight-list director-delivery-list">
-                {loading ? <div className="admin-empty-state">正在读取交付记录…</div> : filteredJobs.length === 0 ? <div className="admin-empty-state">暂无符合条件的交付记录</div> : filteredJobs.map((job) => {
-                  const sceneLabel = job.sceneType === "online-ecommerce" ? "线上电商" : job.sceneType === "physical-store" ? "线下商家" : job.sceneType === "personal-creation" ? "个人创作" : job.sceneType === "quick-cut" ? "一句话剪辑" : "未分类";
-                  const statusLabel = job.status === "completed" ? "已交付" : job.status === "failed" ? "交付失败" : ["rendering", "planning", "inspecting", "quality-check"].includes(job.status) ? "处理中" : "等待处理";
-                  return <article className={"job-insight-card director-delivery-card " + job.status} key={job.jobId}>
-                    <div className="director-delivery-main">
-                      <div className="director-delivery-heading"><span className={"status-pill " + (job.status === "completed" ? "completed" : job.status === "failed" ? "failed" : "pending")}>{statusLabel}</span><strong>{sceneLabel}</strong></div>
-                      <div className="director-delivery-meta"><span>任务编号 {job.jobId}</span><time>{new Date(job.createdAt).toLocaleString("zh-CN")}</time></div>
-                    </div>
-                    <div className="director-delivery-result"><span>交付耗时</span><strong>{job.e2eDurationMs > 0 ? (job.e2eDurationMs / 1000).toFixed(1) + "s" : "\u2014"}</strong></div>
-                  {job.status === "failed" && <button className="compensate-btn" disabled={!compensationAvailable || compensatingJobId === job.jobId} onClick={() => handleCompensate(job.jobId)}>{compensatingJobId === job.jobId ? "处理中?" : compensationAvailable ? "一键补发 200 积分" : "补偿功能待账本接入"}</button>}
-                  </article>;
-                })}
-              </div>
-            </div>
+            <AdminDirectorJobsTab
+              loadedStats={loadedStats}
+              loading={loading}
+              filterStatus={filterStatus}
+              setFilterStatus={setFilterStatus}
+              filterScene={filterScene}
+              setFilterScene={setFilterScene}
+              filteredJobs={filteredJobs}
+              compensationAvailable={compensationAvailable}
+              compensatingJobId={compensatingJobId}
+              handleCompensate={handleCompensate}
+            />
           )}
 
           {activeTab === "partner-finance" && (
-            <div className="overview-viewport partner-finance-viewport">
-              <section className="overview-card">
-                <h3>城市合伙人 · {cityPartners.length} 位已开通</h3>
-                {loading ? <div className="admin-empty-state">正在加载合伙人名册…</div> : cityPartners.length === 0 ? <div className="admin-empty-state">暂无已开通城市合伙人</div> : cityPartners.map((partner) => (
-                  <details className="partner-finance-collapse" key={partner.userId}>
-                    <summary><strong>{partner.displayName} · {partner.province ?? ""}{partner.city ?? ""}</strong></summary>
-                    <div className="partner-finance-collapse-content">
-                      <article className="partner-finance-card">
-                        <div className="partner-finance-card-head">
-                          <div><strong>{partner.displayName} · {partner.province ?? ""}{partner.city ?? ""}</strong><span>{partner.contact} · 开通于 {new Date(partner.activatedAt).toLocaleDateString("zh-CN")}</span></div>
-                          <span className="status-pill completed">城市合伙人</span>
-                        </div>
-                        <div className="partner-finance-amounts">
-                          <span>一级邀请 {partner.directInvites} 人 · 二级邀请 {partner.secondLevelInvites} 人</span>
-                          <span>待结算 ¥{partner.pendingCommissionYuan.toFixed(2)}</span>
-                          <span>已结算 ¥{partner.settledCommissionYuan.toFixed(2)}</span>
-                          <strong>可提现 ¥{partner.withdrawableYuan.toFixed(2)}</strong>
-                        </div>
-                        <div className="partner-finance-details">
-                          收款资料：{partner.payoutVerificationStatus === "verified" ? "已核验" : partner.payoutVerificationStatus === "pending" ? "待审核" : partner.payoutVerificationStatus === "rejected" ? "已驳回" : "未绑定"}
-                          {partner.payoutAccountLast4 ? ` · 支付宝尾号 ${partner.payoutAccountLast4}` : ""}
-                        </div>
-                      </article>
-                    </div>
-                  </details>
-                ))}
-              </section>
-              <section className="overview-card">
-                <h3>收款资料审核 · {partnerProfiles.length} 笔待审核</h3>
-                {loading ? <div className="admin-empty-state">正在加载收款资料…</div> : partnerProfiles.length === 0 ? <div className="admin-empty-state">暂无待审核收款资料</div> : partnerProfiles.map((profile) => (
-                  <article className="partner-finance-card" key={profile.userId}>
-                    <div className="partner-finance-card-head">
-                      <div><strong>{profile.displayName}</strong><span>{profile.contact} · {profile.province ?? ""}{profile.city ?? ""}</span></div>
-                      <span className="status-pill pending">待审核 · 尾号 {profile.accountLast4}</span>
-                    </div>
-                    {revealedPayouts[profile.userId] && <div className="partner-finance-details">实名：{revealedPayouts[profile.userId]?.accountName}　账号：{revealedPayouts[profile.userId]?.account}</div>}
-                    <div className="partner-finance-actions">
-                      <button disabled={financeBusyId === profile.userId} onClick={() => showPayoutDetails(profile.userId, `/api/v1/admin/partner/profiles/${profile.userId}`, profile.userId)}>核验收款资料</button>
-                      <button disabled={financeBusyId === profile.userId || !revealedPayouts[profile.userId]} onClick={() => reviewPayoutProfile(profile, "verified")}>审核通过</button>
-                      <button disabled={financeBusyId === profile.userId} onClick={() => reviewPayoutProfile(profile, "rejected")}>驳回</button>
-                    </div>
-                  </article>
-                ))}
-              </section>
-              <section className="overview-card">
-                <h3>提现审核与打款 · {partnerWithdrawals.filter((item) => ["pending", "approved"].includes(item.status)).length} 笔待处理</h3>
-                {loading ? <div className="admin-empty-state">正在加载提现记录…</div> : partnerWithdrawals.length === 0 ? <div className="admin-empty-state">暂无提现申请</div> : partnerWithdrawals.map((withdrawal) => (
-                  <details className="partner-finance-collapse" key={withdrawal.id}>
-                    <summary><strong>{withdrawal.displayName} · ¥{withdrawal.amountYuan.toFixed(2)}</strong></summary>
-                    <div className="partner-finance-collapse-content">
-                      <article className="partner-finance-card">
-                        <div className="partner-finance-card-head">
-                          <div><strong>{withdrawal.displayName} · ¥{withdrawal.amountYuan.toFixed(2)}</strong><span>{withdrawal.contact} · {withdrawal.createdAt ? new Date(withdrawal.createdAt).toLocaleString("zh-CN") : ""}</span></div>
-                          <span className={`status-pill ${withdrawal.status === "paid" ? "completed" : withdrawal.status === "rejected" || withdrawal.status === "failed" ? "failed" : "pending"}`}>{withdrawal.status === "pending" ? "待审核" : withdrawal.status === "approved" ? "待打款" : withdrawal.status === "paid" ? "已打款" : withdrawal.status === "rejected" ? "已驳回" : "打款失败"}</span>
-                        </div>
-                        <div className="partner-finance-amounts">
-                          <span>手续费 ¥{withdrawal.feeYuan.toFixed(2)}</span>
-                          <strong>实际到账 ¥{withdrawal.netAmountYuan.toFixed(2)}</strong>
-                          <span>支付宝尾号 {withdrawal.accountLast4 ?? "—"}</span>
-                        </div>
-                        {revealedPayouts[withdrawal.id] && <div className="partner-finance-details">收款人：{revealedPayouts[withdrawal.id]?.accountName}　账号：{revealedPayouts[withdrawal.id]?.account}</div>}
-                        {withdrawal.note && <div className="partner-finance-details">处理备注：{withdrawal.note}</div>}
-                        {withdrawal.externalReference && <div className="partner-finance-details">转账凭证：{withdrawal.externalReference}</div>}
-                        <div className="partner-finance-actions">
-                          {["pending", "approved"].includes(withdrawal.status) && <button disabled={financeBusyId === withdrawal.id} onClick={() => showPayoutDetails(withdrawal.userId, `/api/v1/admin/partner/withdrawals/${withdrawal.id}/payout`, withdrawal.id)}>查看收款账户</button>}
-                          {withdrawal.status === "pending" && <>
-                            <button disabled={financeBusyId === withdrawal.id} onClick={() => reviewWithdrawal(withdrawal, "approved")}>审核通过</button>
-                            <button disabled={financeBusyId === withdrawal.id} onClick={() => reviewWithdrawal(withdrawal, "rejected")}>驳回申请</button>
-                          </>}
-                          {withdrawal.status === "approved" && <>
-                            <button disabled={financeBusyId === withdrawal.id} onClick={() => markWithdrawalPaid(withdrawal)}>登记已打款</button>
-                            <button disabled={financeBusyId === withdrawal.id} onClick={() => markWithdrawalFailed(withdrawal)}>登记打款失败</button>
-                          </>}
-                        </div>
-                      </article>
-                    </div>
-                  </details>
-                ))}
-                <p className="partner-finance-disclaimer">打款由管理员在企业支付宝人工完成。只有核实实际到账后，才可登记“已打款”；本控制台不伪装自动出款。</p>
-              </section>
-            </div>
+            <AdminPartnerFinanceTab
+              cityPartners={cityPartners}
+              partnerProfiles={partnerProfiles}
+              partnerWithdrawals={partnerWithdrawals}
+              loading={loading}
+              revealedPayouts={revealedPayouts}
+              financeBusyId={financeBusyId}
+              showPayoutDetails={showPayoutDetails}
+              reviewPayoutProfile={reviewPayoutProfile}
+              reviewWithdrawal={reviewWithdrawal}
+              markWithdrawalPaid={markWithdrawalPaid}
+              markWithdrawalFailed={markWithdrawalFailed}
+            />
           )}
 
           {activeTab === "inbox" && (
-            <div className="overview-viewport partner-finance-viewport admin-inbox-viewport">
-              <section className="overview-card admin-inbox-card">
-                <div className="admin-inbox-section-heading">
-                  <h3>用户来信 · {supportMessages.filter((message) => message.status !== "resolved").length} 封待处理</h3>
-                  <button type="button" className="admin-inbox-refresh" onClick={() => void fetchInboxMessages()}>刷新来信</button>
-                </div>
-                <details className="admin-inbox-collapse">
-                  <summary>展开用户来信（共 {supportMessages.length} 封）</summary>
-                  <div className="admin-inbox-collapse-content">
-                    {supportMessages.length === 0 ? (
-                      <div className="admin-empty-state">暂时没有用户来信。用户通过前台「意见反馈」提交的内容会显示在这里。</div>
-                    ) : supportMessages.map((message) => (
-                      <article className="partner-finance-card admin-inbox-message" key={message.id}>
-                        <div className="partner-finance-card-head">
-                          <div><strong>{message.subject}</strong><span>{message.displayName} · {message.contact || "未提供联系方式"} · {new Date(message.createdAt).toLocaleString("zh-CN")}</span></div>
-                          <span className={"status-pill " + (message.status === "resolved" ? "completed" : message.status === "unread" ? "pending" : "active")}>{message.status === "resolved" ? "已处理" : message.status === "unread" ? "未读" : "已读"}</span>
-                        </div>
-                        <div className="partner-finance-details admin-inbox-message-body">{message.message}</div>
-                        <div className="admin-inbox-reply">
-                          <label htmlFor={"support-reply-" + message.id}>回复用户</label>
-                          <textarea id={"support-reply-" + message.id} rows={3} maxLength={4000} value={supportReplyDrafts[message.id] ?? ""} onChange={(event) => setSupportReplyDrafts((current) => ({ ...current, [message.id]: event.target.value }))} placeholder="输入回复内容，发送后用户可在站内信中收到…" />
-                          <div className="partner-finance-actions">
-                            <button disabled={supportReplyBusyId === message.id} onClick={() => void replyToSupportMessage(message)}>{supportReplyBusyId === message.id ? "发送中…" : "发送回复"}</button>
-                            {message.status !== "resolved" && <button disabled={financeBusyId === message.id} onClick={() => void resolveSupportMessage(message)}>{financeBusyId === message.id ? "处理中…" : "标记为已处理"}</button>}
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </details>
-              </section>
-              <section className="overview-card admin-inbox-card">
-                <h3>站内信编辑与发布</h3>
-                <p className="partner-finance-disclaimer">发布后，所有用户均可在前台站内信中查看；草稿仅管理员可见。欢迎信和功能指南已预置，可直接编辑。</p>
-                <div className="inbox-admin-editor">
-                  <label>信件标题<input value={inboxSubject} maxLength={120} onChange={(event) => setInboxSubject(event.target.value)} placeholder="请输入标题" /></label>
-                  <label>信件类型<select value={inboxCategory} onChange={(event) => setInboxCategory(event.target.value as AdminInboxMessage["category"])}><option value="welcome">欢迎信</option><option value="features">功能信</option><option value="notice">普通通知</option></select></label>
-                  <label>信件正文<textarea value={inboxBody} maxLength={4000} rows={5} onChange={(event) => setInboxBody(event.target.value)} placeholder="请输入要发送给用户的内容" /></label>
-                  <div className="partner-finance-actions">
-                    <button disabled={inboxBusy} onClick={() => void saveInboxMessage("draft")}>{inboxBusy ? "保存中…" : "保存草稿"}</button>
-                    <button disabled={inboxBusy} onClick={() => void saveInboxMessage("published")}>{inboxBusy ? "发布中…" : "发布给所有用户"}</button>
-                    {inboxEditingId && <button disabled={inboxBusy} onClick={resetInboxEditor}>取消编辑</button>}
-                  </div>
-                </div>
-              </section>
-              <section className="overview-card admin-inbox-card">
-                <details className="admin-inbox-collapse">
-                  <summary>已发布信件与草稿（共 {inboxMessages.length} 封）</summary>
-                  <div className="admin-inbox-collapse-content">
-                    {inboxMessages.length === 0 ? <div className="admin-empty-state">暂无站内信，填写上方内容即可创建。</div> : inboxMessages.map((message) => (
-                      <article className="partner-finance-card admin-inbox-message" key={message.id}>
-                        <div className="partner-finance-card-head">
-                          <div><strong>{message.subject}</strong><span>{message.category === "welcome" ? "欢迎信" : message.category === "features" ? "功能信" : "普通通知"} · 更新于 {new Date(message.updatedAt).toLocaleString("zh-CN")}</span></div>
-                          <span className={"status-pill " + (message.status === "published" ? "completed" : "pending")}>{message.status === "published" ? "已发布" : "草稿"}</span>
-                        </div>
-                        <div className="partner-finance-details admin-inbox-message-body">{message.body}</div>
-                        <div className="partner-finance-actions">
-                          {message.status === "published"
-                            ? <button disabled={inboxBusy} onClick={() => editInboxMessage(message)}>编辑已发布信件</button>
-                            : <button disabled={inboxBusy} onClick={() => editInboxMessage(message)}>编辑草稿</button>}
-                          <button disabled={inboxBusy} onClick={() => void deleteInboxMessage(message)}>删除</button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </details>
-              </section>
-            </div>
+            <AdminInboxTab
+              supportMessages={supportMessages}
+              inboxMessages={inboxMessages}
+              supportReplyDrafts={supportReplyDrafts}
+              setSupportReplyDrafts={setSupportReplyDrafts}
+              supportReplyBusyId={supportReplyBusyId}
+              financeBusyId={financeBusyId}
+              inboxSubject={inboxSubject}
+              setInboxSubject={setInboxSubject}
+              inboxCategory={inboxCategory}
+              setInboxCategory={setInboxCategory}
+              inboxBody={inboxBody}
+              setInboxBody={setInboxBody}
+              inboxBusy={inboxBusy}
+              inboxEditingId={inboxEditingId}
+              fetchInboxMessages={fetchInboxMessages}
+              replyToSupportMessage={replyToSupportMessage}
+              resolveSupportMessage={resolveSupportMessage}
+              saveInboxMessage={saveInboxMessage}
+              editInboxMessage={editInboxMessage}
+              deleteInboxMessage={deleteInboxMessage}
+              resetInboxEditor={resetInboxEditor}
+            />
           )}
 
           {activeTab === "overview" && (
-            <div className="overview-viewport">
-              {dashboardError && <div className="admin-data-note" role="status">{dashboardError}</div>}
-              {loading && <div className="admin-data-note" role="status">正在读取经营数据，仪表盘布局已完整呈现…</div>}
-              {!loadedStats && !loading && !dashboardError && <div className="admin-data-note" role="status">当前暂无经营数据，以下指标将在真实数据接入后自动显示。</div>}
-              <section className="admin-dashboard-section">
-                <div className="admin-section-heading">
-                  <div>
-                    <h2>经营概览</h2>
-                    <p>今日经营结果与全量任务表现</p>
-                  </div>
-                  <span>数据来自当前 V4 数据库</span>
-                </div>
-                <div className="admin-dashboard-kpis">
-                  <div className="admin-dashboard-kpi"><span>累计任务</span><strong>{stats.databaseDataAvailable === false ? statsUnavailableLabel : stats.totalJobs}</strong><small>已进入任务系统</small></div>
-                  <div className="admin-dashboard-kpi"><span>今日完成</span><strong>{stats.databaseDataAvailable === false ? statsUnavailableLabel : stats.todayCompletedJobs}</strong><small>今日成功交付</small></div>
-                  <div className="admin-dashboard-kpi"><span>出片成功率</span><strong>{stats.databaseDataAvailable === false ? statsUnavailableLabel : `${stats.jobSuccessRate}%`}</strong><small>完成 / 已结束任务</small></div>
-                  <div className="admin-dashboard-kpi"><span>失败任务</span><strong>{stats.databaseDataAvailable === false ? statsUnavailableLabel : stats.failedJobs}</strong><small>可进入任务明细排查</small></div>
-                </div>
-              </section>
-
-
-              <section className="admin-dashboard-section admin-user-growth-inline">
-                <div className="admin-section-heading">
-                  <div><h2>经营增长曲线</h2><p>注册、成片与实收收入 · 用真实趋势看见简兮的成长</p></div>
-                  <button className="admin-inline-link" onClick={() => setActiveTab("users")}>查看用户与地域分析</button>
-                </div>
-                <div className="admin-user-chart-card">
-                  <div className="admin-user-card-heading">
-                    <div><span className="admin-eyebrow">COMMUNITY / 30 DAYS</span><h3>累计注册 {userAnalytics?.summary.totalUsers.toLocaleString("zh-CN") ?? "—"} 位</h3><p>今日新增 {userAnalytics?.summary.todayNewUsers ?? "—"} 位 · 近 7 天新增 {userAnalytics?.summary.last7Days ?? "—"} 位</p></div>
-                    <span className="admin-chart-legend"><i />每日注册</span>
-                  </div>
-                  {userAnalytics && userTrend.length ? <div className="admin-user-line-chart">
-                    <div className="admin-chart-y-labels"><span>{trendMax}</span><span>{Math.round(trendMax / 2)}</span><span>0</span></div>
-                    <svg viewBox="0 0 900 205" preserveAspectRatio="none" role="img" aria-label="近30天注册趋势">
-                      <defs><linearGradient id="overviewGrowthFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#8179e8" stopOpacity=".2" /><stop offset="100%" stopColor="#8179e8" stopOpacity="0" /></linearGradient></defs>
-                      <path d="M18 176 H882 M18 105 H882 M18 34 H882" stroke="#e9e7f3" strokeDasharray="4 6" fill="none" />
-                      <polygon points={`18,176 ${trendPoints} 882,176`} fill="url(#overviewGrowthFill)" />
-                      <polyline points={trendPoints} fill="none" stroke="#7169d7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="admin-chart-x-labels"><span>{userTrend[0]?.day}</span><span>{userTrend[Math.floor(userTrend.length / 2)]?.day}</span><span>{userTrend[userTrend.length - 1]?.day}</span></div>
-                  </div> : <div className="admin-users-empty">用户增长曲线将在数据库连接后显示。</div>}
-                </div>
-
-                {userAnalytics && userTrend.length > 0 && <div className="admin-trend-multiples">
-                  <article className="admin-trend-mini">
-                    <div><span className="admin-eyebrow">DELIVERED / 30 DAYS</span><strong>{userTrend.reduce((sum, point) => sum + point.completedJobs, 0).toLocaleString("zh-CN")}</strong><small>近 30 天完成成片</small></div>
-                    <svg viewBox="0 0 900 205" preserveAspectRatio="none" role="img" aria-label="近30天完成成片趋势">
-                      <path d="M18 176 H882 M18 105 H882 M18 34 H882" stroke="#e9e7f3" strokeDasharray="4 6" fill="none" />
-                      <polyline points={completedTrendPoints} fill="none" stroke="#5e9cbb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="admin-chart-x-labels"><span>{userTrend[0]?.day}</span><span>{userTrend[Math.floor(userTrend.length / 2)]?.day}</span><span>{userTrend[userTrend.length - 1]?.day}</span></div>
-                  </article>
-                  <article className="admin-trend-mini">
-                    <div><span className="admin-eyebrow">REVENUE / 30 DAYS</span><strong>¥{userTrend.reduce((sum, point) => sum + point.revenueYuan, 0).toFixed(2)}</strong><small>近 30 天已支付净额（按 SKU 价扣除退款）</small></div>
-                    <svg viewBox="0 0 900 205" preserveAspectRatio="none" role="img" aria-label="近30天实收收入趋势">
-                      <path d="M18 176 H882 M18 105 H882 M18 34 H882" stroke="#e9e7f3" strokeDasharray="4 6" fill="none" />
-                      <polyline points={revenueTrendPoints} fill="none" stroke="#c49b62" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="admin-chart-x-labels"><span>{userTrend[0]?.day}</span><span>{userTrend[Math.floor(userTrend.length / 2)]?.day}</span><span>{userTrend[userTrend.length - 1]?.day}</span></div>
-                  </article>
-                </div>}
-              </section>
-
-              <section className="admin-dashboard-section admin-visual-section">
-                <div className="admin-section-heading">
-                  <div><h2>经营数据图表</h2><p>以真实任务数据呈现交付质量与导演调用结构</p></div>
-                  <span>仅展示已采集指标</span>
-                </div>
-                <div className="admin-visual-grid">
-                  <article className="admin-visual-card admin-success-chart">
-                    <div className="admin-visual-title">出片成功率</div>
-                    <div className="admin-donut-wrap">
-                      <svg viewBox="0 0 120 120" role="img" aria-label="出片成功率环形图">
-                        <circle cx="60" cy="60" r="42" fill="none" stroke="#3b4147" strokeWidth="12" />
-                        {stats.databaseDataAvailable !== false && stats.totalJobs > 0 && <circle cx="60" cy="60" r="42" fill="none" stroke="#d8dde2" strokeWidth="12" strokeLinecap="round" strokeDasharray={`${Math.max(0,Math.min(100,stats.jobSuccessRate))*2.6389} 263.89`} transform="rotate(-90 60 60)" />}
-                        <text x="60" y="56" textAnchor="middle" className="admin-donut-value">{stats.databaseDataAvailable === false || stats.totalJobs === 0 ? "—" : `${stats.jobSuccessRate}%`}</text>
-                        <text x="60" y="73" textAnchor="middle" className="admin-donut-caption">成功交付</text>
-                      </svg>
-                    </div>
-                    <div className="admin-visual-foot">{stats.databaseDataAvailable === false ? statsUnavailableHint : stats.totalJobs > 0 ? `累计 ${stats.totalJobs} 项任务` : "等待首批任务数据"}</div>
-                  </article>
-                  <article className="admin-visual-card">
-                    <div className="admin-visual-title">今日任务交付</div>
-                    {stats.databaseDataAvailable === false || stats.totalJobs === 0 ? <div className="admin-chart-empty">暂无可绘制的任务数据</div> : <div className="admin-bar-chart">
-                      <div className="admin-bar-row"><span>今日完成</span><div className="admin-bar-track"><i style={{width:(stats.todayCompletedJobs / Math.max(1,stats.todayCompletedJobs,stats.todayFailedJobs) * 100) + "%"}} /></div><b>{stats.todayCompletedJobs}</b></div>
-                      <div className="admin-bar-row"><span>今日失败</span><div className="admin-bar-track"><i className="failed" style={{width:(stats.todayFailedJobs / Math.max(1,stats.todayCompletedJobs,stats.todayFailedJobs) * 100) + "%"}} /></div><b>{stats.todayFailedJobs}</b></div>
-                    </div>}
-                    <div className="admin-visual-foot">同一自然日内完成与失败的任务数量</div>
-                  </article>
-                  <article className="admin-visual-card">
-                    <div className="admin-visual-title">导演模型调用路径</div>
-                    {!stats.directorTelemetryAvailable ? <div className="admin-chart-empty">导演遥测数据尚未采集</div> : <div className="admin-route-chart">
-                      <div className="admin-route-row"><div><span>主模型直连</span><b>{stats.primaryModelSuccessRate}%</b></div><div className="admin-route-track"><i style={{width:Math.max(0,Math.min(100,stats.primaryModelSuccessRate)) + "%"}} /></div></div>
-                      <div className="admin-route-row"><div><span>备用模型接管</span><b>{stats.fallbackModelRate}%</b></div><div className="admin-route-track"><i style={{width:Math.max(0,Math.min(100,stats.fallbackModelRate)) + "%"}} /></div></div>
-                      <div className="admin-route-row"><div><span>规则兜底</span><b>{stats.heuristicFallbackRate}%</b></div><div className="admin-route-track"><i style={{width:Math.max(0,Math.min(100,stats.heuristicFallbackRate)) + "%"}} /></div></div>
-                    </div>}
-                    <div className="admin-visual-foot">主模型 / 备用模型 / 规则兜底</div>
-                  </article>
-                </div>
-              </section>
-
-              <section className="admin-dashboard-section">
-                <div className="admin-section-heading">
-                  <div>
-                    <h2>AI 导演效能</h2>
-                    <p>耗时、尾部延迟与各制作阶段表现；耗时统计基于已完成任务</p>
-                  </div>
-                  <button className="admin-inline-link" onClick={() => setActiveTab("director-jobs")}>查看任务明细</button>
-                </div>
-                <div className="admin-performance-layout">
-                  <div className="admin-performance-primary">
-                    <span className="admin-data-label">端到端交付耗时 · 平均值</span>
-                    <strong>{stats.avgE2eDurationSec > 0 ? `${stats.avgE2eDurationSec}s` : "暂无数据"}</strong>
-                    <div className="admin-percentile-row">
-                      <span>P50 <b>{stats.p50E2eDurationSec > 0 ? `${stats.p50E2eDurationSec}s` : "—"}</b></span>
-                      <span>P90 <b>{stats.p90E2eDurationSec > 0 ? `${stats.p90E2eDurationSec}s` : "—"}</b></span>
-                      <span>P99 <b>{stats.p99E2eDurationSec > 0 ? `${stats.p99E2eDurationSec}s` : "—"}</b></span>
-                    </div>
-                    <small>P50 表示一半任务不超过该耗时；P90/P99 用于观察慢任务尾部</small>
-                  </div>
-                  <div className="admin-stage-list">
-                    <div className="admin-stage-row"><span>LLM 导演规划</span><strong>{stats.avgLlmDurationSec > 0 ? `${stats.avgLlmDurationSec}s` : "未采集"}</strong></div>
-                    <div className="admin-stage-row"><span>TTS 人声合成</span><strong>{stats.avgTtsDurationSec > 0 ? `${stats.avgTtsDurationSec}s` : "未采集"}</strong></div>
-                    <div className="admin-stage-row"><span>FFmpeg 独立耗时</span><strong>{stats.avgFfmpegDurationSec > 0 ? `${stats.avgFfmpegDurationSec}s` : "未单独采集"}</strong></div>
-                  <div className="admin-stage-row"><span>渲染引擎总耗时（含内部步骤）</span><strong>{stats.avgRendererDurationSec > 0 ? `${stats.avgRendererDurationSec}s` : "未采集"}</strong></div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="admin-dashboard-section">
-                <div className="admin-section-heading">
-                  <div>
-                    <h2>模型命中与自动质检</h2>
-                    <p>主模型直连、备用模型接管、规则兜底与成片质检；策略字段记录率不代表模型准确率</p>
-                  </div>
-                </div>
-                <div className="admin-dashboard-kpis">
-                  <div className="admin-dashboard-kpi"><span>主模型直连成功率</span><strong>{stats.directorTelemetryAvailable ? `${stats.primaryModelSuccessRate}%` : "未采集"}</strong><small>由主模型直接完成的调用</small></div>
-                  <div className="admin-dashboard-kpi"><span>备用模型接管率</span><strong>{stats.directorTelemetryAvailable ? `${stats.fallbackModelRate}%` : "未采集"}</strong><small>主模型失败后备用模型完成</small></div>
-                  <div className="admin-dashboard-kpi"><span>规则兜底率</span><strong>{stats.directorTelemetryAvailable ? `${stats.heuristicFallbackRate}%` : "未采集"}</strong><small>模型链路不可用时规则接管</small></div>
-                  <div className="admin-dashboard-kpi"><span>自动质检通过率</span><strong>{stats.qualityCheckedJobs > 0 ? `${stats.qualityPassRate}%` : "未采集"}</strong><small>{stats.qualityPassedJobs} / {stats.qualityCheckedJobs} 个已质检任务</small></div>
-                </div>
-                <div className="admin-usage-strip">
-                  <span>导演调用 {stats.directorCalls} 次</span>
-                  <span>累计 Token {stats.tokenUsageRecords > 0 ? stats.totalTokensUsed.toLocaleString("zh-CN") : "供应商未返回"}</span>
-                  <span>旁白字符 {stats.totalTtsChars.toLocaleString("zh-CN")}</span>
-                </div>
-              </section>
-
-              <div className="overview-grid">
-                <div className="overview-card">
-                  <h3>导演决策记录</h3>
-                  <div className="stat-row"><span>变体策略字段记录率</span><strong>{stats.variantHitRate}%</strong></div>
-                  <div className="stat-row"><span>场景契合度均分</span><strong>{stats.sceneScoreDataAvailable ? `${stats.avgSceneScore} / 100` : "尚未接入真实评分"}</strong></div>
-                  <p className="admin-data-note">变体策略指标反映方案字段是否写入，不等同于用户效果或模型准确率。场景评分只在真实评分埋点存在时展示。</p>
-                </div>
-                <div className="overview-card">
-                  <h3>经营与成本</h3>
-                  <div className="stat-row"><span>今日已支付净额</span><strong>{stats.revenueDataAvailable === false ? statsUnavailableLabel : `¥${stats.todayRevenueYuan.toFixed(2)}`}</strong></div>
-                  <div className="stat-row"><span>今日导演模型成本估算</span><strong>{stats.costDataAvailable === false ? "未配置模型单价" : "¥" + stats.totalCostEstimateYuan.toFixed(4)}</strong></div>
-                  <p className="admin-data-note">成本仅统计已配置单价的导演模型 Token，不包含 TTS、存储与带宽；不以不完整成本计算毛利。</p>
-                </div>
-              </div>
-            </div>
+            <AdminOverviewTab
+              stats={stats}
+              loadedStats={loadedStats}
+              loading={loading}
+              dashboardError={dashboardError}
+              statsUnavailableLabel={statsUnavailableLabel}
+              statsUnavailableHint={statsUnavailableHint}
+              userAnalytics={userAnalytics}
+              userTrend={userTrend}
+              trendMax={trendMax}
+              trendPoints={trendPoints}
+              completedTrendPoints={completedTrendPoints}
+              revenueTrendPoints={revenueTrendPoints}
+              setActiveTab={setActiveTab}
+            />
           )}
         </div>
+
 
         {/* 吐司通知 */}
         {toastMessage && (
@@ -1476,4 +788,3 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
     </div>
   );
 }
-

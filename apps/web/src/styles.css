@@ -690,7 +690,8 @@ textarea:focus-visible {
 .attachment-upload-ring-svg {
   width: 32px;
   height: 32px;
-  transform: rotate(-90deg); /* 从顶部 12 点钟方向顺时针旋转 */
+  transform: rotate(-90deg);
+  /* 从顶部 12 点钟方向顺时针旋转 */
 }
 
 .attachment-upload-ring-bg {
@@ -743,8 +744,13 @@ textarea:focus-visible {
 }
 
 @keyframes send-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pending-order {
@@ -1170,9 +1176,11 @@ textarea:focus-visible {
   color: #a8abb2;
   cursor: pointer;
 }
+
 .creation-scene-options button.is-locked:hover {
   color: #8a8e96;
 }
+
 .creation-scene-options button.is-locked.is-selected {
   color: #a8abb2;
   text-decoration-color: #c8cad0;
@@ -4586,8 +4594,8 @@ select:focus-visible {
 .message-row:has(.director-filmstrip-panel) .message-author,
 .message-row:has(.job-delivery) .message-author,
 .message-row:has(.speech-cut-review) .message-author,
-.message-row:has(.director-filmstrip-panel) .message-bubble > p,
-.message-row:has(.job-delivery) .message-bubble > p {
+.message-row:has(.director-filmstrip-panel) .message-bubble>p,
+.message-row:has(.job-delivery) .message-bubble>p {
   display: none;
 }
 
@@ -7611,7 +7619,8 @@ body,
 .attachment-upload-ring-svg {
   width: 32px;
   height: 32px;
-  transform: rotate(-90deg); /* 从顶部 12 点钟方向顺时针旋转 */
+  transform: rotate(-90deg);
+  /* 从顶部 12 点钟方向顺时针旋转 */
 }
 
 .attachment-upload-ring-bg {
@@ -7664,8 +7673,13 @@ body,
 }
 
 @keyframes send-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pending-order {
@@ -11353,6 +11367,7 @@ body,
   border-left: 2px solid rgba(255, 255, 255, 0.28);
   border-radius: 0 6px 6px 0;
 }
+
 .filmstrip-concept-label {
   flex: 0 0 auto;
   font-size: 11px;
@@ -11361,6 +11376,7 @@ body,
   color: #d1d5db;
   line-height: 1.6;
 }
+
 .filmstrip-concept-text {
   font-size: 12px;
   color: #b6bcc6;
