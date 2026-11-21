@@ -33,7 +33,7 @@ export const CreateJobRequestSchema = z.object({
 });
 export type CreateJobRequest = z.infer<typeof CreateJobRequestSchema>;
 
-  /** 批量赛马时服务端逐版构造的任务输入。 */
+/** 批量赛马时服务端逐版构造的任务输入。 */
 export type CreateJobInput = CreateJobRequest & {
   batchIndex?: number;
   creationScene?: CreationEntryScene;
