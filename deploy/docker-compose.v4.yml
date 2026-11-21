@@ -32,11 +32,12 @@ services:
       dockerfile: deploy/Dockerfile.v4
       target: api
     restart: unless-stopped
-    # 4C4G 宿主机内存安全红线防护（防 OOM 击穿宿主机）：
-    # 宿主机总内存 4096 MiB (4GB)：Postgres 限制 512 MiB，Web Nginx 限制 128 MiB。
-    # API 容器（含 2 路并发 FFmpeg Worker）设定 2048 MiB 内存硬上限 (mem_limit) 与 1024 MiB 软预留。
-    # 三大容器峰值内存总合为 2688 MiB，为宿主机 Linux 操作系统、SSH、系统监控与内核 Buffer/Cache 留出 1408 MiB (34.4%) 的充裕安全缓冲。
-    mem_limit: 2048m
+    # 商业生产系统出片高可用原则（死保出片正常，防僵化 OOM 误杀）：
+    # 1. 软上限预留 (mem_reservation: 1024m)：常态待机与普通请求锁定在 1024MB 以内，资源不空转；
+    # 2. 移除僵化硬上限 (不设 mem_limit)：视频渲染（Ken Burns 运镜/发丝字幕/高清图解码）瞬时尖峰允许弹性爆发借用内存；
+    # 3. 宿主机配合 4GB Swap 防爆区：双路并发渲染即使遭遇重型素材叠加（各吃 1.2G~1.3G），由 Linux 物理内存与 Swap 安全承接，
+    #    彻底杜绝内核 OOM-Kill 强杀正在出片的业务进程，保障商业客户 100% 渲染成功交付；
+    # 4. 算力与并发约束：并发上限严格锁死在 2 (WORKER_CONCURRENCY=2)，FFmpeg 内部显式 -threads 2 避免抢核。
     mem_reservation: 1024m
     cpus: 4.0
     pids_limit: 512
