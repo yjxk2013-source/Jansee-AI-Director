@@ -52,6 +52,28 @@ function useTypewriter(text: string, active: boolean, charMs: number): { shown: 
   return { shown: chars.slice(0, count).join(""), typing: active && count < chars.length };
 }
 
+function FilmstripThumbImage({ src, alt, index }: { src: string; alt: string; index: number }) {
+  const [loadFailed, setLoadFailed] = useState(false);
+  if (loadFailed) {
+    return (
+      <div className="filmstrip-thumb-placeholder filmstrip-thumb-expired" title="素材已过期或已转存">
+        <span className="frame-num">0{index + 1}</span>
+        <span className="filmstrip-expired-tag">已过期</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="filmstrip-img"
+      loading="lazy"
+      decoding="async"
+      onError={() => setLoadFailed(true)}
+    />
+  );
+}
+
 /**
  * 计算当前应揭示到第几个镜头。
  * 驱动源：真实渲染进度为主 + 缓慢定时兜底，取较大值。
@@ -189,7 +211,7 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
                 <div className="filmstrip-frame-perforations-top"><span /><span /><span /><span /></div>
                 <div className="filmstrip-thumbnail-box">
                   {previewUrl ? (
-                    <img src={previewUrl} alt={`第 ${idx + 1} 镜头素材`} className="filmstrip-img" />
+                    <FilmstripThumbImage src={previewUrl} alt={`第 ${idx + 1} 镜头素材`} index={idx} />
                   ) : (
                     <div className="filmstrip-thumb-placeholder"><span className="frame-num">0{idx + 1}</span></div>
                   )}

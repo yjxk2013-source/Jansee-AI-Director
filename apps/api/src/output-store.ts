@@ -97,6 +97,16 @@ export function createPgOutputStore(pool: Pool): OutputStore {
       return row ? mapOutput(row) : null;
     },
 
+    async findOutputCoverById(userId: string, outputId: string) {
+      // 允许在成片过期（24h后）但会话保留期内（7天内，created_at >= now() - 7 days）仍然访问纯净封面缩略图
+      const result = await pool.query<{ cover_storage_key: string | null }>(
+        "SELECT cover_storage_key FROM generated_outputs WHERE user_id = $1 AND id = $2 AND cover_storage_key IS NOT NULL AND created_at >= (now() - interval '7 days') LIMIT 1",
+        [userId, outputId],
+      );
+      const row = result.rows[0];
+      return row?.cover_storage_key ? { coverStorageKey: row.cover_storage_key } : null;
+    },
+
     async incrementDownloadCount(userId: string, outputId: string) {
       await pool.query(
         "UPDATE generated_outputs SET download_count = download_count + 1 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",

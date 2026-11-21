@@ -40,6 +40,7 @@ export interface OutputStore {
   createOutput(output: NewOutput): Promise<OutputRecord>;
   listUserOutputs(userId: string): Promise<OutputRecord[]>;
   findOutputById(userId: string, outputId: string): Promise<OutputRecord | null>;
+  findOutputCoverById?(userId: string, outputId: string): Promise<{ coverStorageKey: string } | null>;
   incrementDownloadCount?(userId: string, outputId: string): Promise<void>;
   findExpiredOutputs?(now: Date, limit?: number): Promise<Array<{ id: string; storageKey: string }>>;
   markOutputExpired?(outputId: string, now: Date): Promise<void>;
@@ -117,13 +118,20 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
       return reply.code(400).send({ error: { code: "INVALID_OUTPUT_ID" } });
     }
-    const output = await options.outputStore.findOutputById(user.id, id);
-    if (!output) return reply.code(404).send({ error: { code: "WORK_NOT_FOUND" } });
-    if (!output.coverStorageKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+    let coverKey = "";
+    if (options.outputStore.findOutputCoverById) {
+      const cover = await options.outputStore.findOutputCoverById(user.id, id);
+      if (cover?.coverStorageKey) coverKey = cover.coverStorageKey;
+    }
+    if (!coverKey) {
+      const output = await options.outputStore.findOutputById(user.id, id);
+      if (output?.coverStorageKey) coverKey = output.coverStorageKey;
+    }
+    if (!coverKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
 
     // 若存储支持高速直连，封面同样直接 302 重定向到 COS 直链，享受边缘极速加载
     if (typeof options.storage.createSignedUrl === "function") {
-      const signedUrl = await options.storage.createSignedUrl(output.coverStorageKey, {
+      const signedUrl = await options.storage.createSignedUrl(coverKey, {
         ttlSeconds: 3600,
       });
       reply.header("cache-control", "private, no-cache");
@@ -131,7 +139,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     }
 
     try {
-      const filePath = await options.storage.getFilePath(output.coverStorageKey);
+      const filePath = await options.storage.getFilePath(coverKey);
       const fileStat = await stat(filePath);
       reply.header("cache-control", "private, max-age=604800, immutable");
       reply.header("content-type", "image/jpeg");

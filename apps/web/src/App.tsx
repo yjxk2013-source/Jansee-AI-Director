@@ -191,9 +191,105 @@ function isSpeechCutIntent(prompt: string) {
   return /口播精剪|智能剪口播|(?:剪掉|删掉|去掉|删除|清理|精剪).{0,10}(?:口头语|语气词|嗯啊|停顿|重复|冗余)|(?:口头语|语气词|嗯啊|停顿|重复|冗余).{0,10}(?:剪掉|删掉|去掉|删除|清理|精剪)/.test(prompt);
 }
 
+interface JobDeliveryVideoPlayerProps {
+  workId: string;
+  activeId: string | null;
+  onPlay: (id: string) => void;
+  onPause: () => void;
+}
+
+function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: JobDeliveryVideoPlayerProps) {
+  const isPlaying = activeId === workId;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [coverFailed, setCoverFailed] = useState(false);
+
+  // 滑走（移出视口可见比例 < 25%）自动停止播放，杜绝后台继续发声
+  useEffect(() => {
+    if (!isPlaying) return;
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.25) {
+          if (videoRef.current && !videoRef.current.paused) {
+            videoRef.current.pause();
+          }
+          onPause();
+        }
+      },
+      { threshold: [0, 0.25, 0.5] }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isPlaying, onPause]);
+
+  const coverUrl = `/api/v1/works/${workId}/cover`;
+  const streamUrl = `/api/v1/works/${workId}/stream`;
+
+  return (
+    <div ref={containerRef} className="job-delivery-player-box">
+      {isPlaying ? (
+        <video
+          ref={videoRef}
+          className="job-delivery-video"
+          src={streamUrl}
+          poster={coverFailed ? undefined : coverUrl}
+          controls
+          autoPlay
+          playsInline
+          preload="auto"
+          onPause={onPause}
+          onEnded={onPause}
+          aria-label="简兮成片视频播放器"
+        />
+      ) : (
+        <div
+          className="job-delivery-cover-wrap"
+          onClick={() => onPlay(workId)}
+          role="button"
+          tabIndex={0}
+          aria-label="点击播放视频"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onPlay(workId);
+            }
+          }}
+        >
+          {coverFailed ? (
+            <div className="job-delivery-cover-placeholder">
+              <span>视频成片 (点击播放)</span>
+            </div>
+          ) : (
+            <img
+              src={coverUrl}
+              alt="成片封面"
+              loading="lazy"
+              decoding="async"
+              className="job-delivery-cover-img"
+              onError={() => setCoverFailed(true)}
+            />
+          )}
+          <div className="job-delivery-play-overlay">
+            <span className="job-delivery-play-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [conversations, setConversations] = useState<SavedConversation[]>(() => loadSavedConversations());
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => loadActiveConversationId());
+  const [activePlayingVideoId, setActivePlayingVideoId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const messages = conversations.find((conversation) => conversation.id === activeConversationId)?.messages ?? [];
   const [draft, setDraft] = useState("");
@@ -575,6 +671,11 @@ export default function App() {
           if (!active || !payload) return;
           const work = (payload.works ?? []).find((item) => item.jobId === jobId);
           if (!work) return;
+          // 创作者端到端极速开播：静默轻量预热视频头 512KB，用户点击秒出画面
+          fetch(`/api/v1/works/${work.id}/stream`, {
+            credentials: "include",
+            headers: { Range: "bytes=0-524287" },
+          }).catch(() => undefined);
           setConversations((current) => current.map((conversation) => ({
             ...conversation,
             messages: conversation.messages.map((item) => item.id === logMessageId ? { ...item, jobWorkId: work.id } : item),
@@ -1799,15 +1900,11 @@ export default function App() {
 
                     {message.jobWorkId ? (
                       <div className="job-delivery">
-                        <video
-                          className="job-delivery-video"
-                          src={"/api/v1/works/" + message.jobWorkId + "/stream"}
-                          poster={"/api/v1/works/" + message.jobWorkId + "/cover"}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          onLoadedMetadata={(event) => { event.currentTarget.currentTime = 0.1; }}
-                          aria-label="简兮成片视频播放器"
+                        <JobDeliveryVideoPlayer
+                          workId={message.jobWorkId}
+                          activeId={activePlayingVideoId}
+                          onPlay={(id) => setActivePlayingVideoId(id)}
+                          onPause={() => setActivePlayingVideoId((curr) => curr === message.jobWorkId ? null : curr)}
                         />
                         {(() => {
                           const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
@@ -2075,9 +2172,22 @@ export default function App() {
                 >
                   <div className="pending-preview">
                     {mediaKind(file) === "image" ? (
-                      <img src={previewUrls[index]} alt={`素材预览：${file.name}`} draggable={false} />
+                      <img
+                        src={previewUrls[index]}
+                        alt={`素材预览：${file.name}`}
+                        draggable={false}
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
-                      <video src={previewUrls[index]} muted playsInline preload="metadata" aria-label={`视频预览：${file.name}`} draggable={false} />
+                      <video
+                        src={previewUrls[index]}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        aria-label={`视频预览：${file.name}`}
+                        draggable={false}
+                      />
                     )}
                     <span className="pending-order">{index + 1}</span>
                     {(() => {
@@ -3323,7 +3433,31 @@ function WorksPanel({
   const [copyFeedback, setCopyFeedback] = useState<string>("");
   const [activePlayWorkId, setActivePlayWorkId] = useState<string | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const cardContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [coverDataUrls, setCoverDataUrls] = useState<Record<string, string>>({});
+
+  // 滑走（作品移出视口可见比例 < 25%）自动停止播放
+  useEffect(() => {
+    if (!activePlayWorkId) return;
+    const el = cardContainerRefs.current[activePlayWorkId];
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.25) {
+          const video = videoRefs.current[activePlayWorkId];
+          if (video && !video.paused) {
+            video.pause();
+          }
+          setActivePlayWorkId(null);
+        }
+      },
+      { threshold: [0, 0.25, 0.5] }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [activePlayWorkId]);
 
   const captureFrameAsCover = (workId: string, showFeedback = true) => {
     const video = videoRefs.current[workId];
@@ -3486,7 +3620,10 @@ function WorksPanel({
                   </div>
                 </div>
 
-                <div className="work-card-player">
+                <div
+                  className="work-card-player"
+                  ref={(el) => { cardContainerRefs.current[work.id] = el; }}
+                >
                   {activePlayWorkId === work.id ? (
                     <video
                       ref={(el) => { videoRefs.current[work.id] = el; }}
