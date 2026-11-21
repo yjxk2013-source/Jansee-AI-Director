@@ -95,11 +95,13 @@
 
 ### 4. 媒体存储与 CDN 边缘加速（大厂级闭环）
 - **对象存储**：腾讯云 COS（桶：`jansee-1460392374`，地域：`ap-guangzhou`，私有读写）。
-- **统一存储抽象（`ObjectStorage`）**：在 `apps/api/src/storage-local.ts` 导出统一 `ObjectStorage` 接口（`putFile`, `getFilePath`, `deleteObject`, `deleteExpired`, `createSignedUrl`），各模块完全解耦，`createTencentCosObjectStorage` 与 `createLocalObjectStorage` 全量实现该契约。
+- **统一存储抽象（`ObjectStorage`）**：在 `apps/api/src/storage-local.ts` 导出纯净的 `ObjectStorage` 强契约接口（`putFile`, `getFilePath`, `deleteObject`, `deleteExpired`, `createSignedUrl`），移除可选标记。`createTencentCosObjectStorage` 与 `createLocalObjectStorage` 全量严格实现，API 统一解耦调用。
 - **边缘 CDN 域名与安全鉴权**：
   - 边缘加速域名：`https://cdn.jansee.cn`（已绑定 TrustAsia 免费 SSL 证书，开启 HTTP/2.0）。
   - COS 开启【私有回源鉴权】，保护存储桶不被外部盗刷。
-  - **Type A 时间戳防盗链 Token 闭环**：当配置 `CDN_AUTH_KEY`（或 `COS_CDN_AUTH_KEY`）时，API 自动生成带有合法 `sign=${timestamp}-${rand}-${uid}-${md5}` 的时效鉴权直链（播放 3600 秒，下载 600 秒），防止视频被第三方盗刷或未授权下载；未配置密钥时平滑降级，零破坏现有功能。
+  - **Type A 时间戳防盗链与 Fail-closed 安全闭环**：
+    - 当配置 `CDN_AUTH_KEY` 时，API 自动生成符合腾讯云官方标准的 Type A 防盗链直链（`sign=${issueTimestamp}-0-0-${md5}`），URL 参数仅保留标准 sign，避免附加冗余 query 导致边缘节点严格模式拦截。
+    - 严格执行 **Fail-closed（安全回退）**：若未配置 CDN 鉴权密钥，坚决不返回无签名的裸 CDN 链接，自动回退至原生 COS 带签名的私有直链（`rawUrl`），确保私有资产 100% 具备防盗链保护。
   - 后端分发给前端的播放链接通过 `302 Found` 直接重定向至 CDN 鉴权直链，彻底绕开云服务器单机 3Mbps 带宽瓶颈，实现全国边缘节点首帧秒开。
 - **纯净服务器原则**：云服务器本地磁盘**不保留任何视频和素材实体**，成片合成完毕后立刻推入 COS，临时文件即刻销毁，云服务器仅充当纯净的工作代码运行节点。
 
