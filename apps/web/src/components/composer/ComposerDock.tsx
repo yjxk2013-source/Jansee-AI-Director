@@ -313,7 +313,7 @@ export function ComposerDock({
           <div className="composer-actions">
             <button
               type="button"
-              className={`action-btn voice-btn ${isListening ? "is-listening" : ""}`}
+              className={`action-btn voice-btn voice-button ${isListening ? "is-listening" : ""}`}
               onClick={toggleVoiceInput}
               aria-label={
                 isListening
@@ -322,21 +322,38 @@ export function ComposerDock({
               }
               aria-pressed={isListening}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="22" />
-              </svg>
+              {isListening ? (
+                <div className="voice-countdown-indicator" aria-hidden="true">
+                  <svg className="voice-countdown-svg" viewBox="0 0 52 52">
+                    <circle className="voice-countdown-bg" cx="26" cy="26" r="23" />
+                    <circle
+                      className="voice-countdown-progress"
+                      cx="26"
+                      cy="26"
+                      r="23"
+                      strokeDasharray="144.51"
+                      strokeDashoffset={144.51 * (1 - listeningRemainingSeconds / 60)}
+                    />
+                  </svg>
+                  <span className="voice-countdown-number">{listeningRemainingSeconds}</span>
+                </div>
+              ) : (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                </svg>
+              )}
             </button>
             <button
               className="action-btn send-btn"
