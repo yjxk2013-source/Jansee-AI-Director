@@ -23,6 +23,15 @@
 - Every asynchronous job must have an explicit lifecycle, idempotency strategy, timeout, cancellation policy, and failure/refund handling before production use.
 - Use focused tests for each changed module. Never describe an unrun test as passed.
 
+## Anti-monolith engineering discipline (防巨石开发铁律)
+- **Zero Monolith Tolerance**: Any new feature, bugfix, or optimization must adhere to modular decoupling. Never dump hundreds of lines of inline JSX, state handlers, or database queries into orchestrator files.
+- **File Size Ceilings**:
+  - UI entry orchestrator (e.g., `App.tsx`): must stay under 1,000 lines. New panels, drawer menus, and modal dialogs must be placed in dedicated `components/<domain>/` subdirectories.
+  - Sub-components & modals: single responsibility, ideally under 200–300 lines each.
+  - API routers / Controllers (e.g., `admin.ts`): must stay under 500 lines. Heavy database transactions, calculations, and hardware inspections must be placed in `services/`.
+- **Boy Scout Rule for Bugfixes & Optimization**: When modifying or fixing any file near the ceiling, always perform incremental extraction (顺手小步抽离) before adding new logic. Never patch bugs by nesting massive inline conditionals or copying blocks.
+- **Three-Tier Backend Separation**: Route Controller (validation/dispatch) -> Service (business logic & transactions) -> Store/Adapter (persistence/external systems). Pure logic must never be embedded directly inside Fastify route handlers.
+
 ## UI system
 - Use a refined, restrained, Gemini-inspired interface: generous whitespace, clear hierarchy, subtle surfaces, precise typography, and responsive layout.
 - No visual distinction in available creation capabilities between PC and APP.

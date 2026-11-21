@@ -128,3 +128,7 @@
    - `npm run typecheck`（`tsc -b`）：全量 0 错误。
    - `npm run build`：Monorepo 全量编译构建（Vite + API）0 错误通过。
    - `node --import tsx --test tests/zero-emoji.test.ts tests/conversations.test.ts tests/admin.test.ts`：16 项测试全部通过（15 pass, 1 skip, 0 fail）。
+4. **全生命周期防巨石铁律（Anti-Monolith Invariant）**：
+   - 以后的任何新功能开发、Bug修复与体验优化，严禁将大段逻辑堆砌在入口文件。
+   - 前端主调度（如 `App.tsx`）严格控制在 1,000 行内，子组件 200~300 行；后端 Controller（如 `admin.ts`）严格控制在 500 行内，业务与事务全部下沉 `services/`。
+   - 修复与优化遵循“童子军法则”：离开代码时必须比进入前更干净，随时顺手小步抽离。
