@@ -15,6 +15,7 @@ export interface LocalObjectStorage {
   getFilePath(key: string): Promise<string>;
   deleteObject(key: string): Promise<void>;
   deleteExpired(prefix: string, olderThan: Date, now?: Date): Promise<number>;
+  createSignedUrl?(key: string, options?: { downloadFilename?: string; ttlSeconds?: number }): Promise<string> | string;
 }
 
 function validateKey(key: string): string[] {

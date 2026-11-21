@@ -8,7 +8,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { LocalObjectStorage } from "./storage-local.js";
 
-type CosClient = Pick<InstanceType<typeof COS>, "uploadFile" | "getObjectStream" | "headObject" | "deleteObject" | "getBucket">;
+type CosClient = Pick<InstanceType<typeof COS>, "uploadFile" | "getObjectStream" | "headObject" | "deleteObject" | "getBucket" | "getObjectUrl">;
 
 export interface TencentCosObjectStorageConfig {
   secretId: string;
@@ -149,6 +149,24 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
         marker = page.IsTruncated === "true" ? page.NextMarker : undefined;
       } while (marker);
       return removed;
+    },
+
+    createSignedUrl(key, options) {
+      assertKey(key);
+      const query: Record<string, string> = {};
+      if (options?.downloadFilename) {
+        query["response-content-disposition"] = `attachment; filename="${encodeURIComponent(options.downloadFilename)}"`;
+      }
+      return client.getObjectUrl({
+        Bucket: config.bucket,
+        Region: config.region,
+        Key: key,
+        Method: "GET",
+        Sign: true,
+        Expires: Math.min(Math.max(options?.ttlSeconds ?? 3600, 60), 86400),
+        Protocol: "https:",
+        ...(Object.keys(query).length > 0 ? { Query: query } : {}),
+      });
     },
   };
 }

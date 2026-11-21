@@ -120,6 +120,16 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     const output = await options.outputStore.findOutputById(user.id, id);
     if (!output) return reply.code(404).send({ error: { code: "WORK_NOT_FOUND" } });
     if (!output.coverStorageKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+
+    // 若存储支持高速直连，封面同样直接 302 重定向到 COS 直链，享受边缘极速加载
+    if (typeof options.storage.createSignedUrl === "function") {
+      const signedUrl = await options.storage.createSignedUrl(output.coverStorageKey, {
+        ttlSeconds: 3600,
+      });
+      reply.header("cache-control", "private, no-cache");
+      return reply.redirect(302, signedUrl);
+    }
+
     try {
       const filePath = await options.storage.getFilePath(output.coverStorageKey);
       const fileStat = await stat(filePath);
@@ -148,12 +158,26 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     if (!output) {
       return reply.code(404).send({ error: { code: "WORK_NOT_FOUND" } });
     }
-    const filePath = await options.storage.getFilePath(output.storageKey);
-    const fileStat = await stat(filePath);
-    if (options.outputStore.incrementDownloadCount && (request.query as { download?: string }).download === "1") {
+
+    if (options.outputStore.incrementDownloadCount && isDownload) {
       try { await options.outputStore.incrementDownloadCount(user.id, output.id); }
       catch { /* 统计失败不影响作品下载 */ }
     }
+
+    // 若当前存储驱动支持直接生成带鉴权的高速下载/播放 URL（如腾讯云 COS），
+    // 直接 302 重定向至对象存储直链，绕开服务器 3Mbps 带宽瓶颈，实现极速加载与满速下载。
+    if (typeof options.storage.createSignedUrl === "function") {
+      const filename = isDownload ? `jansee_${output.id.slice(0, 8)}.mp4` : undefined;
+      const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
+        downloadFilename: filename,
+        ttlSeconds: isDownload ? 600 : 3600,
+      });
+      reply.header("cache-control", "private, no-cache");
+      return reply.redirect(302, signedUrl);
+    }
+
+    const filePath = await options.storage.getFilePath(output.storageKey);
+    const fileStat = await stat(filePath);
 
     const fileSize = fileStat.size;
     const rangeHeader = request.headers.range;
