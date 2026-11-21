@@ -164,6 +164,19 @@ export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions
     }
 
     try {
+      // 若存储支持高速直连（如腾讯云 COS），静态图片直接 302 重定向到对象存储签名直链，
+      // 免去服务器下载中转与 3Mbps 带宽挤占，实现毫秒级加载。
+      if (asset.mediaType === "image" && typeof options.storage.createSignedUrl === "function") {
+        if (!SERVABLE_IMAGE_MIME_RE.test(asset.mimeType)) {
+          return reply.code(404).send({ error: { code: "ASSET_NOT_FOUND", message: "图片格式不支持预览" } });
+        }
+        const signedUrl = await options.storage.createSignedUrl(asset.storageKey, {
+          ttlSeconds: 3600,
+        });
+        reply.header("cache-control", "private, no-cache");
+        return reply.redirect(signedUrl, 302);
+      }
+
       const filePath = await options.storage.getFilePath(asset.storageKey);
 
       // 静态图片素材：直接读取返回

@@ -2295,7 +2295,11 @@ export default function App() {
                     return (
                       <button className="drawer-recent-work" type="button" key={work.id} onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}>
                         <span className="drawer-recent-work-thumb">
-                          <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="metadata" onLoadedMetadata={(event) => { event.currentTarget.currentTime = 0.1; }} />
+                          {work.coverUrl ? (
+                            <img src={work.coverUrl} alt="作品封面" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="none" />
+                          )}
                           <span className="drawer-recent-work-play" aria-hidden="true">▶</span>
                         </span>
                         <span className="drawer-recent-work-copy">
