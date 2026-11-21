@@ -58,7 +58,12 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
     const inviteUrl = `https://jansee.cn/?ref=${encodeURIComponent(growth.inviteCode)}`;
     QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" })
       .then((dataUrl: string) => { if (active) setInviteQrDataUrl(dataUrl); })
-      .catch(() => { if (active) setInviteQrDataUrl(""); });
+      .catch(() => {
+        if (active) {
+          // 降级使用后端 QR 服务，保障二维码可靠呈现
+          setInviteQrDataUrl(`/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
+        }
+      });
     return () => { active = false; };
   }, [growth?.inviteCode]);
 
@@ -238,46 +243,66 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
     if (!growth?.inviteCode) return;
     try {
       const inviteUrl = "https://jansee.cn/?ref=" + encodeURIComponent(growth.inviteCode);
-      const qrDataUrl = await QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" });
+      const qrDataUrl = await QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" })
+        .catch(() => `/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
+      
       const qr = new Image();
       const qrLoaded = new Promise<void>((resolve, reject) => {
         qr.onload = () => resolve();
-        qr.onerror = () => reject(new Error("QR load failed"));
+        qr.onerror = () => reject(new Error("专属二维码加载失败"));
       });
+      qr.crossOrigin = "anonymous";
       qr.src = qrDataUrl;
       await qrLoaded;
-      const logoMark = new Image();
-      const logoMarkLoaded = new Promise<void>((resolve, reject) => {
-        logoMark.onload = () => resolve();
-        logoMark.onerror = () => reject(new Error("JANSEE symbol logo load failed"));
-      });
-      logoMark.src = "/assets/jansee-mark.svg";
-      const wordmark = new Image();
-      const wordmarkLoaded = new Promise<void>((resolve, reject) => {
-        wordmark.onload = () => resolve();
-        wordmark.onerror = () => reject(new Error("JANSEE wordmark load failed"));
-      });
-      wordmark.src = "/assets/jansee-pirulen-wordmark.png";
-      await Promise.all([logoMarkLoaded, wordmarkLoaded]);
-      await document.fonts.ready;
+
+      // 弹性加载 Logo 标志与文字标（若缺失不阻断海报生成）
+      const loadSafeImage = (src: string) =>
+        new Promise<HTMLImageElement | null>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+
+      const [logoMark, wordmark] = await Promise.all([
+        loadSafeImage("/assets/jansee-mark.svg"),
+        loadSafeImage("/assets/jansee-pirulen-wordmark.png"),
+      ]);
+
+      if (document.fonts?.ready) {
+        try {
+          await document.fonts.ready;
+        } catch {
+          // 字体就绪等待超时或失败时静默降级
+        }
+      }
 
       const canvas = document.createElement("canvas");
       canvas.width = 900;
       canvas.height = 1200;
       const context = canvas.getContext("2d");
-      if (!context) throw new Error("Poster generation failed");
-      const chineseFont = '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif';
+      if (!context) throw new Error("无法初始化海报绘制画布");
+      const chineseFont = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif';
       context.textBaseline = "alphabetic";
 
+      // 纯净典雅背景
       context.fillStyle = "#f6f4ef";
       context.fillRect(0, 0, 900, 1200);
       context.fillStyle = "#18191b";
       context.fillRect(0, 0, 900, 18);
 
       context.textAlign = "left";
-      context.fillStyle = "#777b80";
-      context.drawImage(logoMark, 86, 78, 64, 64);
-      context.drawImage(wordmark, 164, 100, 140, 19);
+      if (logoMark) {
+        context.drawImage(logoMark, 86, 78, 64, 64);
+      }
+      if (wordmark) {
+        context.drawImage(wordmark, 164, 100, 140, 19);
+      } else {
+        context.fillStyle = "#17191c";
+        context.font = "700 24px " + chineseFont;
+        context.fillText("JANSEE", 164, 118);
+      }
+
       context.fillStyle = "#17191c";
       context.font = "600 72px " + chineseFont;
       context.fillText("好视频，", 86, 270);
@@ -288,6 +313,7 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       context.font = "26px " + chineseFont;
       context.fillText("上传素材，智能生成完整短视频", 90, 470);
 
+      // 二维码白底展示区域
       context.fillStyle = "#ffffff";
       context.fillRect(270, 490, 360, 360);
       context.drawImage(qr, 286, 506, 328, 328);
@@ -299,6 +325,7 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       context.font = "22px " + chineseFont;
       context.fillText("专属邀请码：" + growth.inviteCode, 450, 935);
 
+      // 底部权益区域
       context.fillStyle = "#18191b";
       context.fillRect(0, 970, 900, 230);
       context.fillStyle = "#ffffff";
@@ -308,7 +335,9 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       context.fillText("邀请好友再送 200 积分", 450, 1090);
       context.fillText("每日签到再送 100 积分", 450, 1150);
 
-      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Poster export failed")), "image/png"));
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("推广海报导出失败"))), "image/png"),
+      );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -319,7 +348,7 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       window.setTimeout(() => URL.revokeObjectURL(url), 30000);
       setGrowthNotice("专属推广海报已生成，保存后即可分享");
     } catch (cause) {
-      setGrowthNotice(cause instanceof Error ? cause.message : "Poster generation failed");
+      setGrowthNotice(cause instanceof Error ? cause.message : "推广海报生成失败，请稍后重试");
     }
   }
 
@@ -361,7 +390,21 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
                 <strong>{growth.inviteCode}</strong>
                 <small>已邀请 {growth.invitedCount} 位 · 已奖励 {growth.rewardedCount} 位</small>
               </div>
-              {inviteQrDataUrl && <img src={inviteQrDataUrl} alt="专属邀请二维码" />}
+              {inviteQrDataUrl ? (
+                <img
+                  src={inviteQrDataUrl}
+                  alt="专属邀请二维码"
+                  onError={() => {
+                    // 若前端生成的 DataURL 异常，自动降级为服务端接口
+                    const fallback = `/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`;
+                    if (inviteQrDataUrl !== fallback) setInviteQrDataUrl(fallback);
+                  }}
+                />
+              ) : (
+                <div className="growth-qr-placeholder" aria-label="正在生成专属二维码">
+                  二维码生成中
+                </div>
+              )}
             </div>
             <div className="growth-stats">
               <div><strong>{growth.invitedCount}</strong><span>邀请注册人数</span></div>
