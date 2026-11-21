@@ -50,7 +50,7 @@ services:
       DATABASE_SSL: "false"
       DATABASE_PRIVATE_NETWORK: "true"
       TRUST_PROXY_IP: "172.30.250.2"
-      MEDIA_STORAGE_DRIVER: local
+      MEDIA_STORAGE_DRIVER: cos
       MEDIA_STORAGE_ROOT: /app/storage/media
       MEDIA_CACHE_ROOT: /app/storage/cache
       JX_WHISPER_CLI: /app/whisper.cpp/bin/whisper-cli
