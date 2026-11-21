@@ -3953,7 +3953,7 @@ function RechargePanel({
   }, []);
 
   const memberPlans = [
-    { id: "lite", name: "Lite 体验版", price: pricingCatalog?.members.find((item) => item.id === "lite")?.priceYuan ?? 41, strike: pricingCatalog?.members.find((item) => item.id === "lite")?.strikeYuan ?? "¥69", credits: 7600, clipsText: "约 38 条成片", desc: "高清成片，轻松开启创作" },
+    { id: "lite", name: "Lite 体验版", price: pricingCatalog?.members.find((item) => item.id === "lite")?.priceYuan ?? 49, strike: pricingCatalog?.members.find((item) => item.id === "lite")?.strikeYuan ?? "¥69", credits: 7600, clipsText: "约 38 条成片", desc: "高清成片，轻松开启创作" },
     { id: "plus", name: "Plus 日常版", price: pricingCatalog?.members.find((item) => item.id === "plus")?.priceYuan ?? 119, strike: pricingCatalog?.members.find((item) => item.id === "plus")?.strikeYuan ?? "¥199", credits: 24800, clipsText: "约 124 条成片", desc: "高峰优先，创作更顺畅" },
     { id: "pro", name: "Pro 旗舰版", price: pricingCatalog?.members.find((item) => item.id === "pro")?.priceYuan ?? 299, strike: pricingCatalog?.members.find((item) => item.id === "pro")?.strikeYuan ?? "¥499", credits: 66600, clipsText: "约 333 条成片", desc: "最高优先级，专业创作之选", tag: "官方主推" },
     { id: "ultra", name: "Ultra 团队版", price: pricingCatalog?.members.find((item) => item.id === "ultra")?.priceYuan ?? 599, strike: pricingCatalog?.members.find((item) => item.id === "ultra")?.strikeYuan ?? "¥999", credits: 153800, clipsText: "约 769 条成片", desc: "大额积分，满足团队创作" },
