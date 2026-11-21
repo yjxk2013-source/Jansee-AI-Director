@@ -15,10 +15,11 @@ export interface TencentCosObjectStorageConfig {
   secretKey: string;
   bucket: string;
   region: string;
-  cacheRoot?: string;
+  cdnDomain?: string | undefined;
+  cacheRoot?: string | undefined;
   maxObjectBytes: number;
-  minFreeBytes?: number;
-  client?: CosClient;
+  minFreeBytes?: number | undefined;
+  client?: CosClient | undefined;
 }
 
 const SAFE_KEY = /^[a-zA-Z0-9._/-]{1,512}$/;
@@ -157,7 +158,7 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
       if (options?.downloadFilename) {
         query["response-content-disposition"] = `attachment; filename="${encodeURIComponent(options.downloadFilename)}"`;
       }
-      return client.getObjectUrl({
+      const rawUrl = client.getObjectUrl({
         Bucket: config.bucket,
         Region: config.region,
         Key: key,
@@ -167,6 +168,18 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
         Protocol: "https:",
         ...(Object.keys(query).length > 0 ? { Query: query } : {}),
       });
+
+      // 若配置了自定义 CDN 加速域名（如 cdn.jansee.cn），将默认 COS 桶域名平滑替换为 CDN 加速域名
+      if (config.cdnDomain) {
+        try {
+          const parsed = new URL(rawUrl);
+          parsed.host = config.cdnDomain;
+          return parsed.toString();
+        } catch {
+          return rawUrl;
+        }
+      }
+      return rawUrl;
     },
   };
 }

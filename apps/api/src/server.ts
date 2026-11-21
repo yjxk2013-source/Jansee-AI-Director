@@ -153,6 +153,7 @@ const mediaStorage = mediaDriver === "cos"
       secretKey: process.env.COS_SECRET_KEY,
       bucket: process.env.COS_BUCKET,
       region: process.env.COS_REGION,
+      cdnDomain: process.env.COS_CDN_DOMAIN,
       cacheRoot: mediaCacheRoot,
       maxObjectBytes: maxMediaObjectBytes,
       minFreeBytes: minMediaFreeBytes,
