@@ -3957,17 +3957,17 @@ function RechargePanel({
   }, []);
 
   const memberPlans = [
-    { id: "lite", name: "Lite 体验版", price: pricingCatalog?.members.find((item) => item.id === "lite")?.priceYuan ?? 49, strike: pricingCatalog?.members.find((item) => item.id === "lite")?.strikeYuan ?? "¥69", credits: 7600, clipsText: "约 38 条成片", desc: "高清成片，轻松开启创作" },
-    { id: "plus", name: "Plus 日常版", price: pricingCatalog?.members.find((item) => item.id === "plus")?.priceYuan ?? 119, strike: pricingCatalog?.members.find((item) => item.id === "plus")?.strikeYuan ?? "¥199", credits: 24800, clipsText: "约 124 条成片", desc: "高峰优先，创作更顺畅" },
-    { id: "pro", name: "Pro 旗舰版", price: pricingCatalog?.members.find((item) => item.id === "pro")?.priceYuan ?? 299, strike: pricingCatalog?.members.find((item) => item.id === "pro")?.strikeYuan ?? "¥499", credits: 66600, clipsText: "约 333 条成片", desc: "最高优先级，专业创作之选", tag: "官方主推" },
-    { id: "ultra", name: "Ultra 团队版", price: pricingCatalog?.members.find((item) => item.id === "ultra")?.priceYuan ?? 599, strike: pricingCatalog?.members.find((item) => item.id === "ultra")?.strikeYuan ?? "¥999", credits: 153800, clipsText: "约 769 条成片", desc: "大额积分，满足团队创作" },
+    { id: "lite", name: "Lite 体验版", price: pricingCatalog?.members.find((item) => item.id === "lite")?.priceYuan, strike: pricingCatalog?.members.find((item) => item.id === "lite")?.strikeYuan, credits: 7600, clipsText: "约 38 条成片", desc: "高清成片，轻松开启创作" },
+    { id: "plus", name: "Plus 日常版", price: pricingCatalog?.members.find((item) => item.id === "plus")?.priceYuan, strike: pricingCatalog?.members.find((item) => item.id === "plus")?.strikeYuan, credits: 24800, clipsText: "约 124 条成片", desc: "高峰优先，创作更顺畅" },
+    { id: "pro", name: "Pro 旗舰版", price: pricingCatalog?.members.find((item) => item.id === "pro")?.priceYuan, strike: pricingCatalog?.members.find((item) => item.id === "pro")?.strikeYuan, credits: 66600, clipsText: "约 333 条成片", desc: "最高优先级，专业创作之选", tag: "官方主推" },
+    { id: "ultra", name: "Ultra 团队版", price: pricingCatalog?.members.find((item) => item.id === "ultra")?.priceYuan, strike: pricingCatalog?.members.find((item) => item.id === "ultra")?.strikeYuan, credits: 153800, clipsText: "约 769 条成片", desc: "大额积分，满足团队创作" },
   ];
 
   const boostPack = {
     id: "boost_small",
     name: "1,000 算力加油包",
-    price: pricingCatalog?.boostPacks.find((item) => item.id === "boost_small")?.priceYuan ?? 9.9,
-    strike: pricingCatalog?.boostPacks.find((item) => item.id === "boost_small")?.strikeYuan ?? "¥19.9",
+    price: pricingCatalog?.boostPacks.find((item) => item.id === "boost_small")?.priceYuan,
+    strike: pricingCatalog?.boostPacks.find((item) => item.id === "boost_small")?.strikeYuan,
     credits: 1000,
     clipsText: "约 5 次成片",
     desc: "即时到账，积分长期有效",
@@ -4092,11 +4092,11 @@ function RechargePanel({
                   <button
                     type="button"
                     className="credit-buy-button"
-                    disabled={loading}
+                    disabled={loading || typeof plan.price !== "number"}
                     onClick={() => handleBuy(plan.id)}
                   >
-                    ¥{plan.price}
-                    <span className="credit-old-price">{plan.strike}</span>
+                    {typeof plan.price === "number" ? `¥${plan.price}` : "..."}
+                    {plan.strike && <span className="credit-old-price">{plan.strike}</span>}
                   </button>
                 </div>
               ))}
@@ -4113,11 +4113,11 @@ function RechargePanel({
               <button
                 type="button"
                 className="credit-buy-button"
-                disabled={loading}
+                disabled={loading || typeof boostPack.price !== "number"}
                 onClick={() => handleBuy(boostPack.id)}
               >
-                ¥{boostPack.price}
-                <span className="credit-old-price">{boostPack.strike}</span>
+                {typeof boostPack.price === "number" ? `¥${boostPack.price}` : "..."}
+                {boostPack.strike && <span className="credit-old-price">{boostPack.strike}</span>}
               </button>
             </div>
           </section>
