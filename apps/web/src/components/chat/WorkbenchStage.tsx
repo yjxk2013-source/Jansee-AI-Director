@@ -12,6 +12,8 @@ interface WorkbenchStageProps {
   onRestoreDraft: (text: string) => void;
   toggleSpeechCutSuggestion: (messageId: string, suggestionId: string, checked: boolean) => void;
   confirmSpeechCut: (messageId: string, sessionId: string, selectedIds: string[]) => void;
+  onRequestDownload?: ((workId: string, filename: string) => void) | undefined;
+  onShowNotice?: ((notice: string) => void) | undefined;
 }
 
 export function WorkbenchStage({
@@ -24,6 +26,8 @@ export function WorkbenchStage({
   onRestoreDraft,
   toggleSpeechCutSuggestion,
   confirmSpeechCut,
+  onRequestDownload,
+  onShowNotice,
 }: WorkbenchStageProps) {
   return (
     <section
@@ -57,6 +61,8 @@ export function WorkbenchStage({
                   activePlayingVideoId={activePlayingVideoId}
                   setActivePlayingVideoId={setActivePlayingVideoId}
                   onRestoreDraft={onRestoreDraft}
+                  onRequestDownload={onRequestDownload}
+                  onShowNotice={onShowNotice}
                 />
 
                 {message.plan && message.speechCutSessionId && (

@@ -241,57 +241,71 @@ export function WorksPanel({
                 <div
                   className="work-card-player"
                   ref={(el) => { cardContainerRefs.current[work.id] = el; }}
+                  style={{ position: "relative" }}
                 >
-                  {activePlayWorkId === work.id ? (
-                    <video
-                      ref={(el) => { videoRefs.current[work.id] = el; }}
-                      src={`/api/v1/works/${work.id}/stream`}
-                      controls
-                      autoPlay
-                      playsInline
-                      preload="auto"
-                      poster={work.coverUrl || coverDataUrls[work.id] || undefined}
-                      aria-label={titleLabel}
-                    />
-                  ) : (
-                    <div
-                      className="work-card-cover-container"
-                      onClick={() => setActivePlayWorkId(work.id)}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`播放 ${titleLabel}`}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setActivePlayWorkId(work.id);
-                        }
-                      }}
-                    >
-                      {work.coverUrl || coverDataUrls[work.id] ? (
-                        <img
-                          src={work.coverUrl || coverDataUrls[work.id]}
-                          alt={titleLabel}
-                          loading="lazy"
-                          className="work-card-cover-img"
-                        />
-                      ) : (
-                        <div className="work-card-cover-fallback">
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path d="m21 15-5-5L5 21" />
-                          </svg>
-                        </div>
-                      )}
-                      <div className="work-card-play-overlay">
-                        <div className="work-card-play-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
+                  <video
+                    ref={(el) => { videoRefs.current[work.id] = el; }}
+                    src={`/api/v1/works/${work.id}/stream`}
+                    controls={activePlayWorkId === work.id}
+                    playsInline
+                    preload="metadata"
+                    poster={work.coverUrl || coverDataUrls[work.id] || undefined}
+                    aria-label={titleLabel}
+                    onEnded={() => setActivePlayWorkId(null)}
+                    onPause={() => {
+                      if (activePlayWorkId === work.id) setActivePlayWorkId(null);
+                    }}
+                  />
+                  <div
+                    className="work-card-cover-container"
+                    onClick={() => {
+                      setActivePlayWorkId(work.id);
+                      const video = videoRefs.current[work.id];
+                      if (video) void video.play().catch(() => {});
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`播放 ${titleLabel}`}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      opacity: activePlayWorkId === work.id ? 0 : 1,
+                      pointerEvents: activePlayWorkId === work.id ? "none" : "auto",
+                      transition: "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActivePlayWorkId(work.id);
+                        const video = videoRefs.current[work.id];
+                        if (video) void video.play().catch(() => {});
+                      }
+                    }}
+                  >
+                    {work.coverUrl || coverDataUrls[work.id] ? (
+                      <img
+                        src={work.coverUrl || coverDataUrls[work.id]}
+                        alt={titleLabel}
+                        loading="lazy"
+                        className="work-card-cover-img"
+                      />
+                    ) : (
+                      <div className="work-card-cover-fallback">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <path d="m21 15-5-5L5 21" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="work-card-play-overlay">
+                      <div className="work-card-play-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="work-card-actions">
@@ -299,6 +313,8 @@ export function WorksPanel({
                     type="button"
                     className="work-btn-download"
                     onClick={() => {
+                      setCopyFeedback("正在启动原片下载…");
+                      setTimeout(() => setCopyFeedback(""), 2500);
                       if (onRequestDownload) onRequestDownload(work.id, filename);
                     }}
                   >
@@ -306,6 +322,34 @@ export function WorksPanel({
                       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                     </svg>
                     下载原片 MP4
+                  </button>
+                  <button
+                    type="button"
+                    className="work-btn-secondary"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(0, 0, 0, 0.12)",
+                      background: "#fff",
+                      color: "#374151",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      const streamUrl = `${window.location.origin}/api/v1/works/${work.id}/stream`;
+                      copyText(`stream-${work.id}`, streamUrl, "成片加速直链");
+                    }}
+                    title="复制 CDN 加速直链"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    复制直链
                   </button>
                 </div>
 

@@ -11779,6 +11779,52 @@ body,
   display: block;
 }
 
+.job-delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.job-delivery-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.job-delivery-action-btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.job-delivery-action-btn:hover {
+  background: #f9fafb;
+  border-color: rgba(0, 0, 0, 0.24);
+  color: #111827;
+}
+
+.job-delivery-action-btn.primary {
+  background: #18191b;
+  color: #ffffff;
+  border-color: #18191b;
+}
+
+.job-delivery-action-btn.primary:hover {
+  background: #28292c;
+  border-color: #28292c;
+}
+
 .job-publish {
   display: grid;
   gap: 8px;

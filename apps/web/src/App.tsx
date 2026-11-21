@@ -385,6 +385,7 @@ function ClientApp() {
   }, []);
 
   const triggerDownloadFile = useCallback(async (url: string, filename: string) => {
+    showNotice("正在启动高清成片下载…");
     try {
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("下载请求失败");
@@ -489,6 +490,8 @@ function ClientApp() {
         onRestoreDraft={(text) => setDraft(text)}
         toggleSpeechCutSuggestion={toggleSpeechCutSuggestion}
         confirmSpeechCut={confirmSpeechCut}
+        onRequestDownload={handleWorkDownload}
+        onShowNotice={showNotice}
       />
 
       <ComposerDock
