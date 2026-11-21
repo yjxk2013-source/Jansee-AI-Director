@@ -169,6 +169,16 @@ interface ServerHealthData {
   cpu: { usagePercent: number | null; loadAverage: number[] };
   memory: { totalBytes: number; freeBytes: number; usedBytes: number; usedPercent: number; processRssBytes: number; processHeapUsedBytes: number };
   disk: { totalBytes: number; freeBytes: number; usedBytes: number; usedPercent: number | null } | null;
+  mediaStorage?: {
+    driver: string;
+    bucket: string | null;
+    region: string | null;
+    activeOutputsCount: number;
+    activeOutputsBytes: number;
+    activeAssetsCount: number;
+    activeAssetsBytes: number;
+    totalBytes: number;
+  } | null;
   services: Record<string, { status: string; detail: string }>;
 }
 interface AdminConsoleProps {
@@ -870,6 +880,24 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
                   <div className="admin-server-uptime">{serverHealth ? `${Math.floor(serverHealth.host.uptimeSeconds % 86400 / 3600)} 小时 ${Math.floor(serverHealth.host.uptimeSeconds % 3600 / 60)} 分钟` : "等待服务器数据"}</div>
                   <small>{serverHealth ? `${serverHealth.host.platform} · ${serverHealth.host.architecture} · ${serverHealth.host.hostname}` : "主机信息"}</small>
                 </article>
+                <article className="admin-server-metric">
+                  <span>{serverHealth?.mediaStorage?.driver === "cos" ? "腾讯云 COS 占用" : "媒体存储占用"}</span>
+                  <strong>
+                    {serverHealth?.mediaStorage
+                      ? serverHealth.mediaStorage.totalBytes >= 1024 ** 3
+                        ? `${(serverHealth.mediaStorage.totalBytes / 1024 ** 3).toFixed(2)} GB`
+                        : `${(serverHealth.mediaStorage.totalBytes / 1024 ** 2).toFixed(1)} MB`
+                      : "—"}
+                  </strong>
+                  <div className="admin-server-meter">
+                    <i style={{ width: serverHealth?.mediaStorage ? "100%" : "0%", background: "#39a68b" }} />
+                  </div>
+                  <small>
+                    {serverHealth?.mediaStorage
+                      ? `${serverHealth.mediaStorage.activeOutputsCount} 个成片 (${(serverHealth.mediaStorage.activeOutputsBytes / 1024 ** 2).toFixed(1)} MB) · ${serverHealth.mediaStorage.activeAssetsCount} 个素材 · ${serverHealth.mediaStorage.driver === "cos" ? (serverHealth.mediaStorage.bucket || "COS 已连接") : "本地存储"}`
+                      : "等待存储数据"}
+                  </small>
+                </article>
               </section>
 
               <section className="admin-server-panel">
@@ -1052,13 +1080,14 @@ export function AdminConsole({ onClose }: AdminConsoleProps) {
                     { value: "online-ecommerce", label: "线上电商" },
                     { value: "physical-store", label: "线下商家" },
                     { value: "personal-creation", label: "个人创作" },
+                    { value: "quick-cut", label: "一句话剪辑" },
                     { value: "未分类", label: "未分类" },
                   ].map((scene) => <button key={scene.value} className={"filter-chip " + (filterScene === scene.value ? "active" : "")} onClick={() => setFilterScene(scene.value)}>{scene.label}</button>)}
                 </div>
               </div>
               <div className="job-insight-list director-delivery-list">
                 {loading ? <div className="admin-empty-state">正在读取交付记录…</div> : filteredJobs.length === 0 ? <div className="admin-empty-state">暂无符合条件的交付记录</div> : filteredJobs.map((job) => {
-                  const sceneLabel = job.sceneType === "online-ecommerce" ? "线上电商" : job.sceneType === "physical-store" ? "线下商家" : job.sceneType === "personal-creation" ? "个人创作" : "未分类";
+                  const sceneLabel = job.sceneType === "online-ecommerce" ? "线上电商" : job.sceneType === "physical-store" ? "线下商家" : job.sceneType === "personal-creation" ? "个人创作" : job.sceneType === "quick-cut" ? "一句话剪辑" : "未分类";
                   const statusLabel = job.status === "completed" ? "已交付" : job.status === "failed" ? "交付失败" : ["rendering", "planning", "inspecting", "quality-check"].includes(job.status) ? "处理中" : "等待处理";
                   return <article className={"job-insight-card director-delivery-card " + job.status} key={job.jobId}>
                     <div className="director-delivery-main">

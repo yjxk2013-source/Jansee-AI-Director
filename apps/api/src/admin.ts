@@ -273,7 +273,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     const operator = await verifyAdminAuth(request, reply);
     if (!operator) return;
 
-    const [databaseHealthy, disk, ffmpeg, cpuUsage, memory] = await Promise.all([
+    const [databaseHealthy, disk, ffmpeg, cpuUsage, memory, mediaStats] = await Promise.all([
       options.pool ? options.pool.query("SELECT 1").then(() => true).catch(() => false) : Promise.resolve(false),
       statfs(process.env.MEDIA_STORAGE_ROOT || process.cwd()).then((value) => {
         const totalBytes = Number(value.blocks) * Number(value.bsize);
@@ -283,6 +283,30 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       execFileAsync(bundledFfmpeg ?? "ffmpeg", ["-version"], { timeout: 2500, windowsHide: true }).then(() => true).catch(() => false),
       readCpuUsage(),
       readMemoryUsage(),
+      options.pool
+        ? options.pool.query<{ outputs_count: string; outputs_bytes: string; assets_count: string; assets_bytes: string }>(
+            `SELECT
+               (SELECT count(*) FROM generated_outputs WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now())) as outputs_count,
+               (SELECT coalesce(sum(size_bytes), 0) FROM generated_outputs WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now())) as outputs_bytes,
+               (SELECT count(*) FROM assets WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now())) as assets_count,
+               (SELECT coalesce(sum(size_bytes), 0) FROM assets WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now())) as assets_bytes`
+          ).then((res) => {
+            const row = res.rows[0];
+            if (!row) return null;
+            const outputsBytes = Number(row.outputs_bytes) || 0;
+            const assetsBytes = Number(row.assets_bytes) || 0;
+            return {
+              driver: process.env.MEDIA_STORAGE_DRIVER ?? "local",
+              bucket: process.env.COS_BUCKET ?? null,
+              region: process.env.COS_REGION ?? null,
+              activeOutputsCount: Number(row.outputs_count) || 0,
+              activeOutputsBytes: outputsBytes,
+              activeAssetsCount: Number(row.assets_count) || 0,
+              activeAssetsBytes: assetsBytes,
+              totalBytes: outputsBytes + assetsBytes,
+            };
+          }).catch(() => null)
+        : Promise.resolve(null),
     ]);
     const totalMemory = memory.totalBytes;
     const freeMemory = memory.freeBytes;
@@ -303,6 +327,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         processRssBytes: processMemory.rss, processHeapUsedBytes: processMemory.heapUsed,
       },
       disk,
+      mediaStorage: mediaStats,
       services: {
         api: { status: "healthy", detail: "管理 API 正在响应" },
         database: { status: !options.pool ? "not_configured" : databaseHealthy ? "healthy" : "unavailable", detail: !options.pool ? "尚未配置 V4 数据库连接" : databaseHealthy ? "数据库连接正常" : "数据库连接失败" },
@@ -766,11 +791,13 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       id: string; user_id: string; status: DirectorJobInsight["status"];
       aspect_ratio: string; created_at: Date; updated_at: Date; finished_at: Date | null;
       queued_at: Date; started_at: Date | null; director_plan: Record<string, unknown> | null;
+      request_payload: Record<string, unknown> | null;
       credits_charged: string | number;
       error_code: string | null; error_message: string | null; total: string | number;
     }>(`
       SELECT j.id, j.user_id, j.status, j.aspect_ratio,
              j.created_at, j.updated_at, j.finished_at, j.queued_at, j.started_at, j.director_plan,
+             j.request_payload,
              coalesce((SELECT amount FROM billing_ledger l WHERE l.job_id = j.id AND l.type = 'settle' LIMIT 1), 0) AS credits_charged,
              j.error_code, j.error_message, count(*) OVER() AS total
       FROM generation_jobs j
@@ -782,6 +809,13 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     const jobs: DirectorJobInsight[] = result.rows.map((row) => {
       const plan = row.director_plan ?? {};
       const telemetry = (plan._telemetry as Record<string, unknown> | undefined) ?? {};
+      const payload = (row.request_payload as Record<string, unknown> | undefined) ?? {};
+      // 场景优先级：优先尊重客户端/用户显式选择（request_payload.creationScene），其次 telemetry.scene，兜底为 "未分类"
+      const rawCreationScene = typeof payload.creationScene === "string" ? payload.creationScene : null;
+      const rawTelemetryScene = typeof telemetry.scene === "string" ? telemetry.scene : "";
+      const effectiveScene = rawCreationScene || rawTelemetryScene || "";
+      const effectiveSceneSource = rawCreationScene ? "user-selected" : (typeof telemetry.sceneSource === "string" ? telemetry.sceneSource : "");
+
       const variantType = typeof plan.variant_type === "string" ? plan.variant_type : "";
       // 交付耗时统一由数据库时间字段实时计算（受理 started_at → 完成 finished_at），
       // 不读 director_plan._telemetry 里写死的历史值（旧算法把排队等待算进了耗时）。
@@ -807,9 +841,9 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         lockedVariant: typeof telemetry.lockedVariant === "string" ? telemetry.lockedVariant : "",
         variantMatched: typeof telemetry.variantMatched === "boolean" ? telemetry.variantMatched : null,
         voiceId: typeof plan.voice_id === "string" ? plan.voice_id : "未记录",
-        scene: typeof telemetry.scene === "string" ? telemetry.scene : "",
-        sceneSource: typeof telemetry.sceneSource === "string" ? telemetry.sceneSource : "",
-        sceneType: typeof telemetry.scene === "string" ? telemetry.scene : "未分类",
+        scene: effectiveScene,
+        sceneSource: effectiveSceneSource,
+        sceneType: effectiveScene || "未分类",
         sceneScore: numeric(plan.scene_score),
         sceneAlignmentReason: typeof plan.scene_alignment_reason === "string" ? plan.scene_alignment_reason : "尚未采集场景契合度数据",
         tokensUsed: numeric(telemetry.tokensUsed),
