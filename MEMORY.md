@@ -1,6 +1,6 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间：** 2026-11-22 04:22 (UTC+8)  
+> **更新时间：** 2026-11-22 04:25 (UTC+8)  
 > **维护规则：** 本文档是所有 Agent 唯一的全局记忆源。每次更新时**直接全量覆盖重写**，彻底清理失效旧记录，确保新 Agent 仅需阅读本文档即可掌握项目所有功能与最新现状。
 
 ---
@@ -41,6 +41,11 @@
   - `components/billing/RechargePanel.tsx`：算力充值、会员方案、加油包直购（240 行）。
   - `components/billing/BillingHistoryPanel.tsx`：订单历史与积分流水对账（220 行）。
   - `components/chat/SidebarDrawer.tsx`：左侧导航抽屉与最近作品快捷查看条（267 行）。
+
+- **死代码与废弃孤儿文件 100% 清除（Zero Dead Code）**：
+  - 彻底从磁盘删除已废弃的旧版走带手稿代码：`Filmstrip.tsx` (254 行) 与 `filmstrip-logic.ts` (113 行)。
+  - 彻底删除已废弃的打字机组件：`TypewriterText.tsx` (34 行) 与对应测试 `filmstrip-logic.test.ts` (113 行)。
+  - 全工程不存在任何未被引用的死代码或重复函数。
 
 - **管理控制台解耦（`apps/web/src/AdminConsole.tsx`）**：
   - 从原先 1,480 行削减至 **790 行**轻量调度容器（减少 46.6%）。
