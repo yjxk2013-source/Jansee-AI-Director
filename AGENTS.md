@@ -35,3 +35,7 @@
 - Same-role controls must have identical dimensions. Billing purchase buttons must remain exactly equal in width and height across all plans and breakpoints.
 - Do not introduce a new visual language, dominant gradients, neon/glow, decorative emoji, or arbitrary colors without explicit product-owner approval.
 - When an approved reusable pattern changes, update the design-system document and implementation tokens together.
+
+## Single Source of Truth for Project Context & Memory
+- Always read `MEMORY.md` at the project root first. It contains the complete and up-to-date business architecture, current infrastructure status, and execution rules.
+- Whenever completing any significant task, updating architecture, or changing production configurations, rewrite and clean `MEMORY.md` to ensure any incoming Agent understands the latest status instantly.
