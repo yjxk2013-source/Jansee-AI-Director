@@ -1,13 +1,13 @@
 # 简兮 (JANSEE) — AI 智能导演系统 (AI Director System)
 ### 生产级微服务 Monorepo 架构与工程规范白皮书 (Production Architecture Showcase)
 
-[![License: Proprietary Evaluation](https://img.shields.io/badge/License-Proprietary_Evaluation-red.svg)](LICENSE)
+[![License: Proprietary Evaluation](https://img.shields.io/badge/License-Proprietary_Source--Available-red.svg)](LICENSE)
 [![Engine: Node 22 ESM](https://img.shields.io/badge/Node-v22.x_ESM-blue.svg)](package.json)
 [![Architecture: Monorepo](https://img.shields.io/badge/Architecture-Clean_Monorepo-emerald.svg)](packages/)
 [![Status: Production](https://img.shields.io/badge/Status-Live_in_Production-gold.svg)](https://jansee.cn)
 
 > **重要声明**：本仓库为**简兮 (JANSEE) 商业级真实开发源代码与系统架构展示仓**。所有目录、状态机、多任务编排与音视频渲染流水线均来自团队一手生产工程，用于展示团队深厚的全栈工程研发实力与 AI 系统调度深度。  
-> **商业授权限制**：本项目受严格的 [专有受限评估许可证 (FSL)](LICENSE) 保护，严禁未经授权的商业化部署、分发或竞品抄袭。
+> **商业授权限制**：本项目受严格的 [商业受限展示许可证 (FSL)](LICENSE) 保护，严禁未经授权的商业化部署、分发或竞品抄袭。
 
 ---
 
@@ -79,37 +79,7 @@ deploy/
 
 ---
 
-## 四、 生产级云原生与边缘分发架构验证 (Infrastructure Proof)
-
-针对高并发与流量成本，简兮实施了严格的**计算与存储彻底分离**架构：
-
-```mermaid
-sequenceDiagram
-    participant User as 客户端 (PC/Mobile)
-    participant CDN as 腾讯云 CDN (cdn.jansee.cn)
-    participant API as Fastify API 网关 (4100)
-    participant Worker as FFmpeg 渲染引擎 (2并发CFS)
-    participant COS as 腾讯云 COS (私有存储桶)
-
-    User->>API: 1. 提交导演意图与源素材
-    API->>Worker: 2. 状态机分发任务 (queued -> running)
-    Worker->>Worker: 3. FFmpeg faststart 合成短视频
-    Worker->>COS: 4. 成片直推 COS，销毁本地临时文件 (零积压)
-    Worker->>API: 5. 任务标记完成 (completed)
-    User->>API: 6. 请求播放成片 (/api/v1/works/:id/video)
-    API-->>User: 7. 302 重定向至 CDN 边缘加速节点 (秒级起播)
-    User->>CDN: 8. 请求视频分片 (Range 请求)
-    CDN-->>User: 9. 边缘节点首帧秒开交付
-```
-
-### 生产部署规格说明
-- **Docker 编排**：生产环境采用 `deploy/docker-compose.v4.yml`，划定独立 `v4-private` 内部隔离网络；
-- **健康检查**：API 容器具备自主健康探针（`/health/live`，每 30 秒轮询，超时自动重启自愈）；
-- **4C4G 单机并发控制**：API 通过 `WORKER_CONCURRENCY=2` 进行并发硬闸门控制，利用 Linux 内核 CFS 完全均分 CPU，彻底避免内存 OOM 与 CPU 拥塞。
-
----
-
-## 五、 商业授权与合作
+## 四、 商业授权与合作
 
 简兮技术团队支持面向企业级客户的**私有化部署、行业定制化模型中枢适配与商业源码交付**。
 
