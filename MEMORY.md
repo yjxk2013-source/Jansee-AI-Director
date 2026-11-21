@@ -30,7 +30,7 @@
     - `hooks/useComposerMedia.ts`（311 行）：素材批量选择、类型与尺寸校验、XHR 进度环及移动端触摸拖拽手势。
     - `hooks/useDirectorWorkflow.ts`（604 行）：任务提交、导演方案生成、批量赛马分发、语音一句话粗剪及 Mock 预览。
     - `hooks/useJobPolling.ts`（255 行）：采用 **SSE（Server-Sent Events）毫秒级长连接单向推送优先 + 自适应 HTTP 轮询兜底** 的大厂双引擎架构。
-    - `hooks/useVoiceInput.ts`（163 行）：Web Speech API 与原生 Android 桥接的 60 秒听写计时控制。
+    - `hooks/useVoiceInput.ts`（182 行）：全平台统一基于 `MediaRecorder` 录音切片，直连后端 `/api/v1/voice/transcribe` Whisper ASR 本地高精度转写，并具备 60 秒环形进度计时控制，彻底解决移动端与无 Google 语音框架浏览器的听写兼容性痛点。
 
 - **全站弹窗与业务抽屉全量单职责化（全面压进 400 行以内）**：
   - `components/auth/AuthPanel.tsx`：从原先 756 行降至 **113 行**（-85.0%），拆分出：
