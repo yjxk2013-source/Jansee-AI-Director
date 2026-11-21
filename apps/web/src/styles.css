@@ -11318,68 +11318,15 @@ body,
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #6366f1;
-  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6), 0 0 10px 2px rgba(99, 102, 241, 0.45);
-  animation: filmstrip-rec-rainbow 3.6s infinite ease-in-out;
+  background: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25), 0 0 8px rgba(245, 158, 11, 0.5);
+  flex-shrink: 0;
 }
 
-/* 制作中七彩呼吸灯：平滑循环流转赤橙黄绿青蓝紫，伴随柔和舒缓的明暗呼吸与光晕扩散 */
-@keyframes filmstrip-rec-rainbow {
-  0% {
-    background: #ef4444;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px 2px rgba(239, 68, 68, 0.45);
-    transform: scale(1);
-  }
-
-  14% {
-    background: #f97316;
-    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15), 0 0 12px 3px rgba(249, 115, 22, 0.55);
-    transform: scale(1.12);
-  }
-
-  28% {
-    background: #eab308;
-    box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.2), 0 0 11px 2px rgba(234, 179, 8, 0.5);
-    transform: scale(1.05);
-  }
-
-  42% {
-    background: #10b981;
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1), 0 0 13px 3px rgba(16, 185, 129, 0.55);
-    transform: scale(1.15);
-  }
-
-  57% {
-    background: #06b6d4;
-    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2), 0 0 11px 3px rgba(6, 182, 212, 0.5);
-    transform: scale(1.06);
-  }
-
-  71% {
-    background: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 0 12px 3px rgba(59, 130, 246, 0.55);
-    transform: scale(1.14);
-  }
-
-  85% {
-    background: #8b5cf6;
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2), 0 0 11px 2px rgba(139, 92, 246, 0.5);
-    transform: scale(1.08);
-  }
-
-  100% {
-    background: #ef4444;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px 2px rgba(239, 68, 68, 0.45);
-    transform: scale(1);
-  }
-}
-
-/* 成片已完成/已交付：常亮静止稳定绿灯，不再闪烁或流转七彩，给用户明确的完成指示 */
+/* 成片已完成/已交付：常亮静止稳定绿灯，给用户明确清晰的完成指示 */
 .director-filmstrip-panel.is-settled .filmstrip-rec-dot {
   background: #10b981;
-  box-shadow: 0 0 8px 2px rgba(16, 185, 129, 0.6), 0 0 0 1px rgba(16, 185, 129, 0.3);
-  animation: none;
-  transform: none;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 0 8px rgba(16, 185, 129, 0.5);
 }
 
 .filmstrip-rec-text {
@@ -11748,7 +11695,8 @@ body,
 .job-delivery-cover-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #000000;
   display: block;
 }
 
@@ -12860,7 +12808,8 @@ body,
 .work-cover-thumbnail {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #000000;
   display: block;
 }
 
