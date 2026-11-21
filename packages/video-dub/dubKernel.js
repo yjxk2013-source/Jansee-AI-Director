@@ -266,7 +266,7 @@ export async function composeDubTrack({ taskDir, videoFile, audioFile, cues = []
   let nextInputIdx = 2;
 
   const filters = [
-    `[0:v]fade=t=in:st=0:d=${FADE.voiceIn},fade=t=out:st=${fadeSt}:d=${fadeOutSec},` +
+    `[0:v]fade=t=out:st=${fadeSt}:d=${fadeOutSec},` +
     `tpad=stop_mode=add:stop_duration=${tailSec.toFixed(2)}:color=black[vbody]`,
   ];
   let currentBase = 'vbody';
