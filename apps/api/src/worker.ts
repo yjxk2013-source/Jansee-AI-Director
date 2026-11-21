@@ -25,6 +25,7 @@ import { probeVideoSize, hasAudioStream, probeDurationSec } from "@jansee/ffmpeg
 import { performAutoQc } from "@jansee/ffmpeg-kit/autoQc.mjs";
 // @ts-expect-error publish-kit is a JavaScript workspace package
 import { sanitizePublish } from "@jansee/publish-kit";
+import { prewarmCdnUrls } from "./cdn-prewarm.js";
 
 const WORKER_ID = (hostname() + ":" + process.pid + ":" + randomUUID()).slice(0, 120);
 const WORKER_LEASE_SECONDS = 120;
@@ -426,7 +427,8 @@ export async function processJob(
     // Output records are about to become user-visible; after this point preserve their backing objects on later failures.
     outputsPublished = true;
     // 5. completed (100%)
-    for (const output of renderResults.length ? renderResults : [renderResult]) {
+    const outputsToPersist = renderResults.length ? renderResults : [renderResult];
+    for (const output of outputsToPersist) {
       await outputStore.createOutput({
         jobId: job.id,
         userId: job.userId,
@@ -439,6 +441,13 @@ export async function processJob(
         ...(output.coverStorageKey ? { coverStorageKey: output.coverStorageKey } : {}),
         ...(context.workerId ? { workerId: context.workerId } : {}),
       });
+    }
+
+    // 针对端到端视频创作特性：成片完成后立即向腾讯云 CDN 触发边缘预热，用户点击播放即刻命中高速缓存
+    const cdnDomain = process.env.COS_CDN_DOMAIN?.trim();
+    if (cdnDomain) {
+      const urlsToPrewarm = outputsToPersist.map((out) => `https://${cdnDomain}/${out.storageKey}`);
+      prewarmCdnUrls(urlsToPrewarm).catch(() => undefined);
     }
 
     if (activeJob.directorPlan) {

@@ -74,12 +74,23 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
       const available = Number(disk.bavail) * Number(disk.bsize);
       if (available - source.size < minFreeBytes) throw new Error("Insufficient cache disk space for COS upload");
 
+      let detectedContentType = "application/octet-stream";
+      if (key.endsWith(".mp4") || key.includes("/outputs/")) {
+        detectedContentType = "video/mp4";
+      } else if (key.endsWith(".jpg") || key.endsWith(".jpeg") || key.includes("/covers/")) {
+        detectedContentType = "image/jpeg";
+      } else if (key.endsWith(".png")) {
+        detectedContentType = "image/png";
+      } else if (key.endsWith(".json")) {
+        detectedContentType = "application/json";
+      }
+
       await client.uploadFile({
         Bucket: config.bucket,
         Region: config.region,
         Key: key,
         FilePath: sourcePath,
-        ContentType: "application/octet-stream",
+        ContentType: detectedContentType,
         ACL: "private",
       });
       const head = await client.headObject({ Bucket: config.bucket, Region: config.region, Key: key });
