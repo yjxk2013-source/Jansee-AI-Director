@@ -169,12 +169,17 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
         ...(Object.keys(query).length > 0 ? { Query: query } : {}),
       });
 
-      // 若配置了自定义 CDN 加速域名（如 cdn.jansee.cn），将默认 COS 桶域名平滑替换为 CDN 加速域名
+      // 若配置了自定义 CDN 加速域名（如 cdn.jansee.cn）：
+      // 腾讯云 CDN 在开启【回源鉴权】后，CDN 节点会自动使用主账号服务凭证与 COS 源站完成鉴权交互；
+      // 因此面向客户端分发的 CDN 链接不带 URL 签名，避免 COS 校验客户端签名失败，并最大化享受 CDN 边缘缓存。
       if (config.cdnDomain) {
         try {
-          const parsed = new URL(rawUrl);
-          parsed.host = config.cdnDomain;
-          return parsed.toString();
+          const searchParams = new URLSearchParams();
+          if (options?.downloadFilename) {
+            searchParams.set("response-content-disposition", `attachment; filename="${encodeURIComponent(options.downloadFilename)}"`);
+          }
+          const queryString = searchParams.toString();
+          return `https://${config.cdnDomain}/${key}${queryString ? `?${queryString}` : ""}`;
         } catch {
           return rawUrl;
         }
