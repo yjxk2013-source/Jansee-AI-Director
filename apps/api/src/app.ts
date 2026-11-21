@@ -91,7 +91,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.register(cors, { credentials: true, origin(origin, callback) { callback(null, !origin || config.allowedOrigins.includes(origin)); } });
   app.register(rateLimit, { global: true, max: 120, timeWindow: "1 minute", ban: 0 });
   app.register(multipart, { limits: { files: 9, fileSize: 200 * 1024 * 1024, fields: 10, parts: 20 } });
-  app.get("/health/live", async () => ({ status: "alive", service: "jansee-api", version: process.env.APP_VERSION ?? "4.0.0-alpha.1" }));
+  app.get("/health/live", async () => ({ status: "alive", service: "jansee-api", version: process.env.APP_VERSION ?? "4.0.0" }));
   // Package catalogs are public read-only data and must not depend on authentication or a database.
   const currentPricingCatalog = async (force = false) => {
     if (config.paymentProvider?.configured) {
