@@ -35,17 +35,12 @@ import {
   MAX_SAVED_CONVERSATIONS,
 } from "./utils/conversationStorage";
 import { TypewriterText } from "./components/common/TypewriterText";
-import { JobDeliveryVideoPlayer } from "./components/video/JobDeliveryVideoPlayer";
 import { StandaloneAdminApp, isAdminHostRequested } from "./components/admin/StandaloneAdminApp";
-import { AdminLoginPanel } from "./components/admin/AdminLoginPanel";
-import { AuthPanel } from "./components/auth/AuthPanel";
-import { WorksPanel } from "./components/works/WorksPanel";
-import { BillingHistoryPanel } from "./components/billing/BillingHistoryPanel";
-import { RechargePanel } from "./components/billing/RechargePanel";
-import { InstallAppPanel } from "./components/modals/InstallAppPanel";
-import { SiteInboxPanel } from "./components/modals/SiteInboxPanel";
-
-const AdminConsole = lazy(() => import("./AdminConsole").then((m) => ({ default: m.AdminConsole })));
+import { ChatHeader } from "./components/chat/ChatHeader";
+import { ScenePicker } from "./components/composer/ScenePicker";
+import { JobDeliveryCard } from "./components/chat/JobDeliveryCard";
+import { SidebarDrawer } from "./components/chat/SidebarDrawer";
+import { HeaderModalContainer } from "./components/modals/HeaderModalContainer";
 
 
 type SpeechResult = { 0: { transcript: string }; isFinal: boolean };
@@ -1626,36 +1621,12 @@ function ClientApp() {
       }}
       onDrop={handleDrop}
     >
-      <header className="app-header">
-        <div className="header-brand-group">
-          <button
-            className="menu-button"
-            type="button"
-            aria-label="打开导航菜单"
-            aria-expanded={isSidebarOpen}
-            onClick={() => setIsSidebarOpen(true)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-          </button>
-          <a className="brand" href="/" aria-label="JANSEE 首页">
-            <img className="brand-symbol" src="/assets/jansee-mark.svg" alt="" /><img className="brand-wordmark brand-wordmark-pirulen" src="/assets/jansee-pirulen-wordmark.png" alt="JANSEE" />
-          </a>
-        </div>
-        <div className="header-actions">
-          <button
-            className="login-button account-icon-button"
-            type="button"
-            onClick={() => setActiveHeaderPanel("login")}
-            aria-label={authUser ? "我的账号" : "登录"}
-            title={authUser ? "我的账号" : "登录"}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="8" r="3.5" />
-              <path d="M5 20c.8-3.5 3.1-5.3 7-5.3s6.2 1.8 7 5.3" />
-            </svg>
-          </button>
-        </div>
-      </header>
+      <ChatHeader
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+        authUser={authUser}
+        setActiveHeaderPanel={setActiveHeaderPanel}
+      />
 
       <section ref={chatStageRef} className={`chat-stage ${isEmpty ? "chat-stage-empty" : "chat-stage-active"}`} aria-label="简兮 AI 导演对话">
         {isEmpty ? (
@@ -1691,107 +1662,13 @@ function ClientApp() {
                       <Filmstrip message={message} fallbackScene={creationScene} />
                     )}
 
-                    {/* 任务失败：明确告知结果、不暴露内部错误、说明恢复方式与积分去向 */}
-                    {message.jobStatus === "failed" && !message.jobWorkId && (() => {
-                      const failedScene = message.creationScene ?? creationScene;
-                      const isPaidFailed = failedScene === "online-ecommerce" || failedScene === "physical-store";
-                      return (
-                        <div className="job-failure-notice" role="alert">
-                          <span className="job-failure-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24">
-                              <circle cx="12" cy="12" r="9" />
-                              <path d="M12 7.5v5.5" />
-                              <path d="M12 16.5h.01" />
-                            </svg>
-                          </span>
-                          <div className="job-failure-body">
-                            <div className="job-failure-title">这次没能完成</div>
-                            <p className="job-failure-desc">{message.jobError || "制作过程中遇到了临时问题，你的素材和创作内容都已保留。"}</p>
-                            <p className="job-failure-hint">
-                              {isPaidFailed
-                                ? "本次消耗的积分已退回，可调整描述或素材后重试。"
-                                : "本次为免费创作，不消耗积分，可调整描述或素材后重试。"}
-                            </p>
-                            <div style={{ marginTop: "10px" }}>
-                              <button
-                                type="button"
-                                className="composer-button"
-                                style={{ padding: "6px 16px", fontSize: "13px", height: "auto" }}
-                                onClick={() => {
-                                  if (message.text) setDraft(message.text);
-                                }}
-                              >
-                                恢复素材与文案重试
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {message.jobWorkId ? (
-                      <div className="job-delivery">
-                        <JobDeliveryVideoPlayer
-                          workId={message.jobWorkId}
-                          activeId={activePlayingVideoId}
-                          onPlay={(id) => setActivePlayingVideoId(id)}
-                          onPause={() => setActivePlayingVideoId((curr) => curr === message.jobWorkId ? null : curr)}
-                        />
-                        {(() => {
-                          const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
-                          const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
-                          const coverTitle = typeof publish.cover_title === "string" && publish.cover_title.trim() ? publish.cover_title.trim() : "";
-                          const pinnedComment = typeof publish.pinned_comment === "string" && publish.pinned_comment.trim() ? publish.pinned_comment.trim() : "";
-                          const postTime = typeof publish.post_time === "string" && publish.post_time.trim() ? publish.post_time.trim() : "";
-                          if (!caption && !coverTitle) return null;
-                          return (
-                            <div className="job-publish">
-                              {coverTitle && (
-                                <div className="job-publish-fields">
-                                  <p><span>发布标题：</span><strong>{coverTitle}</strong></p>
-                                </div>
-                              )}
-                              {caption && (
-                                <div className="job-publish-caption">
-                                  <span>{caption}</span>
-                                  <button
-                                    type="button"
-                                    className="job-publish-copy"
-                                    onClick={() => {
-                                      void navigator.clipboard.writeText(caption).then(() => {
-                                        alert("宣发文案已复制到剪贴板");
-                                      });
-                                    }}
-                                  >
-                                    复制文案
-                                  </button>
-                                </div>
-                              )}
-                              {(pinnedComment || postTime) && (
-                                <div className="job-publish-fields">
-                                  {pinnedComment && <p><span>置顶评论：</span>{pinnedComment}</p>}
-                                  {postTime && <p><span>建议发布：</span>{postTime}</p>}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    ) : (
-                      (() => {
-                        const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
-                        const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
-                        if (!caption && !publish.cover_title) return null;
-                        if (message.jobStatus !== "failed" && message.jobStatus !== "cancelled") {
-                          return (
-                            <div className="job-delivery-notice-pending">
-                              <span>成片正在压制合成中，宣发方案已在后台生成…</span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()
-                    )}
+                    <JobDeliveryCard
+                      message={message}
+                      fallbackScene={creationScene}
+                      activePlayingVideoId={activePlayingVideoId}
+                      setActivePlayingVideoId={setActivePlayingVideoId}
+                      onRestoreDraft={(text) => setDraft(text)}
+                    />
 
                     {message.plan && message.speechCutSessionId && (
                       <div className="director-plan">
@@ -1862,63 +1739,17 @@ function ClientApp() {
       </section>
 
       <footer className="composer-dock">
-        <div className="creation-scene-picker" role="group" aria-label="选择创作场景">
-          {guestTip && <div className="guest-tip" role="status">{guestTip}</div>}
-          <div className="creation-scene-options">
-            <button
-              type="button"
-              className={`${creationScene === "online-ecommerce" ? "is-selected" : ""}${isGuestViewer ? " is-locked" : ""}`}
-              aria-pressed={creationScene === "online-ecommerce"}
-              title={isGuestViewer ? "注册登录后可使用" : undefined}
-              onClick={() => {
-                if (isGuestViewer) { guideGuestToRegister("带货视频"); return; }
-                setCreationScene("online-ecommerce");
-                setPlaceholderIndex((prev) => prev + 1);
-                setFileError("");
-              }}
-            >
-              带货视频
-            </button>
-            <button
-              type="button"
-              className={`${creationScene === "physical-store" ? "is-selected" : ""}${isGuestViewer ? " is-locked" : ""}`}
-              aria-pressed={creationScene === "physical-store"}
-              title={isGuestViewer ? "注册登录后可使用" : undefined}
-              onClick={() => {
-                if (isGuestViewer) { guideGuestToRegister("门店获客"); return; }
-                setCreationScene("physical-store");
-                setPlaceholderIndex((prev) => prev + 1);
-                setFileError("");
-              }}
-            >
-              门店获客
-            </button>
-            <button
-              type="button"
-              className={creationScene === "personal-creation" ? "is-selected" : ""}
-              aria-pressed={creationScene === "personal-creation"}
-              onClick={() => {
-                setCreationScene("personal-creation");
-                setPlaceholderIndex((prev) => prev + 1);
-                setFileError("");
-              }}
-            >
-              个人创作 <span className="creation-scene-free-label" title="免费" aria-label="免费">免</span>
-            </button>
-            <button
-              type="button"
-              className={creationScene === "quick-cut" ? "is-selected" : ""}
-              aria-pressed={creationScene === "quick-cut"}
-              onClick={() => {
-                setCreationScene("quick-cut");
-                setPlaceholderIndex((prev) => prev + 1);
-                setFileError("");
-              }}
-            >
-              一句话剪辑 <span className="creation-scene-free-label" title="免费" aria-label="免费">免</span>
-            </button>
-          </div>
-        </div>
+        <ScenePicker
+          creationScene={creationScene}
+          setCreationScene={setCreationScene}
+          guestTip={guestTip}
+          isGuestViewer={isGuestViewer}
+          guideGuestToRegister={guideGuestToRegister}
+          onSceneChange={() => {
+            setPlaceholderIndex((prev) => prev + 1);
+            setFileError("");
+          }}
+        />
         <form className="composer" onSubmit={submitMessage}>
           <input
             ref={imageInputRef}
@@ -2152,209 +1983,37 @@ function ClientApp() {
         </form>
       </footer>
 
-      {isSidebarOpen && (
-        <div className="navigation-layer">
-          <button
-            className="navigation-backdrop"
-            type="button"
-            aria-label="关闭导航菜单"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-          <aside className="navigation-drawer" aria-label="主导航">
-            <div className="drawer-header">
-              <button className="drawer-close" type="button" aria-label="关闭菜单" onClick={() => setIsSidebarOpen(false)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-              </button>
-            </div>
-            <button className="drawer-new-chat" type="button" onClick={startNewConversation}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-              <span>新的创作</span>
-            </button>
-            <nav className="drawer-utility-links" aria-label={"\u5de5\u5177\u5bfc\u822a"}>
-              <button
-                className="drawer-credit-link"
-                type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel(isGuestViewer ? "login" : "recharge"); }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
-                <span>算力积分</span>
-                {!isGuestViewer && walletCredits !== null && <span className="drawer-credit-value">{String(walletCredits)}分</span>}
-              </button>
-              <button
-                className="drawer-credit-link"
-                type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel(isGuestViewer ? "login" : "orders"); }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V5a1.5 1.5 0 0 1 2-1.5Z" /><path d="M14.5 3.5V8H19M8 12h8M8 16h8" /></svg>
-                <span>订单记录</span>
-              </button>
-              <button
-                className="drawer-credit-link"
-                type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel(isGuestViewer ? "login" : "ledger"); }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5.5h16M4 12h16M4 18.5h16" /><circle cx="7" cy="5.5" r="1" /><circle cx="7" cy="12" r="1" /><circle cx="7" cy="18.5" r="1" /></svg>
-                <span>积分明细</span>
-              </button>
-              <button
-                className="drawer-credit-link drawer-works-link"
-                type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="M8 5v4m4-4v4m4-4v4M8 15h8" /></svg>
-                <span>{"\u6211\u7684\u4f5c\u54c1"}</span>
-              </button>
-              <button
-                className="drawer-credit-link"
-                type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("inbox"); }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></svg>
-                <span>站内信</span>
-              </button>
-              <button
-                className="drawer-credit-link"
-                type="button"
-                onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("install"); }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-                <span>安装 App</span>
-              </button>
-            </nav>
-            <section className="drawer-recent-works" aria-label="最近作品">
-              <div className="drawer-recent-works-heading">
-                <span>最近作品</span>
-                {authUser && <button type="button" onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}>查看全部</button>}
-              </div>
-              {!authUser ? (
-                <button className="drawer-recent-works-empty drawer-recent-works-login" type="button" onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("login"); }}>登录后查看最近作品</button>
-              ) : recentWorksLoading ? (
-                <p className="drawer-recent-works-empty">正在加载…</p>
-              ) : recentWorks.length > 0 ? (
-                <>
-                  <div className="drawer-recent-works-list">
-                    {(recentWorksExpanded ? recentWorks : recentWorks.slice(0, 3)).map((work) => {
-                      const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(work.createdAt)) / 60000));
-                      const remainingHours = Math.max(0, 24 - Math.floor(ageMinutes / 60));
-                      const isExpiringSoon = remainingHours <= 4;
-                      const ageLabel = isExpiringSoon
-                        ? (remainingHours <= 1 ? "即将过期 (不足1小时)" : `即将过期 (剩 ${remainingHours} 小时)`)
-                        : (ageMinutes < 1 ? "刚刚完成" : ageMinutes < 60 ? ageMinutes + " 分钟前" : Math.floor(ageMinutes / 60) + " 小时前");
-                      return (
-                        <button className="drawer-recent-work" type="button" key={work.id} onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}>
-                          <span className="drawer-recent-work-thumb">
-                            {work.coverUrl ? (
-                              <img src={work.coverUrl} alt="作品封面" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            ) : (
-                              <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="none" />
-                            )}
-                            <span className="drawer-recent-work-play" aria-hidden="true">▶</span>
-                          </span>
-                          <span className="drawer-recent-work-copy">
-                            <strong>{recentWorks.filter((item) => item.jobId === work.jobId).length > 1 ? "\u89c6\u9891\u5207\u7247" : "\u77ed\u89c6\u9891\u6210\u7247"}</strong>
-                            <small>{ageLabel}</small>
-                          </span>
-                          <span className="drawer-recent-work-chevron" aria-hidden="true">›</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {recentWorks.length > 3 && (
-                    <button
-                      type="button"
-                      className="drawer-recent-works-toggle"
-                      onClick={() => setRecentWorksExpanded((prev) => !prev)}
-                      aria-expanded={recentWorksExpanded}
-                    >
-                      <span>{recentWorksExpanded ? "收起" : `展开更多 (${recentWorks.length - 3})`}</span>
-                      <svg
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        style={{
-                          width: 12,
-                          height: 12,
-                          transform: recentWorksExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform .2s ease",
-                        }}
-                      >
-                        <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  )}
-                </>
-              ) : (
-                <p className="drawer-recent-works-empty">完成一次创作，你的作品就会出现在这里</p>
-              )}
-              <p className="drawer-recent-works-note">成片仅保留 24 小时</p>
-            </section>
-          </aside>
-        </div>
-      )}
+      <SidebarDrawer
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        startNewConversation={startNewConversation}
+        isGuestViewer={isGuestViewer}
+        walletCredits={walletCredits}
+        setActiveHeaderPanel={setActiveHeaderPanel}
+        authUser={authUser}
+        recentWorksLoading={recentWorksLoading}
+        recentWorks={recentWorks}
+        recentWorksExpanded={recentWorksExpanded}
+        setRecentWorksExpanded={setRecentWorksExpanded}
+      />
 
-      {activeHeaderPanel && (
-        activeHeaderPanel === "admin-login" ? (
-          <AdminLoginPanel onSuccess={(user) => { setAuthUser(user); setActiveHeaderPanel("admin"); }} />
-        ) : activeHeaderPanel === "admin" ? (
-          <Suspense fallback={<div className="header-panel-layer"><div className="header-panel" style={{ padding: "40px", textAlign: "center", color: "var(--jansee-text-muted, #80868b)" }}>正在载入管理控制台...</div></div>}>
-            <AdminConsole onClose={() => setActiveHeaderPanel(null)} />
-          </Suspense>
-        ) : (
-          <div className="header-panel-layer">
-            <button
-              className="header-panel-backdrop"
-              type="button"
-              aria-label="关闭窗口"
-              onClick={() => setActiveHeaderPanel(null)}
-            />
-            <section className="header-panel" role="dialog" aria-modal="true" aria-labelledby="header-panel-title">
-              <button className="header-panel-close" type="button" aria-label="关闭" onClick={() => setActiveHeaderPanel(null)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-              </button>
-              {activeHeaderPanel === "works" ? (
-                <WorksPanel
-                  user={authUser}
-                  onNew={() => { setActiveHeaderPanel(null); startNewConversation(); }}
-                  conversations={conversations}
-                  highlightWorkId={highlightWorkId}
-                  onClearHighlight={() => setHighlightWorkId(null)}
-                  onRequestDownload={handleWorkDownload}
-                />
-              ) : activeHeaderPanel === "recharge" ? (
-                <RechargePanel
-                  user={authUser}
-                  credits={walletCredits}
-                  membership={membership}
-                  onPaid={refreshWallet}
-                />
-              ) : activeHeaderPanel === "orders" ? (
-                <BillingHistoryPanel key={authUser?.id ?? "guest"} user={authUser} kind="orders" />
-              ) : activeHeaderPanel === "ledger" ? (
-                <BillingHistoryPanel key={authUser?.id ?? "guest"} user={authUser} kind="ledger" />
-              ) : activeHeaderPanel === "inbox" ? (
-                <SiteInboxPanel user={authUser} onLogin={() => setActiveHeaderPanel("login")} />
-              ) : activeHeaderPanel === "install" ? (
-                <InstallAppPanel />
-              ) : (
-                <AuthPanel
-                  user={authUser}
-                  onSuccess={(user) => {
-                    setAuthUser(user);
-                    void refreshWallet();
-                    setActiveHeaderPanel(null);
-                    if (pendingDownloadWork) {
-                      triggerDownloadFile(pendingDownloadWork.id, pendingDownloadWork.filename);
-                      setPendingDownloadWork(null);
-                    }
-                  }}
-                  onProfileUpdated={(user) => setAuthUser(user)}
-                  onLogout={() => { setAuthUser(null); setActiveHeaderPanel(null); }}
-                  onWalletRefresh={refreshWallet}
-                />
-              )}
-            </section>
-          </div>
-        )
-      )}
+      <HeaderModalContainer
+        activeHeaderPanel={activeHeaderPanel}
+        setActiveHeaderPanel={setActiveHeaderPanel}
+        authUser={authUser}
+        setAuthUser={setAuthUser}
+        conversations={conversations}
+        startNewConversation={startNewConversation}
+        highlightWorkId={highlightWorkId}
+        setHighlightWorkId={setHighlightWorkId}
+        handleWorkDownload={handleWorkDownload}
+        walletCredits={walletCredits}
+        membership={membership}
+        refreshWallet={refreshWallet}
+        pendingDownloadWork={pendingDownloadWork}
+        setPendingDownloadWork={setPendingDownloadWork}
+        triggerDownloadFile={triggerDownloadFile}
+      />
 
       {isDragging && <div className="drop-overlay" aria-hidden="true"><div><span>＋</span><strong>把素材放在这里</strong><small>支持图片与视频文件</small></div></div>}
     </main>
