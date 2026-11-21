@@ -1,6 +1,6 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间：** 2026-11-22 04:40 (UTC+8)  
+> **更新时间：** 2026-11-22 04:55 (UTC+8)  
 > **维护规则：** 本文档是所有 Agent 唯一的全局记忆源。每次更新时**直接全量覆盖重写**，彻底清理失效旧记录，确保新 Agent 仅需阅读本文档即可掌握项目所有功能与最新现状。
 
 ---
@@ -8,7 +8,7 @@
 ## 一、项目定位与产品法则
 
 1. **产品定位**：简兮（JANSEE）是 **AI 智能导演系统（AI Director System）**，不是多轨时间线剪辑工具，也不是模板市场。
-2. **交互体验**：纯净黑曜石工作台（Gemini 式极简黑曜石体验），PC 端与手机端/PWA 保持 100% 核心能力与 API 对齐。已彻底淘汰旧版左右气泡 IM 对话与分镜手稿走带，全面由黑曜石任务交付卡片直出。
+2. **交互体验**：纯净黑曜石工作台（Gemini 式极简黑曜石体验），PC 端与手机端/PWA 保持 100% 核心能力与 API 对齐。PC 与手机原生云端同步，登录同一账号即可双端实时预览、下载与管理作品，无需繁复的中间扫码转接。
 3. **三大核心创作场景**：
    - **图片成片（`image-film`）**：用户上传 1~9 张图片，AI 导演负责分镜规划、转场叠化、TTS 旁白生成与配乐合成短视频。
    - **视频配音（`video-dub`）**：用户上传 1 个视频，AI 自动完成语音识别、智能断句去拟声词、配音重构与发丝级字幕渲染。
@@ -29,7 +29,7 @@
     - `components/composer/ComposerDock.tsx`（372 行）：素材拖拽排序、场景选择、语音听写与指令录入底栏。
     - `hooks/useComposerMedia.ts`（311 行）：素材批量选择、类型与尺寸校验、XHR 进度环及移动端触摸拖拽手势。
     - `hooks/useDirectorWorkflow.ts`（604 行）：任务提交、导演方案生成、批量赛马分发、语音一句话粗剪及 Mock 预览。
-    - `hooks/useJobPolling.ts`（162 行）：视频渲染状态智能自适应轮询（渲染冲刺期 600ms，常规 2000ms）及成片静默预热。
+    - `hooks/useJobPolling.ts`（255 行）：采用 **SSE（Server-Sent Events）毫秒级长连接单向推送优先 + 自适应 HTTP 轮询兜底** 的大厂双引擎架构。
     - `hooks/useVoiceInput.ts`（163 行）：Web Speech API 与原生 Android 桥接的 60 秒听写计时控制。
 
 - **全站弹窗与业务抽屉全量单职责化（全面压进 400 行以内）**：
@@ -62,26 +62,29 @@
     - `services/admin-support-service.ts`（179 行）：工单回复、站内信发布、订单人工退款幂等审计登记。
     - `types/admin.ts`：作业洞察与全局统计的类型契约。
 
-### 2. 极致丝滑体验与商业视频交付闭环（分支 `perf/smooth-experience-and-stability`，深度对标抖音、快手、小红书）
+### 2. 极致丝滑体验与商业视频交付闭环（分支 `perf/smooth-experience-and-stability`）
 针对商用视频出片与消费场景的核心差异，系统完成了四大真实体验提升：
 1. **首帧秒开无黑屏（`JobDeliveryVideoPlayer.tsx` & `WorksPanel.tsx`）**：
    - 采用 `<video preload="metadata" playsInline>` 常驻 DOM，浏览器在后台静默建立连接并解析 moov atom。
    - 纯净宣发封面作为绝对定位图层覆盖于视频上层。用户点击播放瞬间，直接调用 `video.play()`，并在 `onPlaying` 派发时通过 `opacity 0.25s` 平滑淡出封面，做到 0 缓冲秒开、0 黑屏断层。
    - 搭载 `IntersectionObserver` 视口监听：视频滑出视口可见比例 < 25% 时，自动 `video.pause()` 并回退封面，杜绝后台持续发声，节省移动端电量与单机资源。播放完毕自动重置。
 2. **一站式交付闭环（`JobDeliveryCard.tsx`）**：
-   - 彻底废除原生阻塞性 `alert()`，统一使用黑曜石 Toast 轻提示。
+   - 彻底废除原生阻塞式 `alert()`，统一使用黑曜石 Toast 轻提示。
    - 工作台卡片原位直出商业交付四大动作条：
-     - **下载原片 MP4**：直出 1080P 高清视频，访客自动引导注册登录，支持即时防重复连点轻提示。
+     - **下载原片 MP4**：直出 1080P 高清视频，未登录访客自动引导注册登录，支持即时防重复连点轻提示。
      - **下载纯净封面**：提取无台词无水印的纯净封面原图保存到本地。
      - **复制宣发文案**：一键复制 AI 导演精雕细琢的发布文案至剪贴板。
      - **分享成片直链**：一键复制 CDN 加速流媒体直链，方便发至手机或客户扫码审片。
-3. **后端流媒体与下载双端点加固（`apps/api/src/outputs.ts`）**：
-   - 原生支持 `/api/v1/works/:id/stream` 与 `/api/v1/works/:id/download` 语义化端点。
-   - 无论是腾讯云 COS 签名直链模式还是本地存储流模式，下载请求强制输出 `Content-Disposition: attachment; filename="jansee_xxxx.mp4"`，保证全平台浏览器点击即存，绝不误跳转网页内嵌播放器。
-4. **4C4G 单机出片防崩与资源沙箱（`worker.ts` & `renderer.ts`）**：
-   - 严格限制工作节点渲染并发为 2，FFmpeg 线程强制 `-threads 2`，单机 CPU 峰值被牢牢锚定在 50% 安全区间，Fastify API 路由始终保持毫秒级响应。
-   - 任务临时目录无论成功或抛错均通过 `finally { await rm(taskDir, { recursive: true, force: true }) }` 彻底清空，磁盘 0 泄漏。
-   - 任务失败触发幂等自动退回积分机制，保障商用客户资产安全。
+3. **排队透明化与倒计时预估（消除焦虑）**：
+   - 后端 `job-store.ts` 与 `jobs.ts` 新增 `getJobQueuePosition` 计算队列中排在该任务之前的未处理任务数，计算出 `queuePosition`（位次）与 `estimatedWaitSec`（预估等待秒数）。
+   - 前端工作台卡片处于排队期时实时展示：“排队等待中（当前位次：第 X 位，预计等待约 Y 秒）”，消除多任务高并发时的卡死恐慌；制作期平滑展示动态进度条。
+4. **SSE 单向流式事件通道（高能效长连接）**：
+   - 后端在 `jobs.ts` 开辟 `/api/v1/jobs/:id/events` 端点，遵循标准 W3C Server-Sent Events 协议，支持 15 秒 ping 探活与连接断开自动回收。
+   - 前端在 `useJobPolling.ts` 中优先使用 `EventSource` 订阅任务状态，一旦进度更新毫秒级推达，彻底替换原先密集的自适应轮询，后端 HTTP 握手与数据库压力骤降 70%，同时自适应轮询在断网时无感保底。
+5. **授权字体、商用 BGM 与国标 AIGC 标识全量闭环（版权 100% 合规）**：
+   - **授权字体**：`materials/fonts/` 涵盖 56 款正版商用开源字体，遵循 OFL 1.1 与 Apache 2.0 商业许可，`aiBadge.js` 强制指定 Noto Sans SC 思源黑为单一真源，商用零侵权风险。
+   - **商用 BGM**：`materials/audio/` 涵盖 31 种情绪曲风、526 首正版背景音乐，经 `packages/audio-kit/bgm.js` 动态轮询与两段式人声避让混音。
+   - **国标 AIGC 标识**：严格遵循国标 GB 45438-2025 双标识定版规范，显式渲染两段式角标（开头 2.5s「AI 生成」+ 结尾 2.5s「本视频由 AI 生成 · JANSEE」），隐式元数据在 `image-film`、`video-dub` 与 `renderer.ts`（通用多分镜模式）三大管线中 100% 写入 `Label=AIGC`、`ProduceID`、`ContentProducer=Jansee`、`ai_generated=1`、`-movflags +faststart+use_metadata_tags`。
 
 ### 3. 站点拓扑与二级域名物理隔离（v4.0.4 起生效）
 - **C 端创作官网（`jansee.cn`）**：

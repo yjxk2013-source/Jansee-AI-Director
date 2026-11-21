@@ -114,6 +114,17 @@ export function createPgJobStore(pool: Pool): JobStore {
       return mapJob(row, assetsRes.rows.map((r) => r.asset_id));
     },
 
+    async getJobQueuePosition(jobId, queuedAt) {
+      const res = await pool.query<{ count: string }>(
+        "SELECT count(*)::int AS count FROM generation_jobs WHERE status = 'queued' AND queued_at < $1",
+        [queuedAt]
+      );
+      const ahead = parseInt(res.rows[0]?.count ?? "0", 10);
+      const queuePosition = ahead + 1;
+      const estimatedWaitSec = Math.max(10, Math.ceil(queuePosition / 2) * 40);
+      return { queuePosition, estimatedWaitSec };
+    },
+
 
     async updateDirectorPlan(userId, jobId, directorPlan, workerId) {
       const result = await pool.query(

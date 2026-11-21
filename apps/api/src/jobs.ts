@@ -66,6 +66,7 @@ export interface JobStore {
   updateJobStatus?(userId: string, jobId: string, toStatus: JobStatus, progress?: number, error?: { code: string; message: string }, workerId?: string): Promise<GenerationJobRecord | null>;
   updateDirectorPlan?(userId: string, jobId: string, directorPlan: Record<string, unknown>, workerId?: string): Promise<void>;
   heartbeatJob?(userId: string, jobId: string, workerId: string, leaseSeconds?: number): Promise<boolean>;
+  getJobQueuePosition?(jobId: string, queuedAt: Date): Promise<{ queuePosition: number; estimatedWaitSec: number }>;
 }
 
 export interface JobRoutesOptions {
@@ -227,6 +228,33 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     });
   });
 
+  const serializeJobPayload = async (job: GenerationJobRecord) => {
+    let queueInfo: { queuePosition: number; estimatedWaitSec: number } | undefined;
+    if (job.status === "queued" && options.jobStore.getJobQueuePosition) {
+      try {
+        queueInfo = await options.jobStore.getJobQueuePosition(job.id, job.queuedAt);
+      } catch {
+        // ignore
+      }
+    }
+    return {
+      id: job.id,
+      mode: job.mode,
+      status: job.status,
+      prompt: job.prompt,
+      aspectRatio: job.aspectRatio,
+      progress: job.progress,
+      directorPlan: publicDirectorPlan(job.directorPlan),
+      errorCode: job.errorCode,
+      errorMessage: job.errorMessage,
+      queuedAt: job.queuedAt.toISOString(),
+      startedAt: job.startedAt?.toISOString() ?? null,
+      finishedAt: job.finishedAt?.toISOString() ?? null,
+      createdAt: job.createdAt.toISOString(),
+      ...(queueInfo ? { queuePosition: queueInfo.queuePosition, estimatedWaitSec: queueInfo.estimatedWaitSec } : {}),
+    };
+  };
+
   app.get("/api/v1/jobs/:id", async (request, reply) => {
     const user = await authenticatedUser(request, options.authStore);
     if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
@@ -238,22 +266,81 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     if (!job) {
       return reply.code(404).send({ error: { code: "JOB_NOT_FOUND", message: "任务不存在或无权访问" } });
     }
-    return reply.send({
-      job: {
-        id: job.id,
-        mode: job.mode,
-        status: job.status,
-        prompt: job.prompt,
-        aspectRatio: job.aspectRatio,
-        progress: job.progress,
-        directorPlan: publicDirectorPlan(job.directorPlan),
-        errorCode: job.errorCode,
-        errorMessage: job.errorMessage,
-        queuedAt: job.queuedAt.toISOString(),
-        startedAt: job.startedAt?.toISOString() ?? null,
-        finishedAt: job.finishedAt?.toISOString() ?? null,
-        createdAt: job.createdAt.toISOString(),
-      },
-    });
+    const jobPayload = await serializeJobPayload(job);
+    return reply.send({ job: jobPayload });
+  });
+
+  // SSE 单向长连接端点：毫秒级实时下发任务进度与状态，彻底替代密集 HTTP 轮询
+  app.get("/api/v1/jobs/:id/events", async (request, reply) => {
+    const user = await authenticatedUser(request, options.authStore);
+    if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+    const { id } = request.params as { id: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return reply.code(400).send({ error: { code: "INVALID_JOB_ID" } });
+    }
+    const initialJob = await options.jobStore.findJobById(user.id, id);
+    if (!initialJob) {
+      return reply.code(404).send({ error: { code: "JOB_NOT_FOUND" } });
+    }
+
+    reply.raw.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
+    reply.raw.setHeader("Connection", "keep-alive");
+    reply.raw.setHeader("X-Accel-Buffering", "no");
+    reply.raw.flushHeaders?.();
+
+    const initialPayload = await serializeJobPayload(initialJob);
+    reply.raw.write(`data: ${JSON.stringify({ job: initialPayload })}\n\n`);
+
+    if (["completed", "failed", "cancelled"].includes(initialJob.status)) {
+      reply.raw.end();
+      return;
+    }
+
+    let isClosed = false;
+    let lastProgress = initialJob.progress;
+    let lastStatus = initialJob.status;
+
+    const cleanup = () => {
+      if (isClosed) return;
+      isClosed = true;
+      clearInterval(intervalTimer);
+      clearInterval(heartbeatTimer);
+    };
+
+    request.raw.on("close", cleanup);
+    request.raw.on("end", cleanup);
+
+    // 每 15 秒下发一次 ping 心跳，防止中间网络代理或移动端静默切断
+    const heartbeatTimer = setInterval(() => {
+      if (isClosed) return;
+      try { reply.raw.write(": ping\n\n"); } catch { cleanup(); }
+    }, 15_000);
+
+    // 每 1000ms 检测一次任务最新状态，有进度跃迁即刻向客户端推送
+    const intervalTimer = setInterval(async () => {
+      if (isClosed) return;
+      try {
+        const latestJob = await options.jobStore.findJobById(user.id, id);
+        if (!latestJob) {
+          cleanup();
+          reply.raw.end();
+          return;
+        }
+        if (latestJob.progress !== lastProgress || latestJob.status !== lastStatus) {
+          lastProgress = latestJob.progress;
+          lastStatus = latestJob.status;
+          const payload = await serializeJobPayload(latestJob);
+          reply.raw.write(`data: ${JSON.stringify({ job: payload })}\n\n`);
+        }
+        if (["completed", "failed", "cancelled"].includes(latestJob.status)) {
+          cleanup();
+          reply.raw.end();
+        }
+      } catch {
+        cleanup();
+        reply.raw.end();
+      }
+    }, 1000);
   });
 }

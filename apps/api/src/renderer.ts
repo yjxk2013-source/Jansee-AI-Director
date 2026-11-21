@@ -493,7 +493,16 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             "-keyint_min", "48",
             "-sc_threshold", "0",
             "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+use_metadata_tags",
+            "-metadata", "Label=AIGC",
+            "-metadata", "ContentProducer=Jansee",
+            "-metadata", `ProduceID=${job.id}`,
+            "-metadata", "ReservedCode1=JANSEE",
+            "-metadata", "title=AI 生成视频 - Jansee",
+            "-metadata", `comment=AI-Generated:true; Provider:Jansee; ContentID:${job.id}`,
+            "-metadata", "ai_generated=1",
+            "-metadata", "provider=Jansee",
+            "-metadata", `content_id=${job.id}`,
             tempOutput
           );
 

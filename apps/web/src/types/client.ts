@@ -49,6 +49,8 @@ export type ChatMessage = {
   jobProgress?: number;
   jobError?: string;
   jobDirectorPlan?: Record<string, unknown>;
+  jobQueuePosition?: number;
+  jobEstimatedWaitSec?: number;
   speechCutSessionId?: string;
   speechCutStatus?: "analyzing" | "awaiting_confirmation" | "producing" | "consumed" | "failed";
   speechCutError?: string;

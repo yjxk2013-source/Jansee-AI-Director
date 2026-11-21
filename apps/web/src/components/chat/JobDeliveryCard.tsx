@@ -235,19 +235,31 @@ export function JobDeliveryCard({
           })()}
         </div>
       ) : (
-        (() => {
-          const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
-          const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
-          if (!caption && !publish.cover_title) return null;
-          if (message.jobStatus !== "failed" && message.jobStatus !== "cancelled") {
-            return (
-              <div className="job-delivery-notice-pending">
-                <span>成片正在压制合成中，宣发方案已在后台生成…</span>
+        message.jobId && message.jobStatus !== "failed" && message.jobStatus !== "cancelled" ? (
+          <div className="job-delivery-notice-pending" role="status" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {message.jobStatus === "queued" ? (
+              <span style={{ fontSize: "13px", color: "var(--jansee-text-secondary, #5f6368)" }}>
+                排队等待中（当前位次：第 {message.jobQueuePosition || 1} 位，预计等待约 {message.jobEstimatedWaitSec || 35} 秒）…
+              </span>
+            ) : (
+              <span style={{ fontSize: "13px", color: "var(--jansee-text-secondary, #5f6368)" }}>
+                AI 导演正在压制合成中{typeof message.jobProgress === "number" ? ` (${message.jobProgress}%)` : "…"}，宣发方案已在后台就绪…
+              </span>
+            )}
+            {typeof message.jobProgress === "number" && message.jobProgress > 0 && (
+              <div style={{ width: "100%", height: "4px", background: "rgba(0, 0, 0, 0.08)", borderRadius: "2px", overflow: "hidden" }}>
+                <div
+                  style={{
+                    width: `${Math.min(100, Math.max(5, message.jobProgress))}%`,
+                    height: "100%",
+                    background: "#18191b",
+                    transition: "width 0.35s ease",
+                  }}
+                />
               </div>
-            );
-          }
-          return null;
-        })()
+            )}
+          </div>
+        ) : null
       )}
     </>
   );
