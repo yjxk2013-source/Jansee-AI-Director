@@ -14,7 +14,7 @@ services:
     volumes:
       - v4_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jansee_v4 -d jansee_v4"]
+      test: [ "CMD-SHELL", "pg_isready -U jansee_v4 -d jansee_v4" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -33,9 +33,10 @@ services:
       target: api
     restart: unless-stopped
     # 4C4G 宿主机内存安全红线防护（防 OOM 击穿宿主机）：
-    # 宿主机总内存 4GB：Postgres 分配 512MB，Web Nginx 分配 128MB，系统与 SSH 预留 800MB。
-    # API 容器（含 2 路并发 FFmpeg Worker）设定 2560MB 内存硬上限 (mem_limit) 与 3072MB 软上限，彻底杜绝突发内存泄露拖死整机。
-    mem_limit: 2560m
+    # 宿主机总内存 4096 MiB (4GB)：Postgres 限制 512 MiB，Web Nginx 限制 128 MiB。
+    # API 容器（含 2 路并发 FFmpeg Worker）设定 2048 MiB 内存硬上限 (mem_limit) 与 1024 MiB 软预留。
+    # 三大容器峰值内存总合为 2688 MiB，为宿主机 Linux 操作系统、SSH、系统监控与内核 Buffer/Cache 留出 1408 MiB (34.4%) 的充裕安全缓冲。
+    mem_limit: 2048m
     mem_reservation: 1024m
     cpus: 4.0
     pids_limit: 512
@@ -55,6 +56,8 @@ services:
       MEDIA_STORAGE_DRIVER: cos
       MEDIA_STORAGE_ROOT: /app/storage/media
       MEDIA_CACHE_ROOT: /app/storage/cache
+      COS_CDN_DOMAIN: ${COS_CDN_DOMAIN:-cdn.jansee.cn}
+      CDN_BASE_URL: ${CDN_BASE_URL:-https://cdn.jansee.cn}
       JX_WHISPER_CLI: /app/whisper.cpp/bin/whisper-cli
       JX_WHISPER_MODEL: /app/whisper.cpp/models/ggml-small.bin
       JX_MATERIALS_ROOT: /app/materials
@@ -72,7 +75,7 @@ services:
       v4-private:
         ipv4_address: 172.30.250.3
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: [ "CMD", "node", "-e", "fetch('http://127.0.0.1:4100/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
       interval: 30s
       timeout: 5s
       retries: 3
