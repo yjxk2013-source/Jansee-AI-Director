@@ -84,6 +84,17 @@
         var splash = document.getElementById("app-splash");
         if (!splash || splash.dataset.hiding) return;
         splash.dataset.hiding = "1";
+        var isAdmin = false;
+        try {
+          var host = window.location.hostname.toLowerCase();
+          var path = window.location.pathname.replace(/\/+$/, "");
+          var params = new URLSearchParams(window.location.search);
+          isAdmin = host === "admin.jansee.cn" || path === "/admin" || params.get("admin") === "1" || window.location.hash === "#admin";
+        } catch (e) {}
+        if (isAdmin) {
+          splash.remove();
+          return;
+        }
         var wait = Math.max(0, 1200 - (Date.now() - window.__janseeSplashStart));
         setTimeout(function () {
           splash.classList.add("is-hidden");

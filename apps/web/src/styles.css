@@ -690,7 +690,8 @@ textarea:focus-visible {
 .attachment-upload-ring-svg {
   width: 32px;
   height: 32px;
-  transform: rotate(-90deg); /* 从顶部 12 点钟方向顺时针旋转 */
+  transform: rotate(-90deg);
+  /* 从顶部 12 点钟方向顺时针旋转 */
 }
 
 .attachment-upload-ring-bg {
@@ -743,8 +744,13 @@ textarea:focus-visible {
 }
 
 @keyframes send-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pending-order {
@@ -1170,9 +1176,11 @@ textarea:focus-visible {
   color: #a8abb2;
   cursor: pointer;
 }
+
 .creation-scene-options button.is-locked:hover {
   color: #8a8e96;
 }
+
 .creation-scene-options button.is-locked.is-selected {
   color: #a8abb2;
   text-decoration-color: #c8cad0;
@@ -4586,8 +4594,8 @@ select:focus-visible {
 .message-row:has(.director-filmstrip-panel) .message-author,
 .message-row:has(.job-delivery) .message-author,
 .message-row:has(.speech-cut-review) .message-author,
-.message-row:has(.director-filmstrip-panel) .message-bubble > p,
-.message-row:has(.job-delivery) .message-bubble > p {
+.message-row:has(.director-filmstrip-panel) .message-bubble>p,
+.message-row:has(.job-delivery) .message-bubble>p {
   display: none;
 }
 
@@ -7611,7 +7619,8 @@ body,
 .attachment-upload-ring-svg {
   width: 32px;
   height: 32px;
-  transform: rotate(-90deg); /* 从顶部 12 点钟方向顺时针旋转 */
+  transform: rotate(-90deg);
+  /* 从顶部 12 点钟方向顺时针旋转 */
 }
 
 .attachment-upload-ring-bg {
@@ -7664,8 +7673,13 @@ body,
 }
 
 @keyframes send-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pending-order {
@@ -11318,68 +11332,15 @@ body,
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #6366f1;
-  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6), 0 0 10px 2px rgba(99, 102, 241, 0.45);
-  animation: filmstrip-rec-rainbow 3.6s infinite ease-in-out;
+  background: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25), 0 0 8px rgba(245, 158, 11, 0.5);
+  flex-shrink: 0;
 }
 
-/* 制作中七彩呼吸灯：平滑循环流转赤橙黄绿青蓝紫，伴随柔和舒缓的明暗呼吸与光晕扩散 */
-@keyframes filmstrip-rec-rainbow {
-  0% {
-    background: #ef4444;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px 2px rgba(239, 68, 68, 0.45);
-    transform: scale(1);
-  }
-
-  14% {
-    background: #f97316;
-    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15), 0 0 12px 3px rgba(249, 115, 22, 0.55);
-    transform: scale(1.12);
-  }
-
-  28% {
-    background: #eab308;
-    box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.2), 0 0 11px 2px rgba(234, 179, 8, 0.5);
-    transform: scale(1.05);
-  }
-
-  42% {
-    background: #10b981;
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1), 0 0 13px 3px rgba(16, 185, 129, 0.55);
-    transform: scale(1.15);
-  }
-
-  57% {
-    background: #06b6d4;
-    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2), 0 0 11px 3px rgba(6, 182, 212, 0.5);
-    transform: scale(1.06);
-  }
-
-  71% {
-    background: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 0 12px 3px rgba(59, 130, 246, 0.55);
-    transform: scale(1.14);
-  }
-
-  85% {
-    background: #8b5cf6;
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2), 0 0 11px 2px rgba(139, 92, 246, 0.5);
-    transform: scale(1.08);
-  }
-
-  100% {
-    background: #ef4444;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 0 10px 2px rgba(239, 68, 68, 0.45);
-    transform: scale(1);
-  }
-}
-
-/* 成片已完成/已交付：常亮静止稳定绿灯，不再闪烁或流转七彩，给用户明确的完成指示 */
+/* 成片已完成/已交付：常亮静止稳定绿灯，给用户明确清晰的完成指示 */
 .director-filmstrip-panel.is-settled .filmstrip-rec-dot {
   background: #10b981;
-  box-shadow: 0 0 8px 2px rgba(16, 185, 129, 0.6), 0 0 0 1px rgba(16, 185, 129, 0.3);
-  animation: none;
-  transform: none;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 0 8px rgba(16, 185, 129, 0.5);
 }
 
 .filmstrip-rec-text {
@@ -11406,6 +11367,7 @@ body,
   border-left: 2px solid rgba(255, 255, 255, 0.28);
   border-radius: 0 6px 6px 0;
 }
+
 .filmstrip-concept-label {
   flex: 0 0 auto;
   font-size: 11px;
@@ -11414,6 +11376,7 @@ body,
   color: #d1d5db;
   line-height: 1.6;
 }
+
 .filmstrip-concept-text {
   font-size: 12px;
   color: #b6bcc6;
@@ -11585,11 +11548,14 @@ body,
   line-height: 1.4;
   color: #e5e7eb;
   min-height: 32px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  max-height: 84px;
+  overflow-y: auto;
   word-break: break-all;
+  scrollbar-width: none;
+}
+
+.filmstrip-script-text::-webkit-scrollbar {
+  display: none;
 }
 
 .filmstrip-script-placeholder {
@@ -11745,7 +11711,8 @@ body,
 .job-delivery-cover-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #000000;
   display: block;
 }
 
@@ -11810,6 +11777,52 @@ body,
   aspect-ratio: 9 / 16;
   object-fit: contain;
   display: block;
+}
+
+.job-delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.job-delivery-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.job-delivery-action-btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.job-delivery-action-btn:hover {
+  background: #f9fafb;
+  border-color: rgba(0, 0, 0, 0.24);
+  color: #111827;
+}
+
+.job-delivery-action-btn.primary {
+  background: #18191b;
+  color: #ffffff;
+  border-color: #18191b;
+}
+
+.job-delivery-action-btn.primary:hover {
+  background: #28292c;
+  border-color: #28292c;
 }
 
 .job-publish {
@@ -12857,7 +12870,8 @@ body,
 .work-cover-thumbnail {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #000000;
   display: block;
 }
 

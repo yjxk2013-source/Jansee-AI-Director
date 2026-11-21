@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthStore } from "./auth.js";
 import { authenticatedUser } from "./assets.js";
 import type { LocalObjectStorage } from "./storage-local.js";
@@ -150,10 +150,14 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     }
   });
 
-  app.get("/api/v1/works/:id/stream", async (request, reply) => {
+  const streamOrDownload = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    forceDownload = false
+  ) => {
     const user = await authenticatedUser(request, options.authStore);
     if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
-    const isDownload = (request.query as { download?: string }).download === "1";
+    const isDownload = forceDownload || (request.query as { download?: string }).download === "1";
     const isGuest = !user.phone && !user.email;
     if (isDownload && isGuest) {
       return reply.code(401).send({ error: { code: "AUTH_REQUIRED_FOR_DOWNLOAD", message: "请先登录或注册账号后再下载原片作品" } });
@@ -216,7 +220,18 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     reply.header("content-type", output.mimeType || "video/mp4");
     reply.header("content-length", fileSize);
     reply.header("accept-ranges", "bytes");
+    if (isDownload) {
+      reply.header("content-disposition", `attachment; filename="${encodeURIComponent(`jansee_${output.id.slice(0, 8)}.mp4`)}"`);
+    }
     return reply.send(createReadStream(filePath));
+  };
+
+  app.get("/api/v1/works/:id/stream", async (request, reply) => {
+    return streamOrDownload(request, reply, false);
+  });
+
+  app.get("/api/v1/works/:id/download", async (request, reply) => {
+    return streamOrDownload(request, reply, true);
   });
 }
 
