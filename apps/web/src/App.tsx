@@ -278,6 +278,7 @@ export default function App() {
   const [membership, setMembership] = useState<{ tierId: string; expiresAt: string; active: boolean } | null>(null);
   const [recentWorks, setRecentWorks] = useState<WorkItem[]>([]);
   const [recentWorksLoading, setRecentWorksLoading] = useState(false);
+  const [recentWorksExpanded, setRecentWorksExpanded] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const cameraCaptureInputRef = useRef<HTMLInputElement>(null);
@@ -2289,33 +2290,57 @@ export default function App() {
               ) : recentWorksLoading ? (
                 <p className="drawer-recent-works-empty">正在加载…</p>
               ) : recentWorks.length > 0 ? (
-                <div className="drawer-recent-works-list">
-                  {recentWorks.map((work) => {
-                    const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(work.createdAt)) / 60000));
-                    const remainingHours = Math.max(0, 24 - Math.floor(ageMinutes / 60));
-                    const isExpiringSoon = remainingHours <= 4;
-                    const ageLabel = isExpiringSoon
-                      ? (remainingHours <= 1 ? "即将过期 (不足1小时)" : `即将过期 (剩 ${remainingHours} 小时)`)
-                      : (ageMinutes < 1 ? "刚刚完成" : ageMinutes < 60 ? ageMinutes + " 分钟前" : Math.floor(ageMinutes / 60) + " 小时前");
-                    return (
-                      <button className="drawer-recent-work" type="button" key={work.id} onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}>
-                        <span className="drawer-recent-work-thumb">
-                          {work.coverUrl ? (
-                            <img src={work.coverUrl} alt="作品封面" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          ) : (
-                            <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="none" />
-                          )}
-                          <span className="drawer-recent-work-play" aria-hidden="true">▶</span>
-                        </span>
-                        <span className="drawer-recent-work-copy">
-                          <strong>{recentWorks.filter((item) => item.jobId === work.jobId).length > 1 ? "\u89c6\u9891\u5207\u7247" : "\u77ed\u89c6\u9891\u6210\u7247"}</strong>
-                          <small>{ageLabel}</small>
-                        </span>
-                        <span className="drawer-recent-work-chevron" aria-hidden="true">›</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <>
+                  <div className="drawer-recent-works-list">
+                    {(recentWorksExpanded ? recentWorks : recentWorks.slice(0, 3)).map((work) => {
+                      const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(work.createdAt)) / 60000));
+                      const remainingHours = Math.max(0, 24 - Math.floor(ageMinutes / 60));
+                      const isExpiringSoon = remainingHours <= 4;
+                      const ageLabel = isExpiringSoon
+                        ? (remainingHours <= 1 ? "即将过期 (不足1小时)" : `即将过期 (剩 ${remainingHours} 小时)`)
+                        : (ageMinutes < 1 ? "刚刚完成" : ageMinutes < 60 ? ageMinutes + " 分钟前" : Math.floor(ageMinutes / 60) + " 小时前");
+                      return (
+                        <button className="drawer-recent-work" type="button" key={work.id} onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}>
+                          <span className="drawer-recent-work-thumb">
+                            {work.coverUrl ? (
+                              <img src={work.coverUrl} alt="作品封面" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="none" />
+                            )}
+                            <span className="drawer-recent-work-play" aria-hidden="true">▶</span>
+                          </span>
+                          <span className="drawer-recent-work-copy">
+                            <strong>{recentWorks.filter((item) => item.jobId === work.jobId).length > 1 ? "\u89c6\u9891\u5207\u7247" : "\u77ed\u89c6\u9891\u6210\u7247"}</strong>
+                            <small>{ageLabel}</small>
+                          </span>
+                          <span className="drawer-recent-work-chevron" aria-hidden="true">›</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {recentWorks.length > 3 && (
+                    <button
+                      type="button"
+                      className="drawer-recent-works-toggle"
+                      onClick={() => setRecentWorksExpanded((prev) => !prev)}
+                      aria-expanded={recentWorksExpanded}
+                    >
+                      <span>{recentWorksExpanded ? "收起" : `展开更多 (${recentWorks.length - 3})`}</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        style={{
+                          width: 12,
+                          height: 12,
+                          transform: recentWorksExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform .2s ease",
+                        }}
+                      >
+                        <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="drawer-recent-works-empty">完成一次创作，你的作品就会出现在这里</p>
               )}

@@ -6921,6 +6921,30 @@ body,
   line-height: 1.7;
 }
 
+.drawer-recent-works-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 6px;
+  border: 1px dashed var(--jansee-border-subtle, #e0e0e0);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--jansee-text-secondary, #5f6368);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.drawer-recent-works-toggle:hover {
+  background: var(--jansee-surface-subtle, #f7f7f5);
+  color: var(--jansee-text, #202124);
+  border-color: var(--jansee-border, #d1d5db);
+}
+
 .drawer-recent-works-login {
   width: calc(100% - 16px);
   padding: 8px;
