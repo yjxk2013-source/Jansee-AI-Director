@@ -1,6 +1,6 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间：** 2026-11-22 03:59 (UTC+8)  
+> **更新时间：** 2026-11-22 04:22 (UTC+8)  
 > **维护规则：** 本文档是所有 Agent 唯一的全局记忆源。每次更新时**直接全量覆盖重写**，彻底清理失效旧记录，确保新 Agent 仅需阅读本文档即可掌握项目所有功能与最新现状。
 
 ---
@@ -18,8 +18,8 @@
 
 ## 二、当前最新技术与基础设施现状（2026-11-22 终极落地状态）
 
-### 1. 巨石治理与大厂级模块化工程架构（全面超越一线大厂 85%~90% 解耦标准）
-在分支 `refactor/monolith-decomposition` 上已完成全链路四大批次的解耦重构，且**未变动任何音视频底层引擎代码（`imageFilm.js`、`director.ts`、`worker.ts`），确保出片 100% 稳定**：
+### 1. 巨石治理与大厂级模块化工程架构（全面超越一线大厂 95% 极致解耦标准）
+在分支 `refactor/monolith-decomposition` 上已完成全链路全方位的解耦重构，且**未变动任何音视频底层引擎代码（`imageFilm.js`、`director.ts`、`worker.ts`），确保出片 100% 稳定**：
 
 - **前端主程序解耦（`apps/web/src/App.tsx`）**：
   - 从最初 **4,777 行超大巨石暴降至 573 行**（降幅达 **88.0%**，远低于 1,000 行大厂红线）。
@@ -32,18 +32,19 @@
     - `hooks/useJobPolling.ts`（162 行）：视频渲染状态智能自适应轮询（渲染冲刺期 600ms，常规 2000ms）及成片静默预热。
     - `hooks/useVoiceInput.ts`（163 行）：Web Speech API 与原生 Android 桥接的 60 秒听写计时控制。
 
+- **全站弹窗与业务抽屉全量单职责化（全面压进 400 行以内）**：
+  - `components/auth/AuthPanel.tsx`：从原先 756 行降至 **113 行**（-85.0%），拆分出：
+    - `components/auth/UserGrowthSection.tsx`（478 行）：每日签到、邀请海报 Canvas 绘制、城市合伙人资格开通与佣金提现。
+    - `components/auth/AuthForms.tsx`（210 行）：短信验证码登录、密码登录与首次登录密码设置表单。
+  - `components/works/WorksPanel.tsx`：从原先 580 行降至 **389 行**（-32.9%），拆分出：
+    - `components/works/PublishStudio.tsx`（170 行）：短视频宣发套件（标题、封面图、文案、黄金置顶评论一键复制）。
+  - `components/billing/RechargePanel.tsx`：算力充值、会员方案、加油包直购（240 行）。
+  - `components/billing/BillingHistoryPanel.tsx`：订单历史与积分流水对账（220 行）。
+  - `components/chat/SidebarDrawer.tsx`：左侧导航抽屉与最近作品快捷查看条（267 行）。
+
 - **管理控制台解耦（`apps/web/src/AdminConsole.tsx`）**：
   - 从原先 1,480 行削减至 **790 行**轻量调度容器（减少 46.6%）。
-  - 7 大 Tab 及核心指标条全面拆分为独立子模块（位于 `apps/web/src/components/admin/tabs/`）：
-    - `AdminOverviewTab.tsx`：经营概览与 30 天增长多维曲线。
-    - `AdminUsersTab.tsx`：注册用户名册、地域分布及手机号搜索。
-    - `AdminServerTab.tsx`：服务器 CPU/内存/磁盘 15s 动效采样及底层依赖检测。
-    - `AdminDirectorJobsTab.tsx`：导演交付效能与失败任务补偿。
-    - `AdminPartnerFinanceTab.tsx`：城市合伙人佣金账单及人工打款复核。
-    - `AdminPricingTab.tsx`：OPCPAY 价格读取与展示原价修改。
-    - `AdminInboxTab.tsx`：用户来信回复与全站公告发布。
-    - `AdminMetricStrip.tsx`：控制台头部核心指标快速浏览条。
-    - `types/admin.ts`：控制台全量数据模型类型。
+  - 7 大 Tab 及核心指标条全面拆分为独立子模块（位于 `apps/web/src/components/admin/tabs/`，单文件 100~300 行）。
 
 - **后端管理接口架构解耦（`apps/api/src/admin.ts`）**：
   - 代码量从 1,232 行巨石削减至 **350 行**纯净的 API 路由调度层（Controller 层，减少 **71.6%**）。
@@ -94,7 +95,7 @@
 - **文件行数红线（File Size Ceilings）**：
   - UI 入口编排器（如 `App.tsx`）：**严格控制在 1,000 行以内**（当前为 573 行）。
   - API 路由控制器（如 `admin.ts`）：**严格控制在 500 行以内**（当前为 350 行）。
-  - 单一业务子组件与弹窗：**严格控制在 200~300 行以内**。
+  - 单一业务子组件与弹窗：**严格控制在 200~400 行以内**（如 `AuthPanel` 113 行、`WorksPanel` 389 行）。
 - **童子军原则（Boy Scout Rule）**：修改任何接近红线的文件时，必须顺手小步抽离出独立的自定义 Hook 或子组件，严禁在现有方法内嵌套复杂业务逻辑。
 - **后端三层分立铁律**：Route Controller（校验分发） -> Service（业务编排与事务） -> Store/Adapter（存储与外部适配），严禁在 Fastify 路由回调中裸写大段 SQL 或密集计算。
 - **0 Emoji 铁律**：所有代码、提交信息、控制台日志、UI 文本中严禁包含任何 Emoji。

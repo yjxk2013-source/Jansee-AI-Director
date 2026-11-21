@@ -1,20 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { AuthUser, SavedConversation, WorkItem } from "../../types/client";
-import { NOTICE_DURATION_MS, useTimedNotice } from "../../utils/clientPlatform";
+import { useEffect, useRef, useState } from "react";
+import type { AuthUser, SavedConversation, WorkItem } from "../../types/client.js";
+import { NOTICE_DURATION_MS, useTimedNotice } from "../../utils/clientPlatform.js";
+import { PublishStudio, type PublishKit } from "./PublishStudio.js";
 
-function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): {
-  title?: string;
-  caption?: string;
-  cover_title?: string;
-  pinned_comment?: string;
-  post_time?: string;
-} | null {
-  // 画面主标题 title 属于导演方案顶层字段，不在 publish 四件套里，单独带出。
+function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): PublishKit | null {
   let title = "";
   const workPlan = work.directorPlan as Record<string, unknown> | undefined;
   if (typeof workPlan?.title === "string" && workPlan.title.trim()) title = workPlan.title.trim();
 
-  // publish 四件套：优先作品自带，缺的再从对应对话的导演方案回填。
   let base: NonNullable<WorkItem["publish"]> | null = null;
   if (work.publish && (work.publish.caption || work.publish.cover_title || work.publish.pinned_comment)) {
     base = work.publish;
@@ -49,7 +42,6 @@ export function WorksPanel({
   onNew,
   conversations = [],
   highlightWorkId,
-  onClearHighlight,
   onRequestDownload,
 }: {
   user: AuthUser | null;
@@ -70,7 +62,6 @@ export function WorksPanel({
   const cardContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [coverDataUrls, setCoverDataUrls] = useState<Record<string, string>>({});
 
-  // 滑走（作品移出视口可见比例 < 25%）自动停止播放
   useEffect(() => {
     if (!activePlayWorkId) return;
     const el = cardContainerRefs.current[activePlayWorkId];
@@ -93,27 +84,6 @@ export function WorksPanel({
     return () => observer.disconnect();
   }, [activePlayWorkId]);
 
-  const captureFrameAsCover = (workId: string, showFeedback = true) => {
-    const video = videoRefs.current[workId];
-    if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/png");
-      setCoverDataUrls((prev) => ({ ...prev, [workId]: dataUrl }));
-      if (showFeedback) {
-        setCopyFeedback("已将当前画面设为封面");
-        setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
-      }
-    } catch {
-      // ignore cross-origin error if any
-    }
-  };
-
   const downloadCover = async (work: WorkItem) => {
     const workId = work.id;
     if (!user || user.isGuest) {
@@ -122,7 +92,6 @@ export function WorksPanel({
       }
       return;
     }
-    // 新作品直接下载引擎生成的纯净封面（后端鉴权流）；旧作品回退到前端截帧。
     if (work.coverUrl) {
       setCopyFeedback("封面图片已开始下载");
       setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
@@ -148,6 +117,7 @@ export function WorksPanel({
       }
       return;
     }
+
     let dataUrl = coverDataUrls[workId];
     const video = videoRefs.current[workId];
     if (!dataUrl && video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -191,7 +161,7 @@ export function WorksPanel({
       })
       .catch(() => setError("无法获取成片列表"))
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, setError]);
 
   useEffect(() => {
     if (!highlightWorkId || works.length === 0) return;
@@ -281,20 +251,12 @@ export function WorksPanel({
                       playsInline
                       preload="auto"
                       poster={work.coverUrl || coverDataUrls[work.id] || undefined}
-                      onPause={() => {
-                        // 暂停保留当前播放器状态
-                      }}
-                      onEnded={() => {
-                        // 播放结束保留当前画面
-                      }}
                       aria-label={titleLabel}
                     />
                   ) : (
                     <div
                       className="work-card-cover-container"
-                      onClick={() => {
-                        setActivePlayWorkId(work.id);
-                      }}
+                      onClick={() => setActivePlayWorkId(work.id)}
                       role="button"
                       tabIndex={0}
                       aria-label={`播放 ${titleLabel}`}
@@ -348,142 +310,15 @@ export function WorksPanel({
                 </div>
 
                 {publishKit && (publishKit.title || publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (
-                  <div className="work-publish-studio">
-                    <div className="work-publish-studio-top">
-                      <span className="work-publish-tag">短视频宣发套件</span>
-                      <button
-                        type="button"
-                        className="work-copy-btn work-copy-all-btn"
-                        onClick={() => {
-                          const blocks: string[] = [];
-                          if (publishKit.title) blocks.push(`【标题】\n${publishKit.title}`);
-                          if (publishKit.cover_title) blocks.push(`【建议封面标题】\n${publishKit.cover_title}`);
-                          if (publishKit.caption) blocks.push(`【发布文案与话题】\n${publishKit.caption}`);
-                          if (publishKit.pinned_comment) blocks.push(`【黄金置顶评论】\n${publishKit.pinned_comment}`);
-                          if (publishKit.post_time) blocks.push(`【建议发布时段】\n${publishKit.post_time}`);
-                          copyText(`all-${work.id}`, blocks.join("\n\n"), "完整宣发包");
-                        }}
-                      >
-                        {copiedKey === `all-${work.id}` ? "已复制全部" : "一键复制全部"}
-                      </button>
-                    </div>
-
-                    {publishKit.title && (
-                      <div className="work-publish-row">
-                        <div className="work-publish-label">标题</div>
-                        <div className="work-publish-content">
-                          <span className="work-publish-text">{publishKit.title}</span>
-                          <button
-                            type="button"
-                            className="work-copy-btn"
-                            onClick={() => copyText(`title-main-${work.id}`, publishKit.title!, "标题")}
-                          >
-                            {copiedKey === `title-main-${work.id}` ? "已复制" : "复制"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="work-publish-cover-card">
-                      <div
-                        className="work-publish-cover-preview"
-                        style={{ cursor: (coverDataUrls[work.id] || work.coverUrl) ? "pointer" : "default" }}
-                        onClick={() => {
-                          const url = coverDataUrls[work.id] || work.coverUrl;
-                          if (url) setPreviewingCoverUrl(url);
-                        }}
-                        title={(coverDataUrls[work.id] || work.coverUrl) ? "点击查看大图" : undefined}
-                      >
-                        {(coverDataUrls[work.id] || work.coverUrl) ? (
-                          <img
-                            src={coverDataUrls[work.id] || work.coverUrl!}
-                            alt="建议视频封面"
-                            className="work-cover-thumbnail"
-                          />
-                        ) : (
-                          <div className="work-cover-placeholder">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <rect x="3" y="3" width="18" height="18" rx="2" />
-                              <circle cx="8.5" cy="8.5" r="1.5" />
-                              <path d="m21 15-5-5L5 21" />
-                            </svg>
-                            <span>视频封面</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="work-publish-cover-detail">
-                        <div className="work-publish-label">建议封面与标题</div>
-                        {publishKit.cover_title ? (
-                          <div className="work-publish-cover-headline">
-                            <span className="work-publish-cover-title-text">{publishKit.cover_title}</span>
-                            <button
-                              type="button"
-                              className="work-copy-btn"
-                              onClick={() => copyText(`title-${work.id}`, publishKit.cover_title!, "封面标题")}
-                            >
-                              {copiedKey === `title-${work.id}` ? "已复制" : "复制标题"}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="work-publish-cover-headline">
-                            <span className="work-publish-cover-title-text">高清视频海报封面</span>
-                          </div>
-                        )}
-
-                        <div className="work-cover-actions">
-                          <button
-                            type="button"
-                            className="work-cover-btn-action work-cover-btn-download"
-                            onClick={() => downloadCover(work)}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                            </svg>
-                            下载封面图
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {publishKit.caption && (
-                      <div className="work-publish-row">
-                        <div className="work-publish-label">发布文案与话题标签</div>
-                        <div className="work-publish-content">
-                          <p className="work-publish-caption-text">{publishKit.caption}</p>
-                          <button
-                            type="button"
-                            className="work-copy-btn"
-                            onClick={() => copyText(`caption-${work.id}`, publishKit.caption!, "发布文案")}
-                          >
-                            {copiedKey === `caption-${work.id}` ? "已复制" : "复制"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {publishKit.pinned_comment && (
-                      <div className="work-publish-row">
-                        <div className="work-publish-label">黄金置顶评论</div>
-                        <div className="work-publish-content">
-                          <span className="work-publish-text">{publishKit.pinned_comment}</span>
-                          <button
-                            type="button"
-                            className="work-copy-btn"
-                            onClick={() => copyText(`pinned-${work.id}`, publishKit.pinned_comment!, "置顶评论")}
-                          >
-                            {copiedKey === `pinned-${work.id}` ? "已复制" : "复制"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {publishKit.post_time && (
-                      <div className="work-publish-time-hint">
-                        <span>建议发布时间：{publishKit.post_time}</span>
-                      </div>
-                    )}
-                  </div>
+                  <PublishStudio
+                    work={work}
+                    publishKit={publishKit}
+                    copiedKey={copiedKey}
+                    copyText={copyText}
+                    coverDataUrl={coverDataUrls[work.id]}
+                    onPreviewCover={(url) => setPreviewingCoverUrl(url)}
+                    onDownloadCover={downloadCover}
+                  />
                 )}
               </article>
             );
@@ -551,29 +386,3 @@ export function WorksPanel({
     </div>
   );
 }
-
-type BillingHistoryKind = "orders" | "ledger";
-
-type BillingOrder = {
-  id: string;
-  packageId: string;
-  packageName: string;
-  amountYuan: number;
-  credits: number;
-  status: "pending" | "paid" | "closed" | "refund_requested" | "refunding" | "refunded";
-  paymentProvider?: "opcpay";
-  payUrl?: string;
-  paymentExpiresAt?: string;
-  createdAt: string;
-  paidAt?: string;
-};
-
-type BillingLedgerEntry = {
-  id: string;
-  jobId?: string;
-  orderId?: string;
-  type: "grant" | "hold" | "settle" | "refund" | "recharge" | "compensation";
-  amount: number;
-  description: string;
-  createdAt: string;
-};
