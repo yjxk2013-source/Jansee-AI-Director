@@ -1,4 +1,4 @@
-﻿import { createReadStream } from "node:fs";
+import { createReadStream } from "node:fs";
 import { lstat, mkdir, rename, rm, stat, statfs } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -15,7 +15,7 @@ export interface ObjectStorage {
   getFilePath(key: string): Promise<string>;
   deleteObject(key: string): Promise<void>;
   deleteExpired(prefix: string, olderThan: Date, now?: Date): Promise<number>;
-  createSignedUrl?(key: string, options?: { downloadFilename?: string | undefined; ttlSeconds?: number | undefined }): Promise<string> | string;
+  createSignedUrl(key: string, options?: { downloadFilename?: string | undefined; ttlSeconds?: number | undefined }): Promise<string> | string;
 }
 
 export type LocalObjectStorage = ObjectStorage;
@@ -136,6 +136,11 @@ export function createLocalObjectStorage(config: LocalStorageConfig): LocalObjec
       }
       void parts;
       return removed;
+    },
+
+    createSignedUrl(key) {
+      validateKey(key);
+      return `/api/v1/outputs/${encodeURIComponent(key)}/stream`;
     },
   };
 }

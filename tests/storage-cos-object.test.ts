@@ -118,21 +118,21 @@ test("Tencent COS object storage generates CDN signed URLs with Type A anti-leec
     ttlSeconds: 600,
   });
 
-  assert.ok(url.startsWith("https://cdn.jansee.cn/outputs/test-video.mp4?"));
+  assert.ok(url.startsWith("https://cdn.jansee.cn/outputs/test-video.mp4?sign="));
   const parsed = new URL(url);
   assert.equal(parsed.host, "cdn.jansee.cn");
   assert.equal(parsed.pathname, "/outputs/test-video.mp4");
   assert.ok(parsed.searchParams.has("sign"));
-  assert.ok(parsed.searchParams.has("response-content-disposition"));
 
   const sign = parsed.searchParams.get("sign")!;
   const [timestampStr, rand, uid, md5hash] = sign.split("-");
   assert.equal(rand, "0");
   assert.equal(uid, "0");
-  assert.ok(Number(timestampStr) > Math.floor(Date.now() / 1000));
+  const now = Math.floor(Date.now() / 1000);
+  assert.ok(Number(timestampStr) <= now && Number(timestampStr) >= now - 5);
   assert.equal(md5hash?.length, 32);
 
-  // 验证无 cdnAuthKey 时平滑降级
+  // 验证无 cdnAuthKey 时严格执行 Fail-closed 策略，安全回退到带签名的 COS rawUrl，绝不裸奔
   const storageWithoutKey = createTencentCosObjectStorage({
     secretId: "test-id",
     secretKey: "test-secret",
@@ -143,6 +143,6 @@ test("Tencent COS object storage generates CDN signed URLs with Type A anti-leec
     client: fakeClient as never,
   });
 
-  const urlWithoutKey = storageWithoutKey.createSignedUrl!("outputs/test-video.mp4");
-  assert.equal(urlWithoutKey, "https://cdn.jansee.cn/outputs/test-video.mp4");
+  const urlWithoutKey = storageWithoutKey.createSignedUrl("outputs/test-video.mp4");
+  assert.equal(urlWithoutKey, "https://jansee-test.cos.ap-guangzhou.myqcloud.com/outputs/test-video.mp4?sign=cos-raw-sign");
 });

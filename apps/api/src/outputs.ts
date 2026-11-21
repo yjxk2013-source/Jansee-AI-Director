@@ -129,11 +129,11 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     }
     if (!coverKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
 
-    // 若存储支持高速直连，封面同样直接 302 重定向到 COS 直链，享受边缘极速加载
-    if (typeof options.storage.createSignedUrl === "function") {
-      const signedUrl = await options.storage.createSignedUrl(coverKey, {
-        ttlSeconds: 3600,
-      });
+    // 若存储返回远端高速直链（如腾讯云 COS / CDN），直接 302 重定向，享受边缘极速加载
+    const signedUrl = await options.storage.createSignedUrl(coverKey, {
+      ttlSeconds: 3600,
+    });
+    if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
       reply.header("cache-control", "private, no-cache");
       return reply.redirect(signedUrl, 302);
     }
@@ -176,13 +176,13 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       catch { /* 统计失败不影响作品下载 */ }
     }
 
-    // 若当前存储驱动支持直接生成带鉴权的高速下载/播放 URL（如腾讯云 COS），
-    // 直接 302 重定向至对象存储直链，绕开服务器 3Mbps 带宽瓶颈，实现极速加载与满速下载。
-    if (typeof options.storage.createSignedUrl === "function") {
-      const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
-        ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
-        ttlSeconds: isDownload ? 600 : 3600,
-      });
+    // 若当前存储驱动返回远端鉴权加速 URL（如腾讯云 COS / CDN），
+    // 直接 302 重定向至直链，绕开服务器 3Mbps 带宽瓶颈，实现极速加载与满速下载。
+    const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
+      ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
+      ttlSeconds: isDownload ? 600 : 3600,
+    });
+    if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
       reply.header("cache-control", "private, no-cache");
       return reply.redirect(signedUrl, 302);
     }
