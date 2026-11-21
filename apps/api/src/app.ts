@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import QRCode from "qrcode";
 import { DirectorPlanRequestSchema, type DirectorPlanner } from "./director.js";
@@ -57,6 +58,7 @@ export interface AppConfig {
   allowPaymentSimulation?: boolean;
   paymentProviderReady?: boolean;
   paymentProvider?: OpcpayService;
+  voiceTranscribeAudio?: (audioPath: string, workDir: string) => Promise<{ text?: string; duration?: number }>;
 }
 
 export function buildApp(config: AppConfig): FastifyInstance {
@@ -88,6 +90,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
   app.register(helmet, { global: true, crossOriginEmbedderPolicy: false, referrerPolicy: { policy: "strict-origin-when-cross-origin" }, ...(!config.production ? { contentSecurityPolicy: false } : {}) });
   app.register(cors, { credentials: true, origin(origin, callback) { callback(null, !origin || config.allowedOrigins.includes(origin)); } });
   app.register(rateLimit, { global: true, max: 120, timeWindow: "1 minute", ban: 0 });
+  app.register(multipart, { limits: { files: 9, fileSize: 200 * 1024 * 1024, fields: 10, parts: 20 } });
   app.get("/health/live", async () => ({ status: "alive", service: "jansee-api", version: process.env.APP_VERSION ?? "4.0.0-alpha.1" }));
   // Package catalogs are public read-only data and must not depend on authentication or a database.
   const currentPricingCatalog = async (force = false) => {
@@ -177,6 +180,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
     registerVoiceTranscribeRoutes(app, {
       authStore: config.authStore,
       allowedOrigins: config.allowedOrigins,
+      ...(config.voiceTranscribeAudio ? { transcribeAudio: config.voiceTranscribeAudio } : {}),
     });
   }
   if (config.authStore && config.billingStore) {

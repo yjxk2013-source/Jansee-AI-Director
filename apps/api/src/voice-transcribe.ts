@@ -15,6 +15,7 @@ const MAX_VOICE_BYTES = 25 * 1024 * 1024; // 25MB
 export interface VoiceTranscribeOptions {
   authStore: AuthStore;
   allowedOrigins: string[];
+  transcribeAudio?: (audioPath: string, workDir: string) => Promise<{ text?: string; duration?: number }>;
 }
 
 export function registerVoiceTranscribeRoutes(app: FastifyInstance, options: VoiceTranscribeOptions): void {
@@ -56,7 +57,9 @@ export function registerVoiceTranscribeRoutes(app: FastifyInstance, options: Voi
       }
 
       const workDir = join(tempDir, "whisper-work");
-      const asr = await runKeepOriginalAsr(audioPath, workDir);
+      const asr = options.transcribeAudio
+        ? await options.transcribeAudio(audioPath, workDir)
+        : await runKeepOriginalAsr(audioPath, workDir);
       const transcript = String(asr?.text || "").trim();
 
       return reply.send({

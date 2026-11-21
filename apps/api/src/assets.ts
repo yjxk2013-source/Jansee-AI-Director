@@ -76,7 +76,6 @@ export async function authenticatedUser(request: FastifyRequest, store: AuthStor
   return session?.user ?? null;
 }
 export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions): void {
-  app.register(multipart, { limits: { files: MAX_FILES, fileSize: VIDEO_LIMIT, fields: 0, parts: MAX_FILES } });
   app.post("/api/v1/assets", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
     if (typeof request.headers.origin !== "string" || !options.allowedOrigins.includes(request.headers.origin)) return reply.code(403).send({ error: { code: "ORIGIN_NOT_ALLOWED" } });
     const user = await authenticatedUser(request, options.authStore); if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
