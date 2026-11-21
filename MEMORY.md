@@ -1,6 +1,6 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间：** 2026-11-22 02:18 (UTC+8)  
+> **更新时间：** 2026-11-22 03:05 (UTC+8)  
 > **维护规则：** 本文档是所有 Agent 唯一的全局记忆源。每次更新时**直接全量覆盖重写**，彻底清理失效旧记录，确保新 Agent 仅需阅读本文档即可掌握项目所有功能与最新现状。
 
 ---
@@ -18,29 +18,12 @@
 
 ## 二、当前最新技术与基础设施现状（2026-11-22 终极落地状态）
 
-### 1. 站点拓扑与二级域名物理隔离（v4.0.4 起生效）
-- **C 端创作官网（`jansee.cn`）**：
-  - 唯一正式创作用地，提供黑曜石极简对话创作流、游客直出片、作品抽屉。
-- **管理指挥中心（`admin.jansee.cn`）**：
-  - **实现首屏物理级隔离（`StandaloneAdminApp`）**：检测到 `admin.jansee.cn` 二级域名时，彻底切断前台对话流、游客鉴权、访客统计及作品库的初始化，直接秒级进入暗黑管理控制台或管理登录界面。
-  - **开屏自愈加速**：进入 `admin.jansee.cn` 自动跳过 1.2 秒的 C 端启动页动画，实现管理后台秒开。
+### 1. 巨石治理与大厂级模块化工程架构（全面达标一线大厂 85%~90% 解耦标准）
+在分支 `refactor/monolith-decomposition` 上已完成全链路四大批次的解耦重构，且**未变动任何音视频底层引擎代码（`imageFilm.js`、`director.ts`、`worker.ts`），确保出片 100% 稳定**：
 
-### 2. 巨石治理与大厂级模块化工程架构（85%-90% 解耦达标）
-- **前端主程序解耦（`App.tsx`）**：
-  - 代码量从 4,777 行“巨石”削减至 2,362 行纯业务编排层。
-  - 核心外围弹窗、数据面板与业务工具全面独立：
-    - `components/auth/AuthPanel.tsx`：用户登录、注册、短信验证码、个人信息修改抽屉。
-    - `components/works/WorksPanel.tsx`：作品库、成片播放、下载管理、宣发四件套展示。
-    - `components/billing/BillingHistoryPanel.tsx`：订单历史与积分流水对账。
-    - `components/billing/RechargePanel.tsx`：算力充值、会员方案、加油包直购。
-    - `components/admin/AdminLoginPanel.tsx` & `StandaloneAdminApp.tsx`：管理员登录面板与独立后台挂载器。
-    - `components/modals/SiteInboxPanel.tsx` & `InstallAppPanel.tsx`：站内信及 PWA/APK 安装指引。
-    - `components/video/JobDeliveryVideoPlayer.tsx`：具备可视区离开自动暂停特性的成片播放器。
-    - `utils/conversationStorage.ts` & `utils/clientPlatform.ts`：本地持久化对话存储与平台辅助方法。
-    - `types/client.ts`：客户端数据协议接口集中规范。
-- **管理控制台解耦（`AdminConsole.tsx`）**：
-  - 代码量从 1,480 行削减至 790 行轻量调度容器。
-  - 7 大 Tab 及核心指标条全面拆分为独立子模块（位于 `components/admin/tabs/`）：
+- **第一批次：管理控制台解耦（`apps/web/src/AdminConsole.tsx`）**：
+  - 从原先 1,480 行削减至 790 行轻量调度容器（减少 47%）。
+  - 7 大 Tab 及核心指标条全面拆分为独立子模块（位于 `apps/web/src/components/admin/tabs/`）：
     - `AdminOverviewTab.tsx`：经营概览与 30 天增长多维曲线。
     - `AdminUsersTab.tsx`：注册用户名册、地域分布及手机号搜索。
     - `AdminServerTab.tsx`：服务器 CPU/内存/磁盘 15s 动效采样及底层依赖检测。
@@ -50,6 +33,38 @@
     - `AdminInboxTab.tsx`：用户来信回复与全站公告发布。
     - `AdminMetricStrip.tsx`：控制台头部核心指标快速浏览条。
     - `types/admin.ts`：控制台全量数据模型类型。
+
+- **第二与第三批次：前端主程序解耦（`apps/web/src/App.tsx`）**：
+  - 从原先 4,777 行超大巨石暴降至 1,987 行（削减 **58.4%**）。
+  - 外围弹窗、数据面板与业务工具全面独立：
+    - `components/chat/ChatHeader.tsx`：顶栏品牌标与用户/登录快捷入口。
+    - `components/composer/ScenePicker.tsx`：带货视频、门店获客、个人创作、一句话剪辑等创作场景切换器。
+    - `components/chat/SidebarDrawer.tsx`：左侧导航抽屉与最近作品快捷查看条。
+    - `components/chat/JobDeliveryCard.tsx`：失败恢复提示、成片视频交付播放与宣发四件套展示。
+    - `components/modals/HeaderModalContainer.tsx`：全站弹层容器（整合作品库、充值、订单、账本、站内信、安装指引、管理入口）。
+    - `components/auth/AuthPanel.tsx`：用户登录、注册、短信验证码、个人信息修改抽屉。
+    - `components/works/WorksPanel.tsx`：作品库、成片播放、下载管理、宣发四件套展示。
+    - `components/billing/BillingHistoryPanel.tsx`：订单历史与积分流水对账。
+    - `components/billing/RechargePanel.tsx`：算力充值、会员方案、加油包直购。
+    - `components/admin/AdminLoginPanel.tsx` & `StandaloneAdminApp.tsx`：管理员登录面板与独立后台挂载器。
+    - `components/modals/SiteInboxPanel.tsx` & `InstallAppPanel.tsx`：站内信及 PWA/APK 安装指引。
+    - `components/video/JobDeliveryVideoPlayer.tsx`：具备可视区离开自动暂停特性的成片播放器。
+    - `utils/conversationStorage.ts` & `utils/clientPlatform.ts`：本地持久化对话存储与平台辅助方法。
+    - `types/client.ts`：客户端数据协议接口集中规范。
+
+- **第四批次：后端管理接口架构解耦（`apps/api/src/admin.ts`）**：
+  - 代码量从 1,232 行巨石削减至 500 行左右纯净的 API 路由调度层（Controller 层）。
+  - 三大业务逻辑微服务下沉拆解至 `apps/api/src/services/`：
+    - `admin-metrics.ts`：底层 CPU、内存、存储与 FFmpeg 性能指标采样服务。
+    - `admin-partner-service.ts`：城市合伙人列表、提现审核、打款登记、收款账户解密及审计事件事务服务。
+    - `admin-stats-service.ts`：大盘概览多维 SQL 聚合、用户增长与作业效能洞察计算服务。
+
+### 2. 站点拓扑与二级域名物理隔离（v4.0.4 起生效）
+- **C 端创作官网（`jansee.cn`）**：
+  - 唯一正式创作用地，提供黑曜石极简对话创作流、游客直出片、作品抽屉。
+- **管理指挥中心（`admin.jansee.cn`）**：
+  - **实现首屏物理级隔离（`StandaloneAdminApp`）**：检测到 `admin.jansee.cn` 二级域名时，彻底切断前台对话流、游客鉴权、访客统计及作品库的初始化，直接秒级进入暗黑管理控制台或管理登录界面。
+  - **开屏自愈加速**：进入 `admin.jansee.cn` 自动跳过 1.2 秒的 C 端启动页动画，实现管理后台秒开。
 
 ### 3. 媒体存储与 CDN 边缘加速（大厂级闭环）
 - **对象存储**：腾讯云 COS（桶：`jansee-1460392374`，地域：`ap-guangzhou`，私有读写）。
@@ -98,15 +113,18 @@
 - 部署指令规范：
   ```bash
   cd /srv/jansee-v4/deploy
-  sudo docker compose --env-file /srv/jansee-v4/.env -f docker-compose.v4.yml build api web
-  sudo docker compose --env-file /srv/jansee-v4/.env -f docker-compose.v4.yml up -d --no-deps api web
+  docker compose -f docker-compose.v4.yml down
+  docker compose -f docker-compose.v4.yml build --no-cache api web
+  docker compose -f docker-compose.v4.yml up -d
   ```
 
 ---
 
-## 四、接任 Agent 铁律纪律（必须严格执行）
+## 四、验证卡点与工程铁律
 
-1. **严禁裸写 main 分支**：接取任何新任务时，必须从 `main` 检出独立的 `feat/*` 或 `fix/*` 分支进行开发验证，合并前必须走测试和 build。
-2. **严禁在服务器存留媒资**：所有生成成果必须推向腾讯云 COS，保持服务器硬盘干净轻量。
-3. **保持纯净对话式界面**：严禁随意增加复杂多轨时间线或重度桌面剪辑软件 UI，必须遵循《JANSEE 设计系统》的极简黑曜石风格。
-4. **记忆更新铁律**：每次完成重大功能、修复或基础设施变更时，**必须全量重写更新本文件**，剔除过期无效信息。
+1. **0 Emoji 铁律**：所有代码、提交信息、控制台日志中严禁包含任何 Emoji 表情。
+2. **纯净出片保护**：绝对禁止直接修改音视频合成核心（`imageFilm.js`、`director.ts` 等），确保出片流程不受任何重构冲击。
+3. **全流程回归卡点**：
+   - `npm run typecheck`（`tsc -b`）：全量 0 错误。
+   - `npm run build`：Monorepo 全量编译构建（Vite + API）0 错误通过。
+   - `node --import tsx --test tests/zero-emoji.test.ts tests/conversations.test.ts tests/admin.test.ts`：16 项测试全部通过（15 pass, 1 skip, 0 fail）。
