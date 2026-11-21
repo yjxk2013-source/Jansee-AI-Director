@@ -1,40 +1,5 @@
 import { useState, useRef, useCallback } from "react";
 
-export type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: any) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-export type SpeechWindow = Window & {
-  SpeechRecognition?: new () => SpeechRecognitionLike;
-  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  JanseeVoice?: { start: () => void; cancel: () => void };
-  __janseeVoiceResult?: ((text: string) => void) | undefined;
-  __janseeVoiceError?: ((message: string) => void) | undefined;
-};
-
-export function voiceErrorMessage(code?: string) {
-  switch (code) {
-    case "not-allowed":
-    case "service-not-allowed":
-      return "麦克风权限未开启，请在浏览器或系统设置里允许简兮使用麦克风后重试。";
-    case "no-speech":
-      return "没有听到声音，请靠近麦克风再试一次。";
-    case "audio-capture":
-      return "没有找到可用的麦克风，请检查设备后重试。";
-    case "network":
-      return "语音服务暂时连不上，请检查网络后重试。";
-    default:
-      return "语音输入暂不可用，请检查麦克风权限后重试。";
-  }
-}
-
 export interface UseVoiceInputOptions {
   onAppendDraft: (text: string) => void;
   onError: (msg: string) => void;
@@ -43,34 +8,82 @@ export interface UseVoiceInputOptions {
 export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) {
   const [isListening, setIsListening] = useState(false);
   const [listeningRemainingSeconds, setListeningRemainingSeconds] = useState(60);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const voiceTimerRef = useRef<number | null>(null);
 
-  const stopVoiceInput = useCallback(() => {
+  // 释放硬件麦克风资源
+  const releaseHardware = useCallback(() => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // no-op
+        }
+      });
+      mediaStreamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+  }, []);
+
+  const clearTimer = useCallback(() => {
     if (voiceTimerRef.current) {
       window.clearInterval(voiceTimerRef.current);
       voiceTimerRef.current = null;
     }
-    const speechWindow = window as SpeechWindow;
-    speechWindow.JanseeVoice?.cancel();
-    speechWindow.__janseeVoiceResult = undefined;
-    speechWindow.__janseeVoiceError = undefined;
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // no-op
+  }, []);
+
+  // 上传录音文件至后端本地 Whisper 进行转写
+  const sendAudioToWhisper = useCallback(async (audioBlob: Blob) => {
+    try {
+      const formData = new FormData();
+      const ext = audioBlob.type.includes("wav") ? "wav" : audioBlob.type.includes("mp4") ? "mp4" : "webm";
+      formData.append("audio", audioBlob, `recording.${ext}`);
+
+      const response = await fetch("/api/v1/voice/transcribe", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error?.message || `语音识别失败（HTTP ${response.status}）`);
       }
-      recognitionRef.current = null;
+
+      const result = await response.json() as { text?: string };
+      const transcript = (result?.text || "").trim();
+      if (transcript) {
+        onAppendDraft(transcript);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "语音识别失败，请检查网络后重试。";
+      onError(msg);
+    }
+  }, [onAppendDraft, onError]);
+
+  const stopVoiceInput = useCallback(() => {
+    clearTimer();
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      try {
+        recorder.stop();
+      } catch {
+        releaseHardware();
+      }
+    } else {
+      releaseHardware();
     }
     setIsListening(false);
     setListeningRemainingSeconds(60);
-  }, []);
+  }, [clearTimer, releaseHardware]);
 
   const beginVoiceSession = useCallback(() => {
     setIsListening(true);
     setListeningRemainingSeconds(60);
-    if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current);
+    clearTimer();
     voiceTimerRef.current = window.setInterval(() => {
       setListeningRemainingSeconds((prev) => {
         if (prev <= 1) {
@@ -80,78 +93,85 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
         return prev - 1;
       });
     }, 1000);
-  }, [stopVoiceInput]);
+  }, [clearTimer, stopVoiceInput]);
 
-  const toggleVoiceInput = useCallback(() => {
-    if (recognitionRef.current || isListening) {
-      stopVoiceInput();
+  const startMediaRecording = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      onError("当前浏览器不支持录音功能，请直接使用输入法键盘的语音麦克风。");
       return;
     }
-
-    const speechWindow = window as SpeechWindow;
-    if (speechWindow.JanseeVoice) {
-      onError("");
-      speechWindow.__janseeVoiceResult = (text) => {
-        const transcript = text.trim();
-        if (transcript) {
-          onAppendDraft(transcript);
-        }
-        stopVoiceInput();
-      };
-      speechWindow.__janseeVoiceError = (message) => {
-        stopVoiceInput();
-        if (message.trim()) onError(message);
-      };
-      try {
-        beginVoiceSession();
-        speechWindow.JanseeVoice.start();
-      } catch {
-        stopVoiceInput();
-        onError("无法启动语音输入，请检查麦克风权限。");
-      }
-      return;
-    }
-
-    const SpeechRecognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      onError("当前浏览器不支持语音输入，可以点输入框后用系统键盘的麦克风按钮听写。");
-      return;
-    }
-
-    onError("");
-    const recognition = new SpeechRecognition();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = true;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.platform)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    recognition.continuous = !isIOS;
-    recognition.onresult = (event) => {
-      let finalText = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        if (result?.isFinal) finalText += result[0].transcript;
-      }
-      if (finalText.trim()) {
-        onAppendDraft(finalText.trim());
-      }
-    };
-    recognition.onerror = (event) => {
-      stopVoiceInput();
-      onError(voiceErrorMessage(event.error));
-    };
-    recognition.onend = () => {
-      stopVoiceInput();
-    };
 
     try {
-      recognitionRef.current = recognition;
+      onError("");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      mediaStreamRef.current = stream;
+
+      let mimeType = "";
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          mimeType = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        }
+      }
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const recordedBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        audioChunksRef.current = [];
+        releaseHardware();
+        if (recordedBlob.size > 1000) {
+          void sendAudioToWhisper(recordedBlob);
+        }
+      };
+
+      recorder.onerror = () => {
+        stopVoiceInput();
+        onError("录音过程发生异常，请重试。");
+      };
+
+      recorder.start(500); // 500ms 分片切片
       beginVoiceSession();
-      recognition.start();
-    } catch {
-      stopVoiceInput();
-      onError("无法启动语音输入，请检查浏览器麦克风权限。");
+    } catch (err) {
+      releaseHardware();
+      setIsListening(false);
+      const errorName = (err as Error)?.name || "";
+      if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+        onError("麦克风权限未开启，请在浏览器或手机系统设置里允许使用麦克风后重试。");
+      } else if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+        onError("未找到可用的麦克风设备。");
+      } else {
+        onError("无法启动录音，请检查麦克风权限。");
+      }
     }
-  }, [isListening, stopVoiceInput, beginVoiceSession, onAppendDraft, onError]);
+  }, [beginVoiceSession, onError, releaseHardware, sendAudioToWhisper, stopVoiceInput]);
+
+  const toggleVoiceInput = useCallback(() => {
+    if (isListening || mediaRecorderRef.current) {
+      stopVoiceInput();
+      return;
+    }
+    void startMediaRecording();
+  }, [isListening, startMediaRecording, stopVoiceInput]);
 
   return {
     isListening,
@@ -160,4 +180,3 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
     stopVoiceInput,
   };
 }
-
