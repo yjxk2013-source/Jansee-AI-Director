@@ -6,6 +6,7 @@ import type { AuthStore } from "./auth.js";
 import type { BillingStore } from "./billing.js";
 import { authenticatedUser } from "./assets.js";
 import { getPricingCatalog, saveDisplayStrikePrice } from "./pricing.js";
+import type { DirectorJobInsight, AdminOverviewStats } from "./types/admin.js";
 import {
   readCpuUsage,
   readMemoryUsage,
@@ -14,97 +15,15 @@ import {
   queryMediaStorageStats,
 } from "./services/admin-metrics.js";
 import {
-  fetchPartnerDirectory,
-  fetchWithdrawals,
-  fetchWithdrawalPayoutDetail,
-  fetchPartnerProfileDetail,
-  reviewPartnerProfile,
-  reviewWithdrawal,
-  markWithdrawalPaid,
-  markWithdrawalFailed,
-} from "./services/admin-partner-service.js";
-import {
   fetchAdminOverviewStats,
   fetchAdminUsersData,
   fetchDirectorJobsData,
 } from "./services/admin-stats-service.js";
+import { registerManualRefund } from "./services/admin-support-service.js";
+import { registerAdminPartnerRoutes } from "./routes/admin-partner-routes.js";
+import { registerAdminSupportRoutes } from "./routes/admin-support-routes.js";
 
-export interface DirectorJobInsight {
-  jobId: string;
-  userId: string;
-  status: "queued" | "inspecting" | "planning" | "rendering" | "quality-check" | "completed" | "failed";
-  aspectRatio: string;
-  e2eDurationMs: number;
-  llmDurationMs: number;
-  ffmpegDurationMs: number;
-  rendererDurationMs: number;
-  ttsDurationMs: number;
-  variantDirectorHit: boolean;
-  variantType: string;
-  variantTemplate: string;
-  lockedVariant: string;
-  variantMatched: boolean | null;
-  voiceId: string;
-  scene: string;
-  sceneSource: string;
-  sceneType: string;
-  sceneScore: number;
-  sceneAlignmentReason: string;
-  tokensUsed: number;
-  ttsChars: number;
-  costEstimateYuan: number;
-  tokenUsageAvailable: boolean;
-  providerMode: string;
-  requestedModel: string;
-  selectedModel: string;
-  modelsAttempted: string[];
-  modelAttempts: Array<{ model: string; durationMs: number; ok: boolean; error?: string }>;
-  costSource: string;
-  qualityPassed: boolean;
-  failureStage: string;
-  creditsCharged: number;
-  errorCode?: string | null;
-  errorMessage?: string | null;
-  createdAt: string;
-  finishedAt?: string | null;
-}
-
-export interface AdminOverviewStats {
-  totalUsers: number;
-  todayRevenueYuan: number;
-  todayNewUsers: number;
-  todayCompletedJobs: number;
-  todayFailedJobs: number;
-  jobSuccessRate: number;
-  avgE2eDurationSec: number;
-  p50E2eDurationSec: number;
-  p90E2eDurationSec: number;
-  p99E2eDurationSec: number;
-  avgLlmDurationSec: number;
-  avgTtsDurationSec: number;
-  avgFfmpegDurationSec: number;
-  avgRendererDurationSec: number;
-  avgSceneScore: number;
-  sceneScoreDataAvailable: boolean;
-  totalJobs: number;
-  failedJobs: number;
-  directorTelemetryAvailable: boolean;
-  directorCalls: number;
-  primaryModelSuccessRate: number;
-  fallbackModelRate: number;
-  heuristicFallbackRate: number;
-  totalTokensUsed: number;
-  tokenUsageRecords: number;
-  totalTtsChars: number;
-  qualityCheckedJobs: number;
-  qualityPassedJobs: number;
-  qualityPassRate: number;
-  totalCostEstimateYuan: number;
-  variantHitRate: number;
-  revenueDataAvailable: boolean;
-  costDataAvailable: boolean;
-  databaseDataAvailable: boolean;
-}
+export type { DirectorJobInsight, AdminOverviewStats };
 
 export interface AdminRoutesOptions {
   authStore: AuthStore;
@@ -169,15 +88,6 @@ function numeric(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function maskAdminContact(phone: unknown, email: unknown): string {
-  const cleanPhone = String(phone ?? "").trim();
-  if (cleanPhone) return cleanPhone.length >= 7 ? `${cleanPhone.slice(0, 3)}****${cleanPhone.slice(-4)}` : cleanPhone;
-  const cleanEmail = String(email ?? "").trim();
-  if (!cleanEmail.includes("@")) return "";
-  const [local, domain] = cleanEmail.split("@");
-  return `${(local ?? "").slice(0, 2)}***@${domain ?? ""}`;
-}
-
 const validUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOptions): void {
@@ -210,6 +120,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     return true;
   };
 
+  // 1. 注册专属子领域路由：合伙人与工单支持
+  registerAdminPartnerRoutes(app, { pool: options.pool, verifyAdminAuth, requireAdminOrigin });
+  registerAdminSupportRoutes(app, { pool: options.pool, verifyAdminAuth, requireAdminOrigin });
+
+  // 2. 定价与大盘展示
   app.get("/api/v1/admin/pricing", async (request, reply) => {
     const operator = await verifyAdminAuth(request, reply);
     if (!operator) return;
@@ -217,7 +132,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     try {
       let pricing = await getPricingCatalog(options.pool);
       if (options.paymentProvider?.configured) {
-        try { pricing = await options.paymentProvider.refreshPricingCatalog(true); } catch { /* show last persisted catalog and sync error below */ }
+        try { pricing = await options.paymentProvider.refreshPricingCatalog(true); } catch { /* show last persisted catalog */ }
       }
       return reply.send({ ...pricing, sync: options.paymentProvider?.pricingStatus ?? { status: "not_configured", source: "OPCPAY", lastSyncedAt: null } });
     } catch { return reply.code(503).send({ error: { code: "PRICING_READ_FAILED", message: "Could not read pricing" } }); }
@@ -229,7 +144,9 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     if (!requireAdminOrigin(request, reply)) return;
     if (!options.pool) return reply.code(503).send({ error: { code: "PRICING_STORAGE_UNAVAILABLE", message: "Pricing database unavailable" } });
     const body = (request.body as { group?: unknown; id?: unknown; strikeYuan?: unknown } | undefined) ?? {};
-    if ((body.group !== "members" && body.group !== "boostPacks") || typeof body.id !== "string" || typeof body.strikeYuan !== "string") return reply.code(400).send({ error: { code: "INVALID_DISPLAY_PRICE", message: "Invalid display price request" } });
+    if ((body.group !== "members" && body.group !== "boostPacks") || typeof body.id !== "string" || typeof body.strikeYuan !== "string") {
+      return reply.code(400).send({ error: { code: "INVALID_DISPLAY_PRICE", message: "Invalid display price request" } });
+    }
     try { return reply.send(await saveDisplayStrikePrice(options.pool, body.group, body.id, body.strikeYuan)); }
     catch (error) { return reply.code(400).send({ error: { code: "DISPLAY_PRICE_UPDATE_FAILED", message: error instanceof Error ? error.message : "Display price save failed" } }); }
   });
@@ -277,144 +194,6 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         payment: { status: paymentHealthy ? "healthy" : "unavailable", detail: paymentHealthy ? "支付服务已通过启动配置检查" : "支付服务尚未就绪" },
       },
     });
-  });
-
-  app.get("/api/v1/admin/support/messages", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "SUPPORT_STORAGE_UNAVAILABLE", message: "站内信数据库暂不可用" } });
-    const query = (request.query as { limit?: string; status?: string }) ?? {};
-    const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 300);
-    const status = ["unread", "read", "resolved"].includes(query.status ?? "") ? query.status : null;
-    const result = await options.pool.query(
-      "SELECT m.id, m.user_id, m.order_id, m.subject, m.message, m.status, m.created_at, u.display_name, u.phone, u.email FROM support_messages m JOIN users u ON u.id = m.user_id WHERE ($2::text IS NULL OR m.status = $2) ORDER BY CASE m.status WHEN 'unread' THEN 0 WHEN 'read' THEN 1 ELSE 2 END, m.created_at DESC LIMIT $1",
-      [limit, status],
-    );
-    return reply.send({ messages: result.rows.map((row: any) => ({
-      id: row.id, userId: row.user_id, orderId: row.order_id,
-      displayName: row.display_name ?? "简兮用户",
-      contact: maskAdminContact(row.phone, row.email),
-      subject: row.subject, message: row.message, status: row.status,
-      createdAt: row.created_at.toISOString(),
-    })) });
-  });
-
-  app.post("/api/v1/admin/support/messages/:messageId/reply", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "SUPPORT_STORAGE_UNAVAILABLE", message: "站内信数据库暂不可用" } });
-    const { messageId } = request.params as { messageId: string };
-    if (!validUuid(messageId)) return reply.code(400).send({ error: { code: "INVALID_MESSAGE_ID", message: "来信编号无效" } });
-    const body = (request.body ?? {}) as { message?: unknown };
-    const content = typeof body.message === "string" ? body.message.trim() : "";
-    if (!content || content.length > 4000) return reply.code(400).send({ error: { code: "INVALID_REPLY", message: "回复内容限 1–4000 字" } });
-    const result = await options.pool.query(
-      `WITH original AS (
-         UPDATE support_messages
-         SET status = CASE WHEN status = 'unread' THEN 'read' ELSE status END,
-             read_at = COALESCE(read_at, now())
-         WHERE id = $1
-         RETURNING user_id, subject
-       ),
-       inserted AS (
-         INSERT INTO site_inbox_messages
-           (recipient_user_id, subject, body, category, status, created_by, published_at)
-         SELECT user_id, left('回复：' || subject, 120), $2, 'notice', 'published', $3, now()
-         FROM original
-         RETURNING id
-       )
-       SELECT inserted.id FROM inserted`,
-      [messageId, content, operator.id],
-    );
-    if (!result.rows[0]) return reply.code(404).send({ error: { code: "SUPPORT_MESSAGE_NOT_FOUND", message: "用户来信不存在" } });
-    return reply.code(201).send({ success: true, replyId: result.rows[0].id, messageId });
-  });
-
-  app.post("/api/v1/admin/support/messages/:messageId/resolve", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "SUPPORT_STORAGE_UNAVAILABLE", message: "站内信数据库暂不可用" } });
-    const { messageId } = request.params as { messageId: string };
-    const result = await options.pool.query(
-      "UPDATE support_messages SET status = 'resolved', read_at = COALESCE(read_at, now()), resolved_at = now() WHERE id = $1 AND status <> 'resolved' RETURNING id",
-      [messageId],
-    );
-    if (!result.rows[0]) return reply.code(404).send({ error: { code: "SUPPORT_MESSAGE_NOT_FOUND", message: "站内信不存在或已处理" } });
-    return reply.send({ success: true, messageId, operatorId: operator.id });
-  });
-
-  app.get("/api/v1/admin/inbox/messages", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "INBOX_STORAGE_UNAVAILABLE" } });
-    const result = await options.pool.query(
-      "SELECT id, subject, body, category, status, created_at, updated_at, published_at FROM site_inbox_messages WHERE recipient_user_id IS NULL ORDER BY updated_at DESC LIMIT 300",
-    );
-    return reply.send({ messages: result.rows.map((row) => ({
-      id: row.id, subject: row.subject, body: row.body, category: row.category,
-      status: row.status, createdAt: row.created_at.toISOString(),
-      updatedAt: row.updated_at.toISOString(), publishedAt: row.published_at?.toISOString?.() ?? null,
-    })) });
-  });
-
-  app.post("/api/v1/admin/inbox/messages", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "INBOX_STORAGE_UNAVAILABLE" } });
-    const body = (request.body ?? {}) as { subject?: unknown; body?: unknown; category?: unknown; status?: unknown };
-    const subject = typeof body.subject === "string" ? body.subject.trim() : "";
-    const content = typeof body.body === "string" ? body.body.trim() : "";
-    const category = ["welcome", "features", "notice"].includes(String(body.category)) ? String(body.category) : "notice";
-    const status = ["draft", "published"].includes(String(body.status)) ? String(body.status) : "draft";
-    if (!subject || subject.length > 120 || !content || content.length > 4000) {
-      return reply.code(400).send({ error: { code: "INVALID_INBOX_MESSAGE", message: "标题限 1–120 字，正文限 1–4000 字" } });
-    }
-    const result = await options.pool.query(
-      `INSERT INTO site_inbox_messages (subject, body, category, status, created_by, published_at)
-       VALUES ($1, $2, $3, $4, $5, CASE WHEN $4 = 'published' THEN now() ELSE NULL END)
-       RETURNING id, subject, body, category, status, created_at, updated_at, published_at`,
-      [subject, content, category, status, operator.id],
-    );
-    return reply.code(201).send({ message: result.rows[0] });
-  });
-
-  app.put("/api/v1/admin/inbox/messages/:messageId", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "INBOX_STORAGE_UNAVAILABLE" } });
-    const { messageId } = request.params as { messageId: string };
-    const body = (request.body ?? {}) as { subject?: unknown; body?: unknown; category?: unknown; status?: unknown };
-    const subject = typeof body.subject === "string" ? body.subject.trim() : "";
-    const content = typeof body.body === "string" ? body.body.trim() : "";
-    const category = ["welcome", "features", "notice"].includes(String(body.category)) ? String(body.category) : "notice";
-    const status = ["draft", "published"].includes(String(body.status)) ? String(body.status) : "draft";
-    if (!validUuid(messageId) || !subject || subject.length > 120 || !content || content.length > 4000) {
-      return reply.code(400).send({ error: { code: "INVALID_INBOX_MESSAGE", message: "站内信内容或编号无效" } });
-    }
-    const result = await options.pool.query(
-      `UPDATE site_inbox_messages SET subject = $2, body = $3, category = $4, status = $5,
-         updated_at = now(), published_at = CASE WHEN $5 = 'published' THEN COALESCE(published_at, now()) ELSE NULL END
-       WHERE id = $1 RETURNING id, subject, body, category, status, created_at, updated_at, published_at`,
-      [messageId, subject, content, category, status],
-    );
-    if (!result.rows[0]) return reply.code(404).send({ error: { code: "MESSAGE_NOT_FOUND" } });
-    return reply.send({ message: result.rows[0], operatorId: operator.id });
-  });
-
-  app.delete("/api/v1/admin/inbox/messages/:messageId", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "INBOX_STORAGE_UNAVAILABLE" } });
-    const { messageId } = request.params as { messageId: string };
-    if (!validUuid(messageId)) return reply.code(400).send({ error: { code: "INVALID_MESSAGE_ID" } });
-    const result = await options.pool.query("DELETE FROM site_inbox_messages WHERE id = $1 RETURNING id", [messageId]);
-    if (!result.rows[0]) return reply.code(404).send({ error: { code: "MESSAGE_NOT_FOUND" } });
-    return reply.send({ success: true, messageId, operatorId: operator.id });
   });
 
   app.get("/api/v1/admin/site-analytics", async (request, reply) => {
@@ -524,7 +303,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       return reply.code(503).send({ error: { code: "COMPENSATION_NOT_CONFIGURED", message: "积分账本尚未接入持久化存储，当前不能安全执行人工补偿" } });
     }
     const { jobId } = request.params as { jobId: string };
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
+    if (!validUuid(jobId)) {
       return reply.code(400).send({ error: { code: "INVALID_JOB_ID", message: "任务 ID 格式无效" } });
     }
     const body = (request.body as { credits?: number; reason?: string } | undefined) ?? {};
@@ -559,201 +338,12 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     if (!Number.isFinite(amountYuan) || amountYuan <= 0 || Math.abs(Math.round(amountYuan * 100) - amountYuan * 100) > 0.000001 || !note || externalReference.length < 4) {
       return reply.code(400).send({ error: { code: "INVALID_REFUND_RECORD", message: "退款金额必须大于 0 且最多两位小数，并填写退款凭证号和人工退款说明" } });
     }
-    const client = await options.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const result = await client.query<{ id: string; status: string; payment_provider: string | null; provider_payment_status: string; provider_price_yuan: string | number | null; amount_yuan: string | number; refunded_amount_yuan: string | number }>(
-        "SELECT id, status, payment_provider, provider_payment_status, provider_price_yuan, amount_yuan, refunded_amount_yuan FROM billing_orders WHERE id = $1 FOR UPDATE", [orderId],
-      );
-      const order = result.rows[0];
-      if (!order) { await client.query("ROLLBACK"); return reply.code(404).send({ error: { code: "ORDER_NOT_FOUND", message: "充值订单不存在" } }); }
-      if (order.payment_provider !== "opcpay" || !["PAID", "REFUNDED"].includes(order.provider_payment_status) || !["paid", "refunded"].includes(order.status)) {
-        await client.query("ROLLBACK");
-        return reply.code(409).send({ error: { code: "ORDER_NOT_CONFIRMED_PAID", message: "仅允许登记 OPCPAY 已核验支付的订单退款" } });
-      }
-      const gross = Number(order.provider_price_yuan ?? order.amount_yuan);
-      const alreadyRefunded = Number(order.refunded_amount_yuan ?? 0);
-      const remaining = Math.max(0, Number((gross - alreadyRefunded).toFixed(2)));
-      if (amountYuan > remaining) {
-        await client.query("ROLLBACK");
-        return reply.code(400).send({ error: { code: "REFUND_EXCEEDS_REMAINING", message: "本订单最多还可登记退款 ¥" + remaining.toFixed(2) } });
-      }
-      const duplicate = await client.query(
-        "SELECT id FROM billing_order_refund_records WHERE source = 'manual' AND external_reference = $1 LIMIT 1",
-        [externalReference],
-      );
-      if (duplicate.rowCount) {
-        await client.query("ROLLBACK");
-        return reply.code(409).send({ error: { code: "REFUND_REFERENCE_DUPLICATE", message: "该退款凭证已登记，禁止重复扣减收入" } });
-      }
-      const inserted = await client.query<{ id: string }>(
-        "INSERT INTO billing_order_refund_records (order_id, amount_yuan, source, external_reference, note, recorded_by) VALUES ($1, $2, 'manual', $3, $4, $5) RETURNING id",
-        [orderId, amountYuan, externalReference, note, operator.id],
-      );
-      const updated = await client.query<{ refunded_amount_yuan: string | number; status: string }>(
-        "UPDATE billing_orders SET refunded_amount_yuan = refunded_amount_yuan + $2, refunded_at = now(), status = CASE WHEN refunded_amount_yuan + $2 >= COALESCE(provider_price_yuan, amount_yuan) THEN 'refunded' ELSE status END WHERE id = $1 RETURNING refunded_amount_yuan, status", [orderId, amountYuan],
-      );
-      await client.query("COMMIT");
-      return reply.send({ success: true, orderId, refundRecordId: inserted.rows[0]?.id, refundedAmountYuan: numeric(updated.rows[0]?.refunded_amount_yuan), remainingRevenueYuan: Math.max(0, Number((gross - numeric(updated.rows[0]?.refunded_amount_yuan)).toFixed(2))), orderStatus: updated.rows[0]?.status });
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505") {
-        return reply.code(409).send({ error: { code: "REFUND_REFERENCE_DUPLICATE", message: "该退款凭证已登记，禁止重复扣减收入" } });
-      }
-      return reply.code(503).send({ error: { code: "REFUND_RECORD_FAILED", message: "退款登记失败，未确认写入，请刷新账务后重试" } });
-    } finally { client.release(); }
-  });
-
-  app.get("/api/v1/admin/partners", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const query = (request.query as { limit?: string }) ?? {};
-    const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 300);
-    const partners = await fetchPartnerDirectory(options.pool, limit);
-    return reply.send({ partners });
-  });
-
-  app.get("/api/v1/admin/partner/withdrawals", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const query = (request.query as { status?: string; limit?: string }) ?? {};
-    const statuses = new Set(["pending", "approved", "paid", "rejected", "failed"]);
-    const status = query.status && statuses.has(query.status) ? query.status : null;
-    const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
-    const withdrawals = await fetchWithdrawals(options.pool, status, limit);
-    return reply.send({ withdrawals });
-  });
-
-  app.get("/api/v1/admin/partner/withdrawals/:withdrawalId/payout", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const { withdrawalId } = request.params as { withdrawalId: string };
-    if (!validUuid(withdrawalId)) return reply.code(400).send({ error: { code: "INVALID_WITHDRAWAL_ID" } });
-    try {
-      const payout = await fetchWithdrawalPayoutDetail(options.pool, withdrawalId, operator.id);
-      if (!payout) return reply.code(404).send({ error: { code: "WITHDRAWAL_NOT_FOUND" } });
-      return reply.send({ payout });
-    } catch {
-      return reply.code(503).send({ error: { code: "PAYOUT_DECRYPTION_FAILED", message: "无法安全解密收款资料，请检查服务端密钥" } });
-    }
-  });
-
-  app.get("/api/v1/admin/partner/profiles", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const result = await options.pool.query(`
-      SELECT p.user_id, p.payout_channel, p.account_last4, p.verification_status, p.updated_at,
-        u.display_name, u.phone, u.email, u.partner_province, u.partner_city
-      FROM partner_payout_profiles p JOIN users u ON u.id = p.user_id
-      WHERE p.verification_status = 'pending'
-      ORDER BY p.updated_at ASC LIMIT 200
-    `);
-    return reply.send({ profiles: result.rows.map((row) => ({
-      userId: row.user_id, channel: row.payout_channel, accountLast4: row.account_last4,
-      displayName: row.display_name ?? "简兮用户",
-      contact: row.phone ? `${row.phone.slice(0, 3)}****${row.phone.slice(-4)}` : row.email ?? "",
-      province: row.partner_province, city: row.partner_city, updatedAt: row.updated_at.toISOString(),
-    })) });
-  });
-
-  app.get("/api/v1/admin/partner/profiles/:userId", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const { userId } = request.params as { userId: string };
-    if (!validUuid(userId)) return reply.code(400).send({ error: { code: "INVALID_USER_ID" } });
-    try {
-      const profile = await fetchPartnerProfileDetail(options.pool, userId, operator.id);
-      if (!profile) return reply.code(404).send({ error: { code: "PAYOUT_PROFILE_NOT_FOUND" } });
-      return reply.send({ profile });
-    } catch {
-      return reply.code(503).send({ error: { code: "PAYOUT_DECRYPTION_FAILED", message: "无法安全解密收款资料，请检查服务端密钥" } });
-    }
-  });
-
-  app.post("/api/v1/admin/partner/profiles/:userId/verify", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const { userId } = request.params as { userId: string };
-    const body = (request.body as { status?: string; note?: string } | undefined) ?? {};
-    const note = typeof body.note === "string" ? body.note.trim().slice(0, 300) : "";
-    if (!validUuid(userId) || !["verified", "rejected"].includes(body.status ?? "") || (body.status === "rejected" && !note)) {
-      return reply.code(400).send({ error: { code: "INVALID_PROFILE_REVIEW", message: "审核状态或驳回原因无效" } });
-    }
-    try {
-      const res = await reviewPartnerProfile(options.pool, userId, body.status as "verified" | "rejected", note, operator.id);
-      if (res.code === "NOT_FOUND") return reply.code(404).send({ error: { code: "PAYOUT_PROFILE_NOT_FOUND" } });
-      if (res.code === "ALREADY_REVIEWED") return reply.code(409).send({ error: { code: "PROFILE_ALREADY_REVIEWED" } });
-      return reply.send({ success: true, userId, status: body.status });
-    } catch {
-      return reply.code(503).send({ error: { code: "PROFILE_REVIEW_FAILED" } });
-    }
-  });
-
-  app.post("/api/v1/admin/partner/withdrawals/:withdrawalId/review", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const { withdrawalId } = request.params as { withdrawalId: string };
-    const body = (request.body as { status?: string; note?: string } | undefined) ?? {};
-    const note = typeof body.note === "string" ? body.note.trim().slice(0, 300) : "";
-    if (!validUuid(withdrawalId) || !["approved", "rejected"].includes(body.status ?? "") || (body.status === "rejected" && !note)) {
-      return reply.code(400).send({ error: { code: "INVALID_WITHDRAWAL_REVIEW", message: "审核状态或驳回原因无效" } });
-    }
-    try {
-      const res = await reviewWithdrawal(options.pool, withdrawalId, body.status as "approved" | "rejected", note, operator.id);
-      if (res.code === "NOT_FOUND") return reply.code(404).send({ error: { code: "WITHDRAWAL_NOT_FOUND" } });
-      if (res.code === "NOT_PENDING") return reply.code(409).send({ error: { code: "WITHDRAWAL_NOT_PENDING" } });
-      return reply.send({ success: true, withdrawalId, status: body.status });
-    } catch {
-      return reply.code(503).send({ error: { code: "WITHDRAWAL_REVIEW_FAILED" } });
-    }
-  });
-
-  app.post("/api/v1/admin/partner/withdrawals/:withdrawalId/paid", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const { withdrawalId } = request.params as { withdrawalId: string };
-    const body = (request.body as { externalReference?: string; note?: string } | undefined) ?? {};
-    const reference = typeof body.externalReference === "string" ? body.externalReference.trim().slice(0, 160) : "";
-    const note = typeof body.note === "string" ? body.note.trim().slice(0, 300) : "";
-    if (!validUuid(withdrawalId) || reference.length < 4) return reply.code(400).send({ error: { code: "INVALID_PAYMENT_REFERENCE", message: "请填写有效的企业支付宝转账流水号或凭证编号" } });
-    try {
-      const res = await markWithdrawalPaid(options.pool, withdrawalId, reference, note, operator.id);
-      if (res.code === "NOT_FOUND") return reply.code(404).send({ error: { code: "WITHDRAWAL_NOT_FOUND" } });
-      if (res.code === "NOT_APPROVED") return reply.code(409).send({ error: { code: "WITHDRAWAL_NOT_APPROVED" } });
-      if (res.code === "REFERENCE_DUPLICATE") return reply.code(409).send({ error: { code: "PAYMENT_REFERENCE_ALREADY_USED", message: "该转账凭证已登记在其他提现记录中" } });
-      return reply.send({ success: true, withdrawalId, status: "paid" });
-    } catch {
-      return reply.code(503).send({ error: { code: "WITHDRAWAL_PAYMENT_RECORD_FAILED" } });
-    }
-  });
-
-  app.post("/api/v1/admin/partner/withdrawals/:withdrawalId/failed", async (request, reply) => {
-    const operator = await verifyAdminAuth(request, reply);
-    if (!operator) return;
-    if (!requireAdminOrigin(request, reply)) return;
-    if (!options.pool) return reply.code(503).send({ error: { code: "PARTNER_FINANCE_UNAVAILABLE" } });
-    const { withdrawalId } = request.params as { withdrawalId: string };
-    const body = (request.body as { note?: string } | undefined) ?? {};
-    const note = typeof body.note === "string" ? body.note.trim().slice(0, 300) : "";
-    if (!validUuid(withdrawalId) || !note) return reply.code(400).send({ error: { code: "INVALID_FAILURE_NOTE", message: "请填写打款失败原因" } });
-    try {
-      const res = await markWithdrawalFailed(options.pool, withdrawalId, note, operator.id);
-      if (res.code === "NOT_FOUND") return reply.code(404).send({ error: { code: "WITHDRAWAL_NOT_FOUND" } });
-      if (res.code === "NOT_APPROVED") return reply.code(409).send({ error: { code: "WITHDRAWAL_NOT_APPROVED" } });
-      return reply.send({ success: true, withdrawalId, status: "failed" });
-    } catch {
-      return reply.code(503).send({ error: { code: "WITHDRAWAL_FAILURE_RECORD_FAILED" } });
-    }
+    const res = await registerManualRefund(options.pool, orderId, amountYuan, externalReference, note, operator.id);
+    if (res.code === "ORDER_NOT_FOUND") return reply.code(404).send({ error: { code: "ORDER_NOT_FOUND", message: "充值订单不存在" } });
+    if (res.code === "ORDER_NOT_CONFIRMED_PAID") return reply.code(409).send({ error: { code: "ORDER_NOT_CONFIRMED_PAID", message: "仅允许登记 OPCPAY 已核验支付的订单退款" } });
+    if (res.code === "EXCEEDS_REMAINING") return reply.code(400).send({ error: { code: "REFUND_EXCEEDS_REMAINING", message: "本订单最多还可登记退款 ¥" + res.remaining.toFixed(2) } });
+    if (res.code === "REFERENCE_DUPLICATE") return reply.code(409).send({ error: { code: "REFUND_REFERENCE_DUPLICATE", message: "该退款凭证已登记，禁止重复扣减收入" } });
+    if (res.code === "FAILED") return reply.code(503).send({ error: { code: "REFUND_RECORD_FAILED", message: "退款登记失败，未确认写入，请刷新账务后重试" } });
+    return reply.send({ success: true, orderId, refundRecordId: res.refundRecordId, refundedAmountYuan: res.refundedAmountYuan, remainingRevenueYuan: res.remainingRevenueYuan, orderStatus: res.orderStatus });
   });
 }

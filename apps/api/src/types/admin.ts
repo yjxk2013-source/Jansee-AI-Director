@@ -1,0 +1,77 @@
+export interface DirectorJobInsight {
+  jobId: string;
+  userId: string;
+  status: "queued" | "inspecting" | "planning" | "rendering" | "quality-check" | "completed" | "failed";
+  aspectRatio: string;
+  e2eDurationMs: number;
+  llmDurationMs: number;
+  ffmpegDurationMs: number;
+  rendererDurationMs: number;
+  ttsDurationMs: number;
+  variantDirectorHit: boolean;
+  variantType: string;
+  variantTemplate: string;
+  lockedVariant: string;
+  variantMatched: boolean | null;
+  voiceId: string;
+  scene: string;
+  sceneSource: string;
+  sceneType: string;
+  sceneScore: number;
+  sceneAlignmentReason: string;
+  tokensUsed: number;
+  ttsChars: number;
+  costEstimateYuan: number;
+  tokenUsageAvailable: boolean;
+  providerMode: string;
+  requestedModel: string;
+  selectedModel: string;
+  modelsAttempted: string[];
+  modelAttempts: Array<{ model: string; durationMs: number; ok: boolean; error?: string }>;
+  costSource: string;
+  qualityPassed: boolean;
+  failureStage: string;
+  creditsCharged: number;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  createdAt: string;
+  finishedAt?: string | null;
+}
+
+export interface AdminOverviewStats {
+  totalUsers: number;
+  todayRevenueYuan: number;
+  todayNewUsers: number;
+  todayCompletedJobs: number;
+  todayFailedJobs: number;
+  jobSuccessRate: number;
+  avgE2eDurationSec: number;
+  p50E2eDurationSec: number;
+  p90E2eDurationSec: number;
+  p99E2eDurationSec: number;
+  avgLlmDurationSec: number;
+  avgTtsDurationSec: number;
+  avgFfmpegDurationSec: number;
+  avgRendererDurationSec: number;
+  avgSceneScore: number;
+  sceneScoreDataAvailable: boolean;
+  totalJobs: number;
+  failedJobs: number;
+  directorTelemetryAvailable: boolean;
+  directorCalls: number;
+  primaryModelSuccessRate: number;
+  fallbackModelRate: number;
+  heuristicFallbackRate: number;
+  totalTokensUsed: number;
+  tokenUsageRecords: number;
+  totalTtsChars: number;
+  qualityCheckedJobs: number;
+  qualityPassedJobs: number;
+  qualityPassRate: number;
+  totalCostEstimateYuan: number;
+  variantHitRate: number;
+  revenueDataAvailable: boolean;
+  costDataAvailable: boolean;
+  databaseDataAvailable: boolean;
+}
+

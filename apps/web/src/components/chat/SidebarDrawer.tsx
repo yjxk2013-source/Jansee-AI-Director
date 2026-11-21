@@ -182,10 +182,10 @@ export function SidebarDrawer({
                       ? "即将过期 (不足1小时)"
                       : `即将过期 (剩 ${remainingHours} 小时)`
                     : ageMinutes < 1
-                    ? "刚刚完成"
-                    : ageMinutes < 60
-                    ? ageMinutes + " 分钟前"
-                    : Math.floor(ageMinutes / 60) + " 小时前";
+                      ? "刚刚完成"
+                      : ageMinutes < 60
+                        ? ageMinutes + " 分钟前"
+                        : Math.floor(ageMinutes / 60) + " 小时前";
                   return (
                     <button
                       className="drawer-recent-work"

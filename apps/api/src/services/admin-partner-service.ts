@@ -127,6 +127,26 @@ export async function fetchWithdrawalPayoutDetail(pool: Pool, withdrawalId: stri
   return { channel: row.payout_channel, accountName, account, accountLast4: row.payout_account_last4, withdrawalStatus: row.status };
 }
 
+export async function fetchPendingPartnerProfiles(pool: Pool) {
+  const result = await pool.query(`
+    SELECT p.user_id, p.payout_channel, p.account_last4, p.verification_status, p.updated_at,
+      u.display_name, u.phone, u.email, u.partner_province, u.partner_city
+    FROM partner_payout_profiles p JOIN users u ON u.id = p.user_id
+    WHERE p.verification_status = 'pending'
+    ORDER BY p.updated_at ASC LIMIT 200
+  `);
+  return result.rows.map((row) => ({
+    userId: row.user_id,
+    channel: row.payout_channel,
+    accountLast4: row.account_last4,
+    displayName: row.display_name ?? "简兮用户",
+    contact: row.phone ? `${row.phone.slice(0, 3)}****${row.phone.slice(-4)}` : row.email ?? "",
+    province: row.partner_province,
+    city: row.partner_city,
+    updatedAt: row.updated_at.toISOString(),
+  }));
+}
+
 export async function fetchPartnerProfileDetail(pool: Pool, userId: string, operatorId: string) {
   const result = await pool.query<{ payout_channel: string; account_name_ciphertext: string; account_ciphertext: string; account_last4: string; verification_status: string }>(
     "SELECT payout_channel, account_name_ciphertext, account_ciphertext, account_last4, verification_status FROM partner_payout_profiles WHERE user_id = $1",

@@ -362,3 +362,4 @@ export async function fetchDirectorJobsData(pool: Pool, status: string | null, l
     total: numeric(result.rows[0]?.total),
   };
 }
+
