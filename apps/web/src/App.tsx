@@ -1801,6 +1801,7 @@ export default function App() {
                         <video
                           className="job-delivery-video"
                           src={"/api/v1/works/" + message.jobWorkId + "/stream"}
+                          poster={"/api/v1/works/" + message.jobWorkId + "/cover"}
                           controls
                           playsInline
                           preload="metadata"
@@ -2291,7 +2292,11 @@ export default function App() {
                 <div className="drawer-recent-works-list">
                   {recentWorks.map((work) => {
                     const ageMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(work.createdAt)) / 60000));
-                    const ageLabel = ageMinutes < 1 ? "\u521a\u521a\u5b8c\u6210" : ageMinutes < 60 ? ageMinutes + " \u5206\u949f\u524d" : ageMinutes < 1440 ? Math.floor(ageMinutes / 60) + " \u5c0f\u65f6\u524d" : Math.floor(ageMinutes / 1440) + " \u5929\u524d";
+                    const remainingHours = Math.max(0, 24 - Math.floor(ageMinutes / 60));
+                    const isExpiringSoon = remainingHours <= 4;
+                    const ageLabel = isExpiringSoon
+                      ? (remainingHours <= 1 ? "即将过期 (不足1小时)" : `即将过期 (剩 ${remainingHours} 小时)`)
+                      : (ageMinutes < 1 ? "刚刚完成" : ageMinutes < 60 ? ageMinutes + " 分钟前" : Math.floor(ageMinutes / 60) + " 小时前");
                     return (
                       <button className="drawer-recent-work" type="button" key={work.id} onClick={() => { setIsSidebarOpen(false); setActiveHeaderPanel("works"); }}>
                         <span className="drawer-recent-work-thumb">
