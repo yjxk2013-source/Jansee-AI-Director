@@ -27,6 +27,7 @@ import { GENERATION_COST_CREDITS } from "./billing.js";
 import { getPricingCatalog } from "./pricing.js";
 import { registerSiteAnalyticsRoutes } from "./site-analytics.js";
 import { registerConversationRoutes } from "./conversations.js";
+import { registerVoiceTranscribeRoutes } from "./voice-transcribe.js";
 // @ts-expect-error ffmpeg-kit probe module is ESM
 import { probeDurationSec } from "@jansee/ffmpeg-kit/probe.mjs";
 
@@ -169,6 +170,12 @@ export function buildApp(config: AppConfig): FastifyInstance {
     registerConversationRoutes(app, {
       authStore: config.authStore,
       pool: config.adminPool,
+      allowedOrigins: config.allowedOrigins,
+    });
+  }
+  if (config.authStore) {
+    registerVoiceTranscribeRoutes(app, {
+      authStore: config.authStore,
       allowedOrigins: config.allowedOrigins,
     });
   }
