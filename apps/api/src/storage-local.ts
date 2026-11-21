@@ -10,13 +10,15 @@ export interface LocalStorageConfig {
   minFreeBytes?: number;
 }
 
-export interface LocalObjectStorage {
+export interface ObjectStorage {
   putFile(key: string, sourcePath: string): Promise<{ sizeBytes: number }>;
   getFilePath(key: string): Promise<string>;
   deleteObject(key: string): Promise<void>;
   deleteExpired(prefix: string, olderThan: Date, now?: Date): Promise<number>;
   createSignedUrl?(key: string, options?: { downloadFilename?: string | undefined; ttlSeconds?: number | undefined }): Promise<string> | string;
 }
+
+export type LocalObjectStorage = ObjectStorage;
 
 function validateKey(key: string): string[] {
   const parts = key.split("/");

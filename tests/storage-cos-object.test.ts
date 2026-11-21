@@ -89,3 +89,60 @@ test("Tencent COS object storage rejects unsafe keys and oversized source files"
   await assert.rejects(storage.putFile("../escape", source), /Invalid private object key/);
   await assert.rejects(storage.putFile("users/test/large", source), /exceeds the COS object size limit/);
 });
+
+test("Tencent COS object storage generates CDN signed URLs with Type A anti-leech token", async () => {
+  const fakeClient = {
+    async uploadFile() { return {}; },
+    async headObject() { return { headers: { "content-length": "32" } }; },
+    getObjectStream() { return Readable.from([Buffer.alloc(32)]); },
+    async deleteObject() { return {}; },
+    async getBucket() { return { Contents: [], IsTruncated: false }; },
+    getObjectUrl({ Key }: { Key: string }) {
+      return `https://jansee-test.cos.ap-guangzhou.myqcloud.com/${Key}?sign=cos-raw-sign`;
+    },
+  };
+
+  const storageWithCdnAuth = createTencentCosObjectStorage({
+    secretId: "test-id",
+    secretKey: "test-secret",
+    bucket: "jansee-test-1250000000",
+    region: "ap-guangzhou",
+    cdnDomain: "cdn.jansee.cn",
+    cdnAuthKey: "secret_cdn_token_key_123",
+    maxObjectBytes: 1024 * 1024,
+    client: fakeClient as never,
+  });
+
+  const url = storageWithCdnAuth.createSignedUrl!("outputs/test-video.mp4", {
+    downloadFilename: "final_video.mp4",
+    ttlSeconds: 600,
+  });
+
+  assert.ok(url.startsWith("https://cdn.jansee.cn/outputs/test-video.mp4?"));
+  const parsed = new URL(url);
+  assert.equal(parsed.host, "cdn.jansee.cn");
+  assert.equal(parsed.pathname, "/outputs/test-video.mp4");
+  assert.ok(parsed.searchParams.has("sign"));
+  assert.ok(parsed.searchParams.has("response-content-disposition"));
+
+  const sign = parsed.searchParams.get("sign")!;
+  const [timestampStr, rand, uid, md5hash] = sign.split("-");
+  assert.equal(rand, "0");
+  assert.equal(uid, "0");
+  assert.ok(Number(timestampStr) > Math.floor(Date.now() / 1000));
+  assert.equal(md5hash?.length, 32);
+
+  // 验证无 cdnAuthKey 时平滑降级
+  const storageWithoutKey = createTencentCosObjectStorage({
+    secretId: "test-id",
+    secretKey: "test-secret",
+    bucket: "jansee-test-1250000000",
+    region: "ap-guangzhou",
+    cdnDomain: "cdn.jansee.cn",
+    maxObjectBytes: 1024 * 1024,
+    client: fakeClient as never,
+  });
+
+  const urlWithoutKey = storageWithoutKey.createSignedUrl!("outputs/test-video.mp4");
+  assert.equal(urlWithoutKey, "https://cdn.jansee.cn/outputs/test-video.mp4");
+});
