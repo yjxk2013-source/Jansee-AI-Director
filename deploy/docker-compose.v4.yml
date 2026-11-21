@@ -32,9 +32,11 @@ services:
       dockerfile: deploy/Dockerfile.v4
       target: api
     restart: unless-stopped
-    # 内存不设硬上限：ffmpeg 6.1.3 修复后按用户实测口径内存稳定（本机 4C4G 并发 2 正常）。
-    # CPU 放开到 4 核：单任务可吃满 4 核提速；双任务由内核 CFS 自动均分成各约 2 核。
-    # 瓶颈在 CPU 不在内存（用户实测）。pids_limit 防 fork 炸弹；Worker 并发数由 WORKER_CONCURRENCY 控制。
+    # 4C4G 宿主机内存安全红线防护（防 OOM 击穿宿主机）：
+    # 宿主机总内存 4GB：Postgres 分配 512MB，Web Nginx 分配 128MB，系统与 SSH 预留 800MB。
+    # API 容器（含 2 路并发 FFmpeg Worker）设定 2560MB 内存硬上限 (mem_limit) 与 3072MB 软上限，彻底杜绝突发内存泄露拖死整机。
+    mem_limit: 2560m
+    mem_reservation: 1024m
     cpus: 4.0
     pids_limit: 512
     env_file:
