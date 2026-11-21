@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { LocalObjectStorage } from "./storage-local.js";
+import type { ObjectStorage } from "./storage-local.js";
 
 type CosClient = Pick<InstanceType<typeof COS>, "uploadFile" | "getObjectStream" | "headObject" | "deleteObject" | "getBucket" | "getObjectUrl">;
 
@@ -16,6 +16,7 @@ export interface TencentCosObjectStorageConfig {
   bucket: string;
   region: string;
   cdnDomain?: string | undefined;
+  cdnAuthKey?: string | undefined;
   cacheRoot?: string | undefined;
   maxObjectBytes: number;
   minFreeBytes?: number | undefined;
@@ -30,7 +31,7 @@ function assertKey(key: string): void {
   }
 }
 
-export function createTencentCosObjectStorage(config: TencentCosObjectStorageConfig): LocalObjectStorage {
+export function createTencentCosObjectStorage(config: TencentCosObjectStorageConfig): ObjectStorage {
   if (!config.secretId || !config.secretKey || !config.bucket || !config.region) {
     throw new Error("Tencent COS configuration is incomplete");
   }
@@ -165,6 +166,7 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
 
     createSignedUrl(key, options) {
       assertKey(key);
+      const ttl = Math.min(Math.max(options?.ttlSeconds ?? 3600, 60), 86400);
       const query: Record<string, string> = {};
       if (options?.downloadFilename) {
         query["response-content-disposition"] = `attachment; filename="${encodeURIComponent(options.downloadFilename)}"`;
@@ -175,22 +177,36 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
         Key: key,
         Method: "GET",
         Sign: true,
-        Expires: Math.min(Math.max(options?.ttlSeconds ?? 3600, 60), 86400),
+        Expires: ttl,
         Protocol: "https:",
         ...(Object.keys(query).length > 0 ? { Query: query } : {}),
       });
 
       // 若配置了自定义 CDN 加速域名（如 cdn.jansee.cn）：
-      // 腾讯云 CDN 在开启【回源鉴权】后，CDN 节点会自动使用主账号服务凭证与 COS 源站完成鉴权交互；
-      // 因此面向客户端分发的 CDN 链接不带 URL 签名，避免 COS 校验客户端签名失败，并最大化享受 CDN 边缘缓存。
+      // 腾讯云 CDN 在开启【私有回源鉴权】后，CDN 节点会自动使用主账号服务凭证与 COS 源站完成鉴权交互；
+      // 同时为保障商业媒体资产防盗刷与用户隐私安全，若配置了 cdnAuthKey，则自动追加腾讯云 CDN Type A 时间戳防盗链 Token；
+      // 若未配置 cdnAuthKey，则平滑降级为普通 CDN 边缘加速链接。
       if (config.cdnDomain) {
         try {
           const searchParams = new URLSearchParams();
+          const cleanKey = key.startsWith("/") ? key.slice(1) : key;
+          const uri = `/${cleanKey}`;
+
+          if (config.cdnAuthKey) {
+            const expireTimestamp = Math.floor(Date.now() / 1000) + ttl;
+            const rand = "0";
+            const uid = "0";
+            const hash = createHash("md5")
+              .update(`${uri}-${expireTimestamp}-${rand}-${uid}-${config.cdnAuthKey}`)
+              .digest("hex");
+            searchParams.set("sign", `${expireTimestamp}-${rand}-${uid}-${hash}`);
+          }
+
           if (options?.downloadFilename) {
             searchParams.set("response-content-disposition", `attachment; filename="${encodeURIComponent(options.downloadFilename)}"`);
           }
           const queryString = searchParams.toString();
-          return `https://${config.cdnDomain}/${key}${queryString ? `?${queryString}` : ""}`;
+          return `https://${config.cdnDomain}${uri}${queryString ? `?${queryString}` : ""}`;
         } catch {
           return rawUrl;
         }

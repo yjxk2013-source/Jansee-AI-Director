@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthStore } from "./auth.js";
 import { authenticatedUser } from "./assets.js";
-import type { LocalObjectStorage } from "./storage-local.js";
+import type { ObjectStorage } from "./storage-local.js";
 
 export interface OutputRecord {
   id: string;
@@ -48,7 +48,7 @@ export interface OutputStore {
 
 export async function cleanupExpiredOutputs(
   store: OutputStore,
-  storage: LocalObjectStorage,
+  storage: ObjectStorage,
   now = new Date(),
 ): Promise<number> {
   if (!store.findExpiredOutputs || !store.markOutputExpired) return 0;
@@ -69,7 +69,7 @@ export async function cleanupExpiredOutputs(
 export interface OutputRoutesOptions {
   authStore: AuthStore;
   outputStore: OutputStore;
-  storage: LocalObjectStorage;
+  storage: ObjectStorage;
   allowedOrigins: string[];
 }
 

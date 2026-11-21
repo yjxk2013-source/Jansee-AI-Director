@@ -154,6 +154,7 @@ const mediaStorage = mediaDriver === "cos"
       bucket: process.env.COS_BUCKET,
       region: process.env.COS_REGION,
       cdnDomain: process.env.COS_CDN_DOMAIN || (process.env.CDN_BASE_URL ? new URL(process.env.CDN_BASE_URL).host : undefined),
+      cdnAuthKey: process.env.CDN_AUTH_KEY || process.env.COS_CDN_AUTH_KEY,
       cacheRoot: mediaCacheRoot,
       maxObjectBytes: maxMediaObjectBytes,
       minFreeBytes: minMediaFreeBytes,

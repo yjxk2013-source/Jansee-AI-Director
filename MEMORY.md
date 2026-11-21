@@ -95,11 +95,12 @@
 
 ### 4. 媒体存储与 CDN 边缘加速（大厂级闭环）
 - **对象存储**：腾讯云 COS（桶：`jansee-1460392374`，地域：`ap-guangzhou`，私有读写）。
-- **边缘 CDN 域名**：`https://cdn.jansee.cn`（已绑定 TrustAsia 免费 SSL 证书，开启 HTTP/2.0）。
-- **鉴权与回源架构**：
-  - COS 开启了【私有回源鉴权】，保护存储桶不被外部盗刷。
-  - CDN 开启了【全部忽略 URL 参数缓存】与【忽略大小写】，缓存时间设为 30 天。
-  - 后端分发给前端的播放链接通过 `302 Found` 直接重定向至 `https://cdn.jansee.cn/users/.../output.mp4`，彻底绕开云服务器单机 3Mbps 带宽瓶颈，实现全国边缘节点首帧秒开。
+- **统一存储抽象（`ObjectStorage`）**：在 `apps/api/src/storage-local.ts` 导出统一 `ObjectStorage` 接口（`putFile`, `getFilePath`, `deleteObject`, `deleteExpired`, `createSignedUrl`），各模块完全解耦，`createTencentCosObjectStorage` 与 `createLocalObjectStorage` 全量实现该契约。
+- **边缘 CDN 域名与安全鉴权**：
+  - 边缘加速域名：`https://cdn.jansee.cn`（已绑定 TrustAsia 免费 SSL 证书，开启 HTTP/2.0）。
+  - COS 开启【私有回源鉴权】，保护存储桶不被外部盗刷。
+  - **Type A 时间戳防盗链 Token 闭环**：当配置 `CDN_AUTH_KEY`（或 `COS_CDN_AUTH_KEY`）时，API 自动生成带有合法 `sign=${timestamp}-${rand}-${uid}-${md5}` 的时效鉴权直链（播放 3600 秒，下载 600 秒），防止视频被第三方盗刷或未授权下载；未配置密钥时平滑降级，零破坏现有功能。
+  - 后端分发给前端的播放链接通过 `302 Found` 直接重定向至 CDN 鉴权直链，彻底绕开云服务器单机 3Mbps 带宽瓶颈，实现全国边缘节点首帧秒开。
 - **纯净服务器原则**：云服务器本地磁盘**不保留任何视频和素材实体**，成片合成完毕后立刻推入 COS，临时文件即刻销毁，云服务器仅充当纯净的工作代码运行节点。
 
 ### 5. DNS 与网络状态（域名：`jansee.cn`）
