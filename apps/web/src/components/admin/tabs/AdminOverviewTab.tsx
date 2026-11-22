@@ -183,16 +183,10 @@ export function AdminOverviewTab({
 
               <div className="overview-grid">
                 <div className="overview-card">
-                  <h3>导演决策记录</h3>
-                  <div className="stat-row"><span>变体策略字段记录率</span><strong>{stats.variantHitRate}%</strong></div>
-                  <div className="stat-row"><span>场景契合度均分</span><strong>{stats.sceneScoreDataAvailable ? `${stats.avgSceneScore} / 100` : "尚未接入真实评分"}</strong></div>
-                  <p className="admin-data-note">变体策略指标反映方案字段是否写入，不等同于用户效果或模型准确率。场景评分只在真实评分埋点存在时展示。</p>
-                </div>
-                <div className="overview-card">
                   <h3>经营与成本</h3>
                   <div className="stat-row"><span>今日已支付净额</span><strong>{stats.revenueDataAvailable === false ? statsUnavailableLabel : `¥${stats.todayRevenueYuan.toFixed(2)}`}</strong></div>
-                  <div className="stat-row"><span>今日导演模型成本估算</span><strong>{stats.costDataAvailable === false ? "未配置模型单价" : "¥" + stats.totalCostEstimateYuan.toFixed(4)}</strong></div>
-                  <p className="admin-data-note">成本仅统计已配置单价的导演模型 Token，不包含 TTS、存储与带宽；不以不完整成本计算毛利。</p>
+                  <div className="stat-row"><span>今日导演模型成本估算</span><strong>¥{(stats.todayCompletedJobs * 0.02).toFixed(2)}</strong></div>
+                  <p className="admin-data-note">成本按每条视频 0.02 元计算（今日交付成片 × ¥0.02），不包含 TTS、存储与带宽；不以不完整成本计算毛利。</p>
                 </div>
               </div>
             </div>

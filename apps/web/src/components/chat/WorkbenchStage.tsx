@@ -111,10 +111,10 @@ export function WorkbenchStage({
                               reason === "pause"
                                 ? "明显停顿"
                                 : reason === "repeat"
-                                ? "重复表达"
-                                : reason === "phrase"
-                                ? "冗余语句"
-                                : "口头语";
+                                  ? "重复表达"
+                                  : reason === "phrase"
+                                    ? "冗余语句"
+                                    : "口头语";
                             return (
                               <div>
                                 <strong style={{ display: "block", marginBottom: "8px" }}>识别完成 · 请确认剪辑建议</strong>

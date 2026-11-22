@@ -82,34 +82,29 @@ export function AdminUsersTab({
         <p className="admin-region-foot">{siteAnalytics?.note ?? "网站访问统计尚未载入。"}</p>
       </section>
 
-      <section className="admin-user-chart-card">
+      <section className="admin-user-chart-card admin-user-table-card">
         <div className="admin-user-card-heading">
-          <div><span className="admin-eyebrow">MEMBER DIRECTORY / ALL REGISTERED</span><h3>用户名册</h3><p>仅展示注册用户；访客数据不计入此名册。</p></div>
-          <span className="admin-chart-legend">共 {userAnalytics ? userAnalytics.total.toLocaleString("zh-CN") : "—"} 位注册用户</span>
-        </div>
-        <div className="admin-region-list">
-          <div className="admin-user-card-heading"><div><span className="admin-eyebrow">GEOGRAPHY / PROVINCES</span><h3>用户分布在哪些省份</h3></div></div>
-          {userAnalytics ? userAnalytics.regions.map((region) => (
-            <div className="admin-region-row" key={region.province}>
-              <div className="admin-region-label"><strong>{region.province}</strong><span>{region.users} 人</span></div>
-              <div className="admin-region-track"><i style={{ width: `${Math.max(4, region.users / maxProvinceUsers * 100)}%` }} /></div>
-            </div>
-          )) : <div className="admin-users-empty">正在加载地域数据…</div>}
-        </div>
-        <p className="admin-region-foot">提示：新注册但尚未授权定位或未填省市的用户，统一归入「待补充」。</p>
-
-        <div className="admin-user-search-bar">
-          <input
-            type="search"
-            value={userKeyword}
-            placeholder="按手机号、昵称、地区搜索…"
-            onChange={(event) => setUserKeyword(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") void searchUsers(); }}
-          />
-          <button type="button" onClick={() => void searchUsers()} disabled={userListBusy}>{userListBusy ? "检索中…" : "搜索"}</button>
+          <div><span className="admin-eyebrow">MEMBERS / DIRECTORY</span><h3>认识每一位用户</h3><p>最近注册的账号 · 共 {userAnalytics?.total ?? "—"} 位</p></div>
+          <div className="admin-user-search-actions">
+            <input
+              className="admin-user-search"
+              value={userKeyword}
+              placeholder="按手机号、昵称、地区搜索…"
+              onChange={(event) => setUserKeyword(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") void searchUsers(); }}
+            />
+            <button
+              type="button"
+              className="admin-user-search-button"
+              onClick={() => void searchUsers()}
+              disabled={userListBusy}
+            >
+              {userListBusy ? "检索中…" : "搜索用户"}
+            </button>
+          </div>
         </div>
 
-        <div className="admin-user-table-wrap">
+        <div className="admin-user-table-scroll">
           <table className="admin-user-table">
             <thead>
               <tr>
@@ -119,15 +114,16 @@ export function AdminUsersTab({
                 <th>所在地区</th>
                 <th>可用积分</th>
                 <th>成片数</th>
+                <th>下载量</th>
                 <th>状态</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="admin-table-empty">正在加载名册…</td></tr>
+                <tr><td colSpan={9} className="admin-users-empty">正在加载名册…</td></tr>
               ) : visibleUsers.length === 0 ? (
-                <tr><td colSpan={8} className="admin-table-empty">暂无匹配用户</td></tr>
+                <tr><td colSpan={9} className="admin-users-empty">暂无匹配用户</td></tr>
               ) : (
                 visibleUsers.map((user) => (
                   <tr key={user.id}>
@@ -136,18 +132,24 @@ export function AdminUsersTab({
                     <td>{new Date(user.createdAt).toLocaleDateString("zh-CN")}</td>
                     <td>{user.region}</td>
                     <td><strong className="admin-user-credits">{user.credits.toLocaleString("zh-CN")}</strong></td>
-                    <td>{user.completedJobs}</td>
-                    <td><span className={`status-pill ${user.status === "active" ? "completed" : "pending"}`}>{user.status === "active" ? "正常" : user.status}</span></td>
-                    <td><button type="button" className="admin-table-action" onClick={() => openCreditAdjustment(user)}>调整积分</button></td>
+                    <td>{user.completedJobs.toLocaleString("zh-CN")}</td>
+                    <td>{(user.downloads ?? 0).toLocaleString("zh-CN")}</td>
+                    <td><span className={`admin-user-status ${user.status === "active" ? "is-active" : "is-paused"}`}>{user.status === "active" ? "正常" : user.status}</span></td>
+                    <td><button type="button" className="admin-user-credit-btn" onClick={() => openCreditAdjustment(user)}>调整积分</button></td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
           {userAnalytics && userAnalytics.users.length < userAnalytics.total && (
-            <div className="admin-user-table-more">
-              <button type="button" onClick={() => void loadMoreUsers()} disabled={userListBusy}>{userListBusy ? "加载中…" : `加载更多（已载入 ${userAnalytics.users.length} / ${userAnalytics.total}）`}</button>
-            </div>
+            <button
+              type="button"
+              className="admin-load-more-users"
+              onClick={() => void loadMoreUsers()}
+              disabled={userListBusy}
+            >
+              {userListBusy ? "加载中…" : `继续查看更早注册的用户（已载入 ${userAnalytics.users.length} / ${userAnalytics.total}）`}
+            </button>
           )}
         </div>
       </section>

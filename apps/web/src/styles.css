@@ -10312,7 +10312,7 @@ body,
 }
 
 /* Admin contrast refinement: KPI tiles and boost-pack pricing */
-/* Four headline KPI cards: soft individual tints with readable dark typography. */
+/* Five headline KPI cards: soft individual tints with readable dark typography. */
 .admin-metric-card:nth-child(1) {
   background: #f1f5ff !important;
   border-color: #dce5fb !important;
@@ -10331,6 +10331,11 @@ body,
 .admin-metric-card:nth-child(4) {
   background: #fff6ed !important;
   border-color: #f5e5d3 !important;
+}
+
+.admin-metric-card:nth-child(5) {
+  background: #fdfdfd !important;
+  border-color: #e5e5ea !important;
 }
 
 .admin-metric-card .metric-label {
@@ -12132,7 +12137,44 @@ body,
     padding: 12px;
   }
 
-  .director-jobs-viewport .director-delivery-card {
+  .director-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 4px 8px;
+  color: #737579;
+  font-size: 12px;
+}
+
+.director-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.director-pagination-actions button {
+  padding: 6px 14px;
+  border: 1px solid #dedfdd;
+  border-radius: 8px;
+  background: #fff;
+  color: #3c4043;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .18s ease;
+}
+
+.director-pagination-actions button:hover:not(:disabled) {
+  border-color: #bdc1c6;
+  background: #f8f9fa;
+}
+
+.director-pagination-actions button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.director-jobs-viewport .director-delivery-card {
     gap: 12px;
   }
 }
@@ -12189,13 +12231,6 @@ body,
 .admin-console-container:has(.admin-body > .overview-viewport) .admin-metric-strip {
   background: #f3f3f1 !important;
   border-bottom-color: #e5e5e2 !important;
-}
-
-.admin-console-container:has(.admin-body > .overview-viewport) .admin-metric-card,
-.admin-console-container:has(.admin-body > .overview-viewport) .admin-metric-card:nth-child(n) {
-  background: #fff !important;
-  border: 1px solid #e5e5e2 !important;
-  box-shadow: none !important;
 }
 
 .admin-console-container:has(.admin-body > .overview-viewport) .metric-label {
