@@ -26,7 +26,6 @@ import { ComposerDock } from "./components/composer/ComposerDock.js";
 import { WorkbenchStage } from "./components/chat/WorkbenchStage.js";
 import { SidebarDrawer } from "./components/chat/SidebarDrawer.js";
 import { HeaderModalContainer } from "./components/modals/HeaderModalContainer.js";
-import { useVoiceInput } from "./hooks/useVoiceInput.js";
 import { useJobPolling } from "./hooks/useJobPolling.js";
 import { useComposerMedia } from "./hooks/useComposerMedia.js";
 import { useDirectorWorkflow } from "./hooks/useDirectorWorkflow.js";
@@ -112,23 +111,7 @@ function ClientApp() {
 
   const isGuestViewer = !authUser || authUser.isGuest === true;
 
-  // 1. 语音听写 Hook
-  const {
-    isListening,
-    isCancelling,
-    setIsCancelling,
-    listeningRemainingSeconds,
-    startVoiceInput,
-    stopVoiceInput,
-    toggleVoiceInput,
-  } = useVoiceInput({
-    onAppendDraft: useCallback((text: string) => {
-      setDraft((current) => `${current}${current.trim() ? " " : ""}${text}`);
-    }, []),
-    onError: useCallback((msg: string) => setFileError(msg), []),
-  });
-
-  // 2. 素材选择与上传 Hook
+  // 1. 素材选择与上传 Hook
   const {
     files,
     setFiles,
@@ -193,7 +176,6 @@ function ClientApp() {
     guideGuestToRegister,
     setFileError,
     textareaRef,
-    stopVoiceInput,
   });
 
   // 真实访客上报
@@ -552,12 +534,55 @@ function ClientApp() {
   const activeMessages = conversations.find((c) => c.id === activeConversationId)?.messages ?? [];
   const isEmpty = activeMessages.length === 0;
 
-  // 刷新页面或切换对话/产生新消息时，自动平滑滚动到工作台最底部（展现最新对话/成片）
+  // 手机端与PC通用：每次打开或切换对话/产生新消息时，确保视图稳稳停留在最新的位置（最底部）
   useEffect(() => {
     const stage = chatStageRef.current;
-    if (!stage) return;
-    stage.scrollTo({ top: stage.scrollHeight, behavior: "smooth" });
-  }, [activeConversationId, activeMessages.length]);
+    if (!stage || isEmpty) return;
+
+    const scrollToBottomInstant = () => {
+      if (!stage) return;
+      stage.scrollTop = stage.scrollHeight;
+    };
+
+    // 1. 立即瞬时触底
+    scrollToBottomInstant();
+
+    // 2. 下一渲染帧触底
+    const rafId = requestAnimationFrame(scrollToBottomInstant);
+
+    // 3. 异步定时触底（等待卡片、字体与海报尺寸计算完成）
+    const t1 = setTimeout(scrollToBottomInstant, 120);
+    const t2 = setTimeout(scrollToBottomInstant, 380);
+    const t3 = setTimeout(scrollToBottomInstant, 800);
+
+    // 4. 利用 ResizeObserver 在首屏加载的 2.5 秒内，内容高度每撑大一次就自动稳在最新位置
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      let isInitialPeriod = true;
+      const initialTimer = setTimeout(() => { isInitialPeriod = false; }, 2500);
+      ro = new ResizeObserver(() => {
+        if (isInitialPeriod && stage) {
+          stage.scrollTop = stage.scrollHeight;
+        }
+      });
+      ro.observe(stage);
+      return () => {
+        cancelAnimationFrame(rafId);
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(initialTimer);
+        ro?.disconnect();
+      };
+    }
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [activeConversationId, activeMessages.length, isEmpty]);
 
   return (
     <main
@@ -634,13 +659,6 @@ function ClientApp() {
         setDraft={setDraft}
         activePlaceholder={activePlaceholder}
         handleKeyDown={handleKeyDown}
-        isListening={isListening}
-        isCancelling={isCancelling}
-        setIsCancelling={setIsCancelling}
-        listeningRemainingSeconds={listeningRemainingSeconds}
-        startVoiceInput={startVoiceInput}
-        stopVoiceInput={stopVoiceInput}
-        toggleVoiceInput={toggleVoiceInput}
         isDirectorThinking={isDirectorThinking}
         isAnyFileUploading={isAnyFileUploading}
       />

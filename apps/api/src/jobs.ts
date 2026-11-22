@@ -185,7 +185,8 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     const created: Array<{ job: GenerationJobRecord; billed: boolean }> = [];
     try {
       for (let index = 0; index < versions; index += 1) {
-        const planForVersion = clientPlans[index] ?? (index === 0 ? parsed.data.directorPlan : undefined);
+        // 批量赛马多版本共用已规划方案（若有各自方案则使用各自方案，无则复用主方案，严禁空方案入库触发后台重跑）
+        const planForVersion = clientPlans[index] ?? parsed.data.directorPlan;
         const input: CreateJobInput = {
           ...batchBaseInput,
           idempotencyKey: index === 0

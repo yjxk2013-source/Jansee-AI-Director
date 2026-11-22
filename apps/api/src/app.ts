@@ -262,11 +262,13 @@ export function buildApp(config: AppConfig): FastifyInstance {
          ORDER BY m.published_at DESC NULLS LAST, m.created_at DESC`,
         [user.id],
       );
-      return reply.send({ messages: result.rows.map((row) => ({
-        id: row.id, subject: row.subject, body: row.body, category: row.category,
-        publishedAt: row.published_at?.toISOString?.() ?? null,
-        readAt: row.read_at?.toISOString?.() ?? null,
-      })) });
+      return reply.send({
+        messages: result.rows.map((row) => ({
+          id: row.id, subject: row.subject, body: row.body, category: row.category,
+          publishedAt: row.published_at?.toISOString?.() ?? null,
+          readAt: row.read_at?.toISOString?.() ?? null,
+        }))
+      });
     });
 
     app.post("/api/v1/inbox/:messageId/read", async (request, reply) => {
@@ -521,7 +523,7 @@ export function buildApp(config: AppConfig): FastifyInstance {
     if (assetNameHits.length > 0) {
       request.log.warn({ userId: user?.id ?? null, scene: "director.assets", hitCount: assetNameHits.length }, "blocked asset name by local preflight");
       return reply.code(422).send({ error: { code: "CONTENT_POLICY_BLOCKED", message: "素材文件名包含平台禁止内容或高风险宣传用语，请调整文件名后重试", requestId: request.id } });
-    }    try {
+    } try {
       // 多版成片（批量赛马）：版数先由用户文字/语音转写文本解析；规划接口只生成首版。
       // 后续版本由各自 Worker 使用单版提示词独立补跑，避免一次 LLM 输出 N 份 JSON 造成整批失败。
       const batch = parseBatchVersions(planningPrompt, parsed.data.mode);

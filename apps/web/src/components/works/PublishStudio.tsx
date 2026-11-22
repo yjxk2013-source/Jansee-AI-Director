@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { WorkItem } from "../../types/client.js";
 
 export interface PublishKit {
@@ -27,7 +28,9 @@ export function PublishStudio({
   onPreviewCover,
   onDownloadCover,
 }: PublishStudioProps) {
-  const coverUrl = coverDataUrl || work.coverUrl;
+  const [primaryFailed, setPrimaryFailed] = useState(false);
+  // 封面第一优先级始终为服务端合成的高清纯净封面 work.coverUrl，绝不被本地 canvas 粗糙黑帧覆盖
+  const coverUrl = !primaryFailed && work.coverUrl ? work.coverUrl : coverDataUrl;
 
   return (
     <div className="work-publish-studio">
@@ -65,6 +68,9 @@ export function PublishStudio({
               src={coverUrl}
               alt="建议视频封面"
               className="work-cover-thumbnail"
+              onError={() => {
+                if (!primaryFailed) setPrimaryFailed(true);
+              }}
             />
           ) : (
             <div className="work-cover-placeholder">

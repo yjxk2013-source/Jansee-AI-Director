@@ -265,68 +265,9 @@ export async function processJob(
       activeJob = { ...job, directorPlan };
       ttsChars = typeof plan.narration === "string" ? Array.from(plan.narration).length : 0;
       console.info(`[jansee-director] plan reused job=${job.id} scene=${route.creationScene}/${route.sceneSource} providerMode=${String(providerTelemetry.providerMode)} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic/unreported")} fallbackUsed=${providerTelemetry.fallbackUsed === true} variant=${String(plan.variant_type ?? "none")} voiceType=${plan.voice_id} candidates=${JSON.stringify(providerTelemetry.voiceCandidateIds ?? [])} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
-    } else if (context.directorPlanner && !isServerValidatedSpeechCut) {
-      const planStartedAt = Date.now();
-      const resolvedPlanningAssets = await Promise.all(assets.map(async (asset) => {
-        let durationSec: number | undefined;
-        if (asset.mediaType === "video" && context.storage) {
-          try {
-            const filePath = await context.storage.getFilePath(asset.storageKey);
-            const probed = probeDurationSec(filePath);
-            if (Number.isFinite(probed) && probed > 0) durationSec = probed;
-          } catch {
-            // 时长探测失败忽略
-          }
-        }
-        return { name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes, ...(durationSec !== undefined ? { durationSec } : {}) };
-      }));
-      // 批量赛马：每个版本都使用与单片一致的导演提示词独立补跑。
-      const plan = await context.directorPlanner.createPlan({
-        mode: job.mode,
-        prompt: job.prompt,
-        aspectRatio: job.aspectRatio,
-        assets: resolvedPlanningAssets,
-      });
-      llmDurationMs = Date.now() - planStartedAt;
-      providerTelemetry = (plan as typeof plan & { _providerTelemetry?: Record<string, unknown> })._providerTelemetry ?? {};
-      ttsChars = typeof plan.narration === "string" ? Array.from(plan.narration).length : 0;
-      const cleanPlan = { ...plan } as Record<string, unknown>;
-      delete cleanPlan["_providerTelemetry"];
-      const directorPlan = {
-        ...cleanPlan,
-        _telemetry: {
-          llmDurationMs,
-          ffmpegDurationMs: 0,
-          rendererDurationMs: 0,
-          e2eDurationMs: 0,
-          ttsDurationMs: 0,
-          ttsChars,
-          providerMode: providerTelemetry.providerMode ?? "unreported",
-          requestedModel: providerTelemetry.requestedModel ?? null,
-          selectedModel: providerTelemetry.selectedModel ?? null,
-          modelsAttempted: providerTelemetry.modelsAttempted ?? [],
-          fallbackUsed: providerTelemetry.fallbackUsed ?? false,
-          promptTokens: providerTelemetry.promptTokens ?? 0,
-          completionTokens: providerTelemetry.completionTokens ?? 0,
-          tokensUsed: providerTelemetry.totalTokens ?? 0,
-          tokenUsageAvailable: providerTelemetry.usageAvailable === true,
-          costEstimateYuan: estimateDirectorCostYuan(providerTelemetry),
-          costSource: providerTelemetry.usageAvailable !== true ? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? "unconfigured" : "director_model_pricing",
-          providerFailureReason: providerTelemetry.failureReason ?? null,
-          scene: providerTelemetry.scene ?? null,
-          sceneSource: providerTelemetry.sceneSource ?? null,
-          lockedVariant: providerTelemetry.lockedVariant ?? null,
-          variantMatched: typeof providerTelemetry.variantMatched === "boolean" ? providerTelemetry.variantMatched : null,
-          modelAttempts: Array.isArray(providerTelemetry.modelAttempts) ? providerTelemetry.modelAttempts : [],
-          variantType: plan.variant_type ?? null,
-          voiceId: plan.voice_id,
-          voiceType: plan.voice_id,
-          speechSpeed: plan.speech_speed ?? 1,
-        },
-      };
-      await jobStore.updateDirectorPlan?.(job.userId, job.id, directorPlan, context.workerId);
-      activeJob = { ...job, directorPlan };
-      console.info(`[jansee-director] plan ready job=${job.id} mode=${job.mode} scene=${String(providerTelemetry.scene ?? "unreported")}/${String(providerTelemetry.sceneSource ?? "unreported")} providerMode=${String(providerTelemetry.providerMode ?? "unreported")} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic")} fallbackUsed=${providerTelemetry.fallbackUsed === true} llmMs=${llmDurationMs} tokens=${Number(providerTelemetry.totalTokens ?? 0)} variant=${String(plan.variant_type ?? "none")} lockedVariant=${String(providerTelemetry.lockedVariant ?? "none")} variantMatched=${providerTelemetry.variantMatched === true} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
+    } else {
+      // 宪法铁律（2026-11-23）：一条成片严格只调用一次 LLM，杜绝 Worker 后台私自补跑刷爆 Token
+      throw new Error("MISSING_DIRECTOR_PLAN: 任务未携带有效导演方案，执行层拒绝后台重复规划");
     }
 
     console.info(`[Worker-规划 | 任务:${job.id.slice(0, 8)}] 2/4 导演方案就绪 (operation=${String(activeJob.directorPlan?.operation ?? "standard")}, voiceId=${String(activeJob.directorPlan?.voice_id ?? "未定")})`);

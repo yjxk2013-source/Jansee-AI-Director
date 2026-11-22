@@ -264,45 +264,6 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
           ? { ...c, updatedAt: Date.now(), messages: baseMessagesWithAssets }
           : c));
 
-        if (submittingMode === "video-dub" && isSpeechCutIntent(submittingDraft)) {
-          let speechResponse = await fetch("/api/v1/speech-cut/analyze", {
-            method: "POST",
-            credentials: "include",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ assetId: assetIds[0] }),
-          });
-          let speechPayload = await speechResponse.json() as { session?: { id: string; status: string }; error?: { code?: string; message?: string } };
-          if (!speechResponse.ok && speechPayload.error?.code === "ASSET_NOT_FOUND") {
-            submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
-            assetIds = await ensureUploads(submittingFiles);
-            speechResponse = await fetch("/api/v1/speech-cut/analyze", {
-              method: "POST",
-              credentials: "include",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ assetId: assetIds[0] }),
-            });
-            speechPayload = await speechResponse.json();
-          }
-          if (!speechResponse.ok || !speechPayload.session) throw new Error(speechPayload.error?.message || "语音分析任务创建失败，请稍后重试。");
-          submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
-          const directorMessage: ChatMessage = {
-            id: makeId(),
-            role: "director",
-            text: "收到。我会先识别原始人声、口头语和明显停顿，再把剪辑建议交给你确认。未经你确认，我不会删除任何台词。",
-            plan: ["语音识别与停顿分析", "逐条展示可删除建议", "你确认后才开始精剪，原始人声保持不变"],
-            speechCutSessionId: speechPayload.session.id,
-            speechCutStatus: "analyzing",
-          };
-          const nextMessages = [...baseMessagesWithAssets, directorMessage];
-          setConversations((current) => current.map((c) => c.id === conversationId
-            ? { ...c, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
-            : c));
-          setDraft("");
-          setFiles([]);
-          if (textareaRef.current) textareaRef.current.style.height = "auto";
-          return;
-        }
-
         let response = await fetch("/api/v1/director/plan", {
           method: "POST",
           credentials: "include",
@@ -316,6 +277,8 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
           }),
         });
         type PlanPayload = {
+          operation?: string;
+          sliceSeconds?: number;
           title: string;
           concept: string;
           scenes: Array<{ order: number; description: string }>;
@@ -368,6 +331,35 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
         const plans = (payload.plans && payload.plans.length ? payload.plans : [plan]) as PlanPayload[];
         const batchTotal = Math.max(1, Math.min(10, Math.floor(payload.batch?.total ?? 1)));
 
+        // 由 LLM 大脑决策：若判定为口播精剪，跳转精剪流水线
+        if (plan.operation === "speech-cut") {
+          let speechResponse = await fetch("/api/v1/speech-cut/analyze", {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ assetId: assetIds[0] }),
+          });
+          let speechPayload = await speechResponse.json() as { session?: { id: string; status: string }; error?: { code?: string; message?: string } };
+          if (!speechResponse.ok || !speechPayload.session) throw new Error(speechPayload.error?.message || "语音分析任务创建失败，请稍后重试。");
+          submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
+          const directorMessage: ChatMessage = {
+            id: makeId(),
+            role: "director",
+            text: "收到导演意图规划：本片将执行口播精剪。我会先识别原始人声、口头语和明显停顿，再把剪辑建议交给你确认。",
+            plan: ["语音识别与停顿分析", "逐条展示可删除建议", "你确认后才开始精剪，原始人声保持不变"],
+            speechCutSessionId: speechPayload.session.id,
+            speechCutStatus: "analyzing",
+          };
+          const nextMessages = [...baseMessagesWithAssets, directorMessage];
+          setConversations((current) => current.map((c) => c.id === conversationId
+            ? { ...c, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
+            : c));
+          setDraft("");
+          setFiles([]);
+          if (textareaRef.current) textareaRef.current.style.height = "auto";
+          return;
+        }
+
         let jobResponse = await fetch("/api/v1/jobs", {
           method: "POST",
           credentials: "include",
@@ -414,7 +406,10 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
         submittingFiles.forEach((file) => uploadPromisesRef.current.delete(fileKey(file)));
         refreshWallet();
 
-        const directorRoleLine = plan.voice_id ? "导演选定音色：" + plan.voice_id : null;
+        const isKeepOriginal = plan.operation === "keep-original";
+        const directorRoleLine = isKeepOriginal
+          ? "原声模式：保留原片人声与环境音，本地 Whisper 提取台词"
+          : (plan.voice_id ? "导演选定音色：" + plan.voice_id : null);
         const planSite = (plan as Record<string, unknown>).site;
         const planList = [
           ...plan.scenes.map((scene) => "镜头 " + scene.order + ((scene as Record<string, unknown>).side_typo ? " · " + (scene as Record<string, unknown>).side_typo : "") + "：" + scene.description),
@@ -424,7 +419,7 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
           ...(directorRoleLine ? [directorRoleLine] : []),
           "BGM 情绪：" + (plan.bgm_emotion || "温和垫底") + "（两段式音量 0.10/0.22 避让人声）",
           "转场效果：0.7 秒柔和叠画（宪法级过渡）",
-          "成片时长：按配音实测自动对齐",
+          isKeepOriginal ? "成片时长：保留原视频时长无损直出" : "成片时长：按配音实测自动对齐",
         ];
 
         const baseMessagesForWorkbench = baseMessagesWithAssets.map((m) =>

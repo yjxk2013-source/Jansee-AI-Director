@@ -180,6 +180,7 @@ export function WorkbenchStage({
               </div>
             );
           })}
+          <div id="workbench-bottom-anchor" style={{ height: "1px", width: "100%", pointerEvents: "none" }} />
         </div>
       )}
     </section>

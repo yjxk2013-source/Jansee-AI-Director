@@ -12,9 +12,9 @@ export function useTimedNotice(): [string, (next: string) => void] {
     setValue(next);
     timerRef.current = next
       ? window.setTimeout(() => {
-          setValue("");
-          timerRef.current = undefined;
-        }, NOTICE_DURATION_MS)
+        setValue("");
+        timerRef.current = undefined;
+      }, NOTICE_DURATION_MS)
       : undefined;
   }, []);
   useEffect(() => () => {
@@ -49,9 +49,9 @@ export function mediaKind(file: File): Attachment["kind"] | null {
   return null;
 }
 
-export function isSpeechCutIntent(prompt: string) {
-  if (/(不要|不需要|别|保留).{0,8}(剪|删|去掉).{0,8}(口头语|语气词|嗯啊|停顿|重复)/.test(prompt)) return false;
-  return /口播精剪|智能剪口播|(?:剪掉|删掉|去掉|删除|清理|精剪).{0,10}(?:口头语|语气词|嗯啊|停顿|重复|冗余)|(?:口头语|语气词|嗯啊|停顿|重复|冗余).{0,10}(?:剪掉|删掉|去掉|删除|清理|精剪)/.test(prompt);
+// 废弃硬编码关键词匹配：意图由 LLM 导演大脑全权判定输出 operation
+export function isSpeechCutIntent(_prompt: string) {
+  return false;
 }
 
 export const JOB_PROGRESS_LOGS: Record<string, Array<{ speaker: string; text: string }>> = {

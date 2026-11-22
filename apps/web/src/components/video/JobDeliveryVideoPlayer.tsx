@@ -21,7 +21,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           setCapturedCover(canvas.toDataURL("image/jpeg", 0.85));
         }
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -73,7 +73,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
     if (videoRef.current) {
       void videoRef.current.play().then(() => {
         setIsActuallyPlaying(true);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 

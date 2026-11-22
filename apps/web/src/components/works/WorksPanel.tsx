@@ -261,7 +261,7 @@ export function WorksPanel({
                     poster={work.coverUrl || coverDataUrls[work.id] || undefined}
                     aria-label={titleLabel}
                     onLoadedData={() => {
-                      if (!coverDataUrls[work.id]) {
+                      if (!work.coverUrl && !coverDataUrls[work.id]) {
                         const video = videoRefs.current[work.id];
                         if (video && video.videoWidth > 0) {
                           try {

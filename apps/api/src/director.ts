@@ -131,7 +131,7 @@ export interface DirectorProviderTelemetry {
   totalTokens: number;
   usageAvailable: boolean;
   costUsageAvailable: boolean;
-  scene: "online-ecommerce" | "physical-store" | "personal-creation";
+  scene: "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut";
   sceneSource: "user-selected" | "keyword-inferred";
   lockedVariant: string | null;
   variantMatched: boolean | null;
@@ -260,8 +260,9 @@ export function isDirectorPlanCompatible(input: DirectorPlanResolvedInput, plan:
 }
 
 function routeTelemetry(route: DirectorRouteResolution, hits: { variantMatched: boolean | null }): Pick<DirectorProviderTelemetry, "scene" | "sceneSource" | "lockedVariant" | "variantMatched"> {
+  const telemetryScene = (route.creationScene === "quick-cut" ? "personal-creation" : route.creationScene) as DirectorProviderTelemetry["scene"];
   return {
-    scene: route.creationScene,
+    scene: telemetryScene,
     sceneSource: route.sceneSource,
     lockedVariant: route.decidedVariant,
     variantMatched: hits.variantMatched,
@@ -301,10 +302,9 @@ export function createHeuristicDirectorPlanner(): DirectorPlanner {
       }));
 
       const sliceSeconds = parseSliceSeconds(text);
-      const deterministicOperation = resolveDeterministicOperation(mode, text);
 
       return {
-        operation: deterministicOperation ?? "standard",
+        operation: "standard",
         sliceSeconds,
         title: `${input.prompt.slice(0, 15)} 商业成片方案`,
         concept: route.isPersonal ? "基于简兮宪法导演规则，围绕创作者个人表达与素材节奏组织成片。" : "基于简兮成熟 AI 导演引擎，结合变体叙事、两段式人声避让与叠画转场组织成片。",
@@ -499,6 +499,7 @@ export function createOpenAICompatiblePlanner(config: {
   streamTimeoutMs?: number;
   maxTokens?: number;
   thinkingBudget?: number;
+  maxAttemptsPerModel?: number;
   fetchImpl?: typeof fetch;
 }): DirectorPlanner {
   const fetchImpl = config.fetchImpl ?? fetch;
@@ -516,32 +517,18 @@ export function createOpenAICompatiblePlanner(config: {
     Object.assign(plan, { _providerTelemetry: telemetry });
 
   /**
-   * 快捷路径：确定性剪辑决策 / 模拟密钥——不进 LLM，逐版走规则兜底。
-   * 返回空数组表示不命中快捷路径，应走主模型调用。
+   * 快捷路径：仅在测试/模拟密钥环境下走本地规则，真实创作全权交由 LLM 大脑进行意图分析。
+   * 返回空数组表示走主模型调用。
    */
   async function planViaShortcuts(input: DirectorPlanResolvedInput): Promise<DirectorPlan[]> {
     const count = Math.max(1, Math.floor(input.batchVersions ?? 1));
-    const deterministicOperation = resolveDeterministicOperation(input.mode, input.prompt);
     const isMockKey = !config.apiKey || config.apiKey === "test-key" || config.apiKey.startsWith("mock-");
-    if (!deterministicOperation && !isMockKey) return [];
+    if (!isMockKey) return [];
     const route = resolveDirectorRoute(input);
     const plans: DirectorPlan[] = [];
     for (let index = 0; index < count; index += 1) {
       const plan = await fallbackPlanner.createPlan(input);
-      plans.push(attachTelemetry(plan, deterministicOperation ? {
-        providerMode: "deterministic",
-        requestedModel: config.model,
-        selectedModel: null,
-        modelsAttempted: [],
-        modelAttempts: [],
-        fallbackUsed: false,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        usageAvailable: false,
-        costUsageAvailable: false,
-        ...routeTelemetry(route, resolveDirectorHits(input, plan, route)),
-      } : {
+      plans.push(attachTelemetry(plan, {
         providerMode: "heuristic", requestedModel: config.model, selectedModel: null,
         modelsAttempted: [], modelAttempts: [], fallbackUsed: true, promptTokens: 0, completionTokens: 0, totalTokens: 0, usageAvailable: false, costUsageAvailable: false,
         ...routeTelemetry(route, resolveDirectorHits(input, plan, route)),
@@ -556,34 +543,35 @@ export function createOpenAICompatiblePlanner(config: {
     // 批量赛马：提示词契约按版数切换（versions 数组），单版保持原样。
     const planningInput = expectedPlans > 1 ? { ...input, batchVersions: expectedPlans } : input;
     const route = resolveDirectorRoute(planningInput);
-    const deterministicOperation = resolveDeterministicOperation(input.mode, input.prompt);
     const models = [...new Set([config.model, ...(config.fallbackModels ?? [])].map((model) => model.trim()).filter(Boolean))];
     const modelsAttempted: string[] = [];
     const modelAttempts: DirectorModelAttempt[] = [];
     let lastError: unknown;
+    const maxAttempts = Math.max(1, config.maxAttemptsPerModel ?? 1);
     for (const model of models) {
       if (!modelsAttempted.includes(model)) modelsAttempted.push(model);
-      // 严格单次调用：禁止反复重试 LLM，首选 1 次 + 备选 1 次，杜绝 Token 浪费。
-      const attemptStartedAt = Date.now();
-      const controller = new AbortController();
-      // 首包预算：首选 DeepSeek 25s 吐首字，备选 GLM 60s 吐首字。
-      // 一旦收到任意首包（无论是 reasoning 还是 content），立即彻底清除计时器，后续全程耐心等待，不限时。
-      const firstPacketTimeoutMs = model === config.model
-        ? (Number(config.timeoutMs) > 0 ? Number(config.timeoutMs) : 25_000)
-        : (Number(config.fallbackTimeoutMs) > 0 ? Number(config.fallbackTimeoutMs) : 60_000);
-      let timeoutError: Error | undefined;
-      let rejectTimeout!: (reason: Error) => void;
-      const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject; });
-      const fireTimeout = (error: Error) => {
-        timeoutError = error;
-        rejectTimeout(error);
-        controller.abort();
-      };
-      let firstPacketReceived = false;
-      let timer: NodeJS.Timeout | null = setTimeout(() => {
-        fireTimeout(new Error(`Director provider first token timed out after ${firstPacketTimeoutMs}ms`));
-      }, firstPacketTimeoutMs);
-      try {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        // 严格单次调用：默认禁止反复重试 LLM，首选 1 次 + 备选 1 次，杜绝 Token 浪费。
+        const attemptStartedAt = Date.now();
+        const controller = new AbortController();
+        // 首包预算：首选 DeepSeek 25s 吐首字，备选 GLM 60s 吐首字。
+        // 一旦收到任意首包（无论是 reasoning 还是 content），立即彻底清除计时器，后续全程耐心等待，不限时。
+        const firstPacketTimeoutMs = model === config.model
+          ? (Number(config.timeoutMs) > 0 ? Number(config.timeoutMs) : 25_000)
+          : (Number(config.fallbackTimeoutMs) > 0 ? Number(config.fallbackTimeoutMs) : 60_000);
+        let timeoutError: Error | undefined;
+        let rejectTimeout!: (reason: Error) => void;
+        const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject; });
+        const fireTimeout = (error: Error) => {
+          timeoutError = error;
+          rejectTimeout(error);
+          controller.abort();
+        };
+        let firstPacketReceived = false;
+        let timer: NodeJS.Timeout | null = setTimeout(() => {
+          fireTimeout(new Error(`Director provider first token timed out after ${firstPacketTimeoutMs}ms`));
+        }, firstPacketTimeoutMs);
+        try {
         const response = await Promise.race([fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
           headers: {
@@ -686,16 +674,9 @@ export function createOpenAICompatiblePlanner(config: {
         const validatedPlans = rawPlans.map((rawPlan) => {
           const parsed = { ...rawPlan };
           normalizeDirectorVoiceId(parsed);
-          // A clear slicing request is a deterministic operation decision, even if the LLM omits it.
-          if (deterministicOperation) {
-            parsed.operation = deterministicOperation;
-          } else {
-            // 用户没有要求保留原声或切片，禁止 LLM 自行决定 keep-original 导致静默跳过 TTS 与字幕
-            if (parsed.operation === "keep-original") {
-              parsed.operation = "standard";
-            }
+          if (parsed.operation === "video-slice" && !Number(parsed.sliceSeconds)) {
+            parsed.sliceSeconds = parseSliceSeconds(input.prompt);
           }
-          if (deterministicOperation === "video-slice") parsed.sliceSeconds = parseSliceSeconds(input.prompt);
           if (!parsed.packaging || typeof parsed.packaging !== "object") {
             parsed.packaging = { intro: true, subtitles: true, bgm: true };
           }
@@ -761,6 +742,7 @@ export function createOpenAICompatiblePlanner(config: {
           clearTimeout(timer);
           timer = null;
         }
+      }
       }
     }
     // 所有配置模型均调用失败：如实抛错，由调用方降级/标 failed。不再静默 heuristic 兜底。

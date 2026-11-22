@@ -49,27 +49,28 @@ const COMMERCE_REGEX = /(保暖|打底|衣服|裤|裙|鞋|包|手表|机械表|�
 const LOCAL_REGEX = /(老店|老字号|餐馆|火锅|烤鸭|烧烤|烤肉|咖啡|小酒馆|奶茶|甜品|门店|门头|档口|招牌菜|堂食|包间|人均|位置|同城|探店|打卡|免预约|地址|商圈|步行街|地铁站|营业时间|聚餐|约会|排队|环境好|到店|附近)/i;
 
 /**
- * 智能识别文本中的商业实体属性（区分线上电商带货与同城探店）
+ * 智能识别文本中的商业实体属性（区分线上电商带货、同城探店、个人创作与一句话剪辑）
  */
-export type CreationScene = "online-ecommerce" | "physical-store" | "personal-creation";
-/** 用户可见的创作入口；quick-cut 不走 LLM 导演场景路由。 */
-export type CreationEntryScene = CreationScene | "quick-cut";
+export type CreationScene = "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut";
+/** 用户可见的创作入口 */
+export type CreationEntryScene = CreationScene;
 
 const SCENE_MARKER_RE = /^\[User-selected creation scene:\s*(?:online-ecommerce|physical-store|personal-creation|quick-cut)\.?\]\s*\n?/i;
 
 /** 把前端明确选择的创作场景写成服务端可识别的提示词前缀（幂等，旧前缀会被替换）。 */
 export function withCreationSceneMarker(prompt: string, scene?: CreationEntryScene): string {
-  if (!scene || scene === "quick-cut") return prompt;
+  if (!scene) return prompt;
   return `[User-selected creation scene: ${scene}.]\n${prompt.replace(SCENE_MARKER_RE, "")}`;
 }
 
 /** Resolve explicit composer choice before any keyword inference. */
 export function detectCreationScene(text = "", mode: CreationMode = "image-film"): CreationScene {
-  const selected = text.match(/User-selected creation scene:\s*(online-ecommerce|physical-store|personal-creation)/i)?.[1]?.toLowerCase();
-  if (selected === "online-ecommerce" || selected === "physical-store" || selected === "personal-creation") return selected;
+  const selected = text.match(/User-selected creation scene:\s*(online-ecommerce|physical-store|personal-creation|quick-cut)/i)?.[1]?.toLowerCase();
+  if (selected === "online-ecommerce" || selected === "physical-store" || selected === "personal-creation" || selected === "quick-cut") return selected;
   if (text.includes("physical-store")) return "physical-store";
   if (text.includes("online-ecommerce")) return "online-ecommerce";
   if (text.includes("personal-creation")) return "personal-creation";
+  if (text.includes("quick-cut")) return "quick-cut";
   return detectSceneIntent(text, mode) === "local" ? "physical-store" : "online-ecommerce";
 }
 
@@ -100,11 +101,11 @@ export interface DirectorRouteResolution {
 
 /** 统一解析创建场景与锁定变体，供提示词组装与导演遥测共用，保证单一事实来源。 */
 export function resolveDirectorRoute(input: DirectorPlanResolvedInput): DirectorRouteResolution {
-  const userSelected = /User-selected creation scene:\s*(online-ecommerce|physical-store|personal-creation)/i.test(input.prompt)
-    || ["physical-store", "online-ecommerce", "personal-creation"].some((key) => input.prompt.includes(key));
+  const userSelected = /User-selected creation scene:\s*(online-ecommerce|physical-store|personal-creation|quick-cut)/i.test(input.prompt)
+    || ["physical-store", "online-ecommerce", "personal-creation", "quick-cut"].some((key) => input.prompt.includes(key));
   const creationScene = detectCreationScene(input.prompt, input.mode);
   const scene = creationScene === "physical-store" ? "local" : "sell";
-  const isPersonal = creationScene === "personal-creation";
+  const isPersonal = creationScene === "personal-creation" || creationScene === "quick-cut";
   // 风格与变体完全交给 LLM，自主适配当前事实、受众与创作目标。
   const decidedVariant = null;
   return { creationScene, scene, isPersonal, decidedVariant, sceneSource: userSelected ? "user-selected" : "keyword-inferred" };
@@ -175,15 +176,15 @@ const CANDIDATE_EMOTIONS = [
 export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): string {
   const { creationScene, scene, isPersonal, decidedVariant } = resolveDirectorRoute(input);
   const personaRules = isPersonal
-    ? "Personal creator direction: preserve authentic personal expression without forced commercial language."
+    ? ""
     : scene === "local"
-      ? "Local content direction: use the supplied facts and freely choose the most authentic current expression for the venue and audience."
-      : "Commercial content direction: use the supplied facts and freely choose the freshest effective narrative, hook and voice for the audience.";
+      ? LOCAL_PERSONA_RULES
+      : SELL_PERSONA_RULES;
   const voiceBlock = buildVoiceInstructions(input.prompt, creationScene);
 
   const batchVersions = Math.max(1, Math.floor(input.batchVersions ?? 1));
   const planExample = {
-    operation: "standard (默认) 或 video-slice (仅当用户明确要求截取高光切片时)",
+    operation: "standard (默认全新配音出片) | keep-original (保留原声直出) | speech-cut (口播精剪去语气词/停顿) | video-slice (按指定秒数切片)",
     sliceSeconds: 20,
     title: "画面视觉主标题（4~6字最佳的凝练高奢短语，如「素履以往」「手作咖啡」「现烤蛋挞」，字数越少排版越大气高级，严禁冗长句子，严禁复制发布标题）",
     concept: "结合变体与口播人设的情绪创作阐述（20~100字）",
@@ -198,7 +199,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     voice_id: "真实腾讯 TTS VoiceType 数字 ID（例如 403010、402001、404000、402000）",
     speech_speed: 1.0,
     bgm_emotion: "从情绪池选 1 个",
-    variant_type: isPersonal ? "personal-creation" : "由导演根据当前事实与受众自主判断，不使用固定变体池",
+    variant_type: isPersonal ? "personal-creation" : (scene === "local" ? "从上方 8 种本地探店变体中选 1 种填入" : "从上方 14 种电商带货变体中选 1 种填入"),
     packaging: { intro: true, subtitles: true, bgm: true },
     publish: {
       title: "社交媒体发布标题（必填，10~28字，抖音/快手/小红书/视频号的爆款发布标题，直击受众痛点与好奇心，严禁为空，严禁写成4字设计卡短标题）",
@@ -210,17 +211,23 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
   };
   const contractSections = batchVersions > 1
     ? [
-        `仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 \`\`\`json），严禁前后缀解释。本次为批量赛马规划：顶层必须是 { "versions": [ ... ] }，versions 数组恰好包含 ${batchVersions} 个方案对象（数组顺序即版本顺序），每个对象字段与下方模板一致：`,
-        `批内差异化铁律（最高优先级）：${batchVersions} 个版本必须彼此明显不同——① variant_type 互不相同；② voice_id 严禁任何两版重复（每版从候选集中为该版单独挑选最契合的音色，性别与气质都要拉开）；③ bgm_emotion 尽量不重复；④ 台词的切入角度、开场钩子与情绪基调逐版拉开，让用户一眼听出是不同的成片。每个版本都独立满足全部创作规则（分镜数与素材数对齐、黄金3秒钩子、JSON 字段完整）。`,
-        JSON.stringify({ versions: [planExample, `……（共 ${batchVersions} 个版本对象，每个都是完整方案，字段与上方模板一致）`] }, null, 2),
-      ]
+      `仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 \`\`\`json），严禁前后缀解释。本次为批量赛马规划：顶层必须是 { "versions": [ ... ] }，versions 数组恰好包含 ${batchVersions} 个方案对象（数组顺序即版本顺序），每个对象字段与下方模板一致：`,
+      `批内差异化铁律（最高优先级）：${batchVersions} 个版本必须彼此明显不同——① variant_type 互不相同；② voice_id 严禁任何两版重复（每版从候选集中为该版单独挑选最契合的音色，性别与气质都要拉开）；③ bgm_emotion 尽量不重复；④ 台词的切入角度、开场钩子与情绪基调逐版拉开，让用户一眼听出是不同的成片。每个版本都独立满足全部创作规则（分镜数与素材数对齐、黄金3秒钩子、JSON 字段完整）。`,
+      JSON.stringify({ versions: [planExample, `……（共 ${batchVersions} 个版本对象，每个都是完整方案，字段与上方模板一致）`] }, null, 2),
+    ]
     : [
-        "仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 ```json），严禁前后缀解释。字段列表：",
-        JSON.stringify(planExample, null, 2),
-      ];
+      "仅输出一个合法纯 JSON 对象，严禁 Markdown 代码块包裹（禁 ```json），严禁前后缀解释。字段列表：",
+      JSON.stringify(planExample, null, 2),
+    ];
 
   const sections: string[] = [
     `Director route: ${creationScene}. Constitution Director owns global rules; persona directors operate within its boundaries.`,
+    "===== 简兮 AI 导演 · 全局意图决策与操作指令 (Operation Intent Brain) =====",
+    "你作为简兮 AI 导演的最高决策大脑，必须深度分析用户在 prompt 中表达的真实意图，精准输出 operation（严禁输出其他枚举）：",
+    "1. keep-original（保留原声直出）：当用户明确表达希望保留视频原生声音、我的原声、原本声音、原声音频、不要重新配音、原片直出等意图时，必须输出 keep-original。此时成片将保留原声，底层执行层调用本地 Whisper 生成发丝级原声字幕并制作高奢片头与纯净封面；narration 可写对原片精髓的提炼总结或留空；",
+    "2. speech-cut（口播精剪）：当用户表达去除口头语、剪掉语气词、删除停顿/重复/废话等意图时，输出 speech-cut；",
+    "3. video-slice（画面切片）：当用户要求按指定秒数截取高光切片时，输出 video-slice，并在 sliceSeconds 中给出截取秒数；",
+    "4. standard（标准全新配音出片）：用户希望重新编写分镜解说词并合成全新 AI 人声配音时，输出 standard（默认）。",
     "===== 简兮 AI 导演 · 全局宪法核心视听铁律 (Constitution Core) =====",
     input.mode === "image-film"
       ? "1. 图片与分镜对齐律：输入 N 张图片素材，规划 N 个分镜镜头，按视觉叙事顺序编排；全局 narration 旁白必须由 N 句精炼台词组成（每句用标点隔开，严格对应第 1 到第 N 个分镜镜头），每句台词经 TTS 实测后的真实时长决定对应图片的画面展示时长；"
@@ -231,7 +238,9 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "3. 视听高级感铁律：死守无损物理安全区与 0 Emoji 规范；标题极简克制，副标留白点睛，正文旁白自然松弛。",
     CONSTITUTION_RULES,
     input.mode === "storyboard" ? STORYBOARD_CORE_RULES : "",
-    creationScene === "personal-creation" ? "[ROUTE] Personal creator path: Constitution Director directs knowledge, lifestyle, personal expression or personal IP. Do not use commercial variants." : "",
+    creationScene === "personal-creation"
+      ? "[ROUTE] Personal creator path: Constitution Director directs knowledge, lifestyle, personal expression or personal IP. Do not use commercial variants."
+      : (scene === "local" ? "[ROUTE] Local: use the 8 local variants only." : "[ROUTE] Ecommerce: use the 14 ecommerce variants only."),
     `简兮总导演。Mode: ${input.mode === "image-film" ? "image film" : input.mode === "video-dub" ? "single video dub" : "storyboard"}. Scene: ${input.prompt.includes("online-ecommerce") ? "product sales" : input.prompt.includes("physical-store") ? "store attraction" : input.prompt.includes("personal-creation") ? "personal creation" : scene === "local" ? "local business" : "ecommerce"}.`,
     input.prompt.includes("personal-creation") ? "[SCENE] Personal: focus on creator expression, not selling." : "",
     input.prompt.includes("online-ecommerce") ? "[SCENE] Ecommerce: only use supplied product facts." : "",
@@ -246,24 +255,22 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "===== 成片旁白与分镜节奏编排规范 =====",
     ...(input.mode === "video-dub"
       ? [
-          "1. 视频配音模式说明：本任务为单段已有视频配音，画面原生时长是固定的。narration 是全片主播口播台词，由 2~4 句精炼台词组成（由句号、感叹号或问号隔开）；",
-          "2. 台词体量与时长严格契合：按自然净语速约 3 字/秒，台词总字数必须严格受控在视频时长对应的字数限额内，确保全片在画面结束前 1.5 秒从容收尾，切禁过长；",
-          "3. scenes 数组输出 1 个主体镜头描述（order: 1, description: 针对全片核心画面的视觉呈现总结，motion: sweep_lr）。",
-        ]
+        "1. 视频配音模式说明：本任务为单段已有视频配音，画面原生时长是固定的。narration 是全片主播口播台词，由 2~4 句精炼台词组成（由句号、感叹号或问号隔开）；",
+        "2. 台词体量与时长严格契合：按自然净语速约 3 字/秒，台词总字数必须严格受控在视频时长对应的字数限额内，确保全片在画面结束前 1.5 秒从容收尾，切禁过长；",
+        "3. scenes 数组输出 1 个主体镜头描述（order: 1, description: 针对全片核心画面的视觉呈现总结，motion: sweep_lr）。",
+      ]
       : [
-          "1. narration 字段是全片口播配音的唯一样本。如果用户输入提供了 N 个素材，narration 必须恰好由 N 句精炼台词组成，每句用标点符号（句号、感叹号或问号）清晰隔开；",
-          "2. 每一句台词按顺序严格对应第 1 到第 N 个分镜素材，执行层会将每句话与对应分镜无缝绑定；",
-          "3. 严禁单句长难句跨越多个分镜镜头，必须确保每一句话在当前镜头内语意完整、富有呼吸节奏；",
-          "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点安排（只描述画面看点，不要写运镜动作）。",
-          "5. 运镜编排铁律：每个 scene 必须额外输出 motion 字段，且只能从下面这份【引擎支持的运镜 ID 清单】里选一个原样填入，严禁自造运镜词、严禁输出清单外的任何值：",
-          "   - sweep_lr：镜头横向平移，从左向右缓缓扫过（适合横向铺陈、多主体依次呈现）",
-          "   - sweep_rl：镜头横向平移，从右向左缓缓扫过（适合横向铺陈、反向节奏）",
-          "   - rise_up：镜头缓缓向上抬升（适合突出高度、纵深感、主体登场）",
-          "   - diagonal：镜头斜向平移（适合增加动感、打破呆板构图）",
-          "   运镜要服务于该镜内容：按情绪和画面看点为每个镜头编排，相邻镜头尽量不重复同一种运镜；motion 只填上面 4 个 ID 之一（如 \"motion\": \"rise_up\"），不要写中文描述。",
-        ]),
-    "   - diagonal：镜头斜向平移（适合增加动感、打破呆板构图）",
-    "   运镜要服务于该镜内容：按情绪和画面看点为每个镜头编排，相邻镜头尽量不重复同一种运镜；motion 只填上面 4 个 ID 之一（如 \"motion\": \"rise_up\"），不要写中文描述。",
+        "1. narration 字段是全片口播配音的唯一样本。如果用户输入提供了 N 个素材，narration 必须恰好由 N 句精炼台词组成，每句用标点符号（句号、感叹号或问号）清晰隔开；",
+        "2. 每一句台词按顺序严格对应第 1 到第 N 个分镜素材，执行层会将每句话与对应分镜无缝绑定；",
+        "3. 严禁单句长难句跨越多个分镜镜头，必须确保每一句话在当前镜头内语意完整、富有呼吸节奏；",
+        "4. scenes 数组的长度必须为 N（与素材数量一致），order 从 1 到 N，description 为该分镜镜头的视觉焦点安排（只描述画面看点，不要写运镜动作）。",
+        "5. 运镜编排铁律：每个 scene 必须额外输出 motion 字段，且只能从下面这份【引擎支持的运镜 ID 清单】里选一个原样填入，严禁自造运镜词、严禁输出清单外的任何值：",
+        "   - sweep_lr：镜头横向平移，从左向右缓缓扫过（适合横向铺陈、多主体依次呈现）",
+        "   - sweep_rl：镜头横向平移，从右向左缓缓扫过（适合横向铺陈、反向节奏）",
+        "   - rise_up：镜头缓缓向上抬升（适合突出高度、纵深感、主体登场）",
+        "   - diagonal：镜头斜向平移（适合增加动感、打破呆板构图）",
+        "   运镜要服务于该镜内容：按情绪和画面看点为每个镜头编排，相邻镜头尽量不重复同一种运镜；motion 只填上面 4 个 ID 之一（如 \"motion\": \"rise_up\"），不要写中文描述。",
+      ]),
     "",
     "===== 场景人设与变体规则 =====",
     personaRules,
