@@ -455,7 +455,7 @@ export class InMemoryBillingStore implements BillingStore {
     for (const order of this.orders.values()) {
       const expiresAt = order.paymentExpiresAt
         ? new Date(order.paymentExpiresAt).getTime()
-        : new Date(order.createdAt).getTime() + 30 * 60 * 1000;
+        : new Date(order.createdAt).getTime() + 5 * 60 * 1000;
       if (order.userId === userId && order.status === "pending" && order.paymentProvider === "opcpay" && expiresAt <= cutoff.getTime()) {
         order.status = "closed";
         closed += 1;

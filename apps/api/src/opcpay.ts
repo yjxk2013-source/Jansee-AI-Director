@@ -257,12 +257,12 @@ export class OpcpayService {
       if (!this.billingStore.attachPaymentIntent) {
         throw new Error("充值账本不支持持久化支付意图，已阻止发起付款");
       }
-      const expiryCutoff = new Date(Date.now() - 20 * 60 * 1000);
+      const expiryCutoff = new Date(Date.now() - 5 * 60 * 1000);
       const existingPending = await this.billingStore.findPendingProviderOrders?.(userId, "opcpay") ?? [];
       for (const pending of existingPending) {
         const expiry = pending.paymentExpiresAt
           ? new Date(pending.paymentExpiresAt).getTime()
-          : new Date(pending.createdAt).getTime() + 30 * 60 * 1000;
+          : new Date(pending.createdAt).getTime() + 5 * 60 * 1000;
         if (expiry <= expiryCutoff.getTime()) await this.reconcileOrderLocked(userId, pending);
       }
       await this.billingStore.closeExpiredProviderOrders?.(userId, expiryCutoff);
@@ -324,7 +324,7 @@ export class OpcpayService {
         priceYuan: Number(option.price),
         priceVersion: Number(option.price_version),
         payUrl: "",
-        expiresAt: current.paymentExpiresAt ?? new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        expiresAt: current.paymentExpiresAt ?? new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
 
       let purchase = await client.purchase({

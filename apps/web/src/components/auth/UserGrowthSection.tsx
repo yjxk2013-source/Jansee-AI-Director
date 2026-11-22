@@ -59,10 +59,14 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
     QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" })
       .then((dataUrl: string) => { if (active) setInviteQrDataUrl(dataUrl); })
       .catch(() => {
-        if (active) {
-          // 降级使用后端 QR 服务，保障二维码可靠呈现
-          setInviteQrDataUrl(`/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
-        }
+        // 前端纯 js 离线渲染兜底
+        QRCode.toDataURL(inviteUrl, { width: 320, margin: 1, errorCorrectionLevel: "M" })
+          .then((dataUrl: string) => { if (active) setInviteQrDataUrl(dataUrl); })
+          .catch(() => {
+            if (active) {
+              setInviteQrDataUrl(`/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
+            }
+          });
       });
     return () => { active = false; };
   }, [growth?.inviteCode]);
@@ -245,7 +249,7 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       const inviteUrl = "https://jansee.cn/?ref=" + encodeURIComponent(growth.inviteCode);
       const qrDataUrl = await QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" })
         .catch(() => `/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
-      
+
       const qr = new Image();
       const qrLoaded = new Promise<void>((resolve, reject) => {
         qr.onload = () => resolve();

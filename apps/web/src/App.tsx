@@ -82,8 +82,8 @@ function ClientApp() {
     return list[placeholderIndex % list.length] ?? list[0]!;
   }, [creationScene, placeholderIndex]);
 
-  const [guestTip, setGuestTip] = useState("");
-  const [fileError, setFileError] = useState("");
+  const [guestTip, setGuestTip] = useTimedNotice();
+  const [fileError, setFileError] = useTimedNotice();
   const [notice, showNotice] = useTimedNotice();
   const [isDragging, setIsDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -446,6 +446,13 @@ function ClientApp() {
 
   const activeMessages = conversations.find((c) => c.id === activeConversationId)?.messages ?? [];
   const isEmpty = activeMessages.length === 0;
+
+  // 刷新页面或切换对话/产生新消息时，自动平滑滚动到工作台最底部（展现最新对话/成片）
+  useEffect(() => {
+    const stage = chatStageRef.current;
+    if (!stage) return;
+    stage.scrollTo({ top: stage.scrollHeight, behavior: "smooth" });
+  }, [activeConversationId, activeMessages.length]);
 
   return (
     <main
