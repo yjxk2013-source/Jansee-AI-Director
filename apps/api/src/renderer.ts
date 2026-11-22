@@ -276,7 +276,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 30),
             intro_title: typeof plan?.title === "string" ? plan.title : job.prompt.slice(0, 30),
             intro_en: "JANSEE",
-            intro_note: "AI DIRECTOR",
+            intro_note: typeof plan?.note === "string" ? plan.note : "AI DIRECTOR",
             shots,
             bgm_emotion: typeof plan?.bgm_emotion === "string" ? plan.bgm_emotion : "warm",
             bgm_on: (plan?.packaging as Record<string, unknown> | undefined)?.bgm !== false && plan?.bgm_on !== false,

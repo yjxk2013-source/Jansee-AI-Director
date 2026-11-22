@@ -184,9 +184,11 @@ export async function produceVideoDub({ taskId, taskDir, videoFile, cut, voiceId
   /* —— 0.4 开场微光花字包装：共享层 @jansee/intro-kit，简兮经典 tpl_fashion_v1 上下双向微光排版 —— */
   /* —— 0.4 开场微光花字包装与纯净宣发封面（加开场设计、无台词字幕、无 AI 标） —— */
   let introFile = null;
-  const introTitle = String(cut?.publish?.cover_title || cut?.intro_title || cut?.title || cut?.shots?.[0]?.line || 'JANSEE FILM').trim();
+  // 设计卡视觉主标题：坚决只取 cut.title（4~6字极简主标），严禁取发布引流长句 cover_title
+  const introTitle = String(cut?.title || cut?.intro_title || cut?.shots?.[0]?.line || 'JANSEE FILM').trim();
   const introEn = String(cut?.intro_en || cut?.site || 'JANSEE FILM').trim();
-  const introNote = String(cut?.intro_note || cut?.concept || cut?.shots?.[1]?.line || cut?.end_line || '留一席留白 · 慢下来品味').trim();
+  // 设计卡点睛副标：优先取 cut.note（6~16字调性短句），严禁取几百字的 concept
+  const introNote = String(cut?.note || cut?.intro_note || cut?.end_line || '留一席留白 · 慢下来品味').trim();
   const introIdx = String(cut?.intro_idx || 'NO. 01 / CINEMATIC DUB').trim();
 
   try {

@@ -103,7 +103,7 @@ const storyboardEngine: ProductionEngine = {
             title: String(plan.title || "JANSEE"),
             brandEn: "JANSEE",
             site: "JANSEE",
-            note: "AI DIRECTOR",
+            note: String(plan.note || "AI DIRECTOR"),
             idx: "JANSEE FILM",
             width: canvas.width,
             height: canvas.height,
@@ -241,14 +241,15 @@ const storyboardEngine: ProductionEngine = {
     let coverStorageKey: string | undefined;
     const coverPath = path.join(context.taskDir, "cover.jpg");
     try {
+      // 设计卡视觉主标题：坚决只取 plan.title（4~6字极简主标），严禁取发布引流长句 cover_title
       const introTitle = String(
-        (plan.publish as Record<string, unknown> | undefined)?.cover_title ||
-        plan.intro_title ||
         plan.title ||
+        plan.intro_title ||
         "JANSEE FILM"
       ).trim();
       const introEn = String(plan.intro_en || plan.site || "JANSEE FILM").trim();
-      const introNote = String(plan.intro_note || plan.concept || "一席留白 · 静待亲临").trim();
+      // 设计卡点睛副标：优先取 plan.note（6~16字调性短句），严禁取几百字的 concept
+      const introNote = String(plan.note || plan.intro_note || "一席留白 · 静待亲临").trim();
       await composePureCover({
         bgSource: shots[0]!.file,
         title: introTitle,
