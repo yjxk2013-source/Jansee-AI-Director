@@ -23,9 +23,10 @@ export function registerVoiceTranscribeRoutes(app: FastifyInstance, options: Voi
     if (typeof request.headers.origin === "string" && !options.allowedOrigins.includes(request.headers.origin)) {
       return reply.code(403).send({ error: { code: "ORIGIN_NOT_ALLOWED" } });
     }
+    // 允许已登录用户或访客通过，若未建立会话先返回 401 提示
     const user = await authenticatedUser(request, options.authStore);
     if (!user) {
-      return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+      return reply.code(401).send({ error: { code: "AUTH_REQUIRED", message: "请刷新页面建立会话后再使用语音识别" } });
     }
 
     let tempDir: string | null = null;

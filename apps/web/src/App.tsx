@@ -177,7 +177,7 @@ function ClientApp() {
   });
 
   const guideGuestToRegister = useCallback((sceneName: string) => {
-    setGuestTip(`${sceneName}场景需要登录后体验。新用户注册即赠送免费额度，无需绑定信用卡。`);
+    setGuestTip(`请先登录后再体验${sceneName}，新用户注册即赠送免费额度`);
     setActiveHeaderPanel("login");
   }, []);
 
@@ -218,11 +218,11 @@ function ClientApp() {
     stopVoiceInput,
   });
 
-  // 占位词定时轮换
+  // 占位词定时轮换（每 6 秒轮换下一条）
   useEffect(() => {
     const timer = setInterval(() => {
       setPlaceholderIndex((prev) => prev + 1);
-    }, 4000);
+    }, 6000);
     return () => clearInterval(timer);
   }, []);
 

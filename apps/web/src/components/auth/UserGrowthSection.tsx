@@ -56,46 +56,45 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
     }
     let active = true;
     const inviteUrl = `https://jansee.cn/?ref=${encodeURIComponent(growth.inviteCode)}`;
-    QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" })
-      .then((dataUrl: string) => { if (active) setInviteQrDataUrl(dataUrl); })
+    
+    // 生成客户端离线 DataURL
+    QRCode.toDataURL(inviteUrl, { width: 320, margin: 2, errorCorrectionLevel: "M" })
+      .then((dataUrl: string) => {
+        if (active && dataUrl) setInviteQrDataUrl(dataUrl);
+      })
       .catch(() => {
-        // 前端纯 js 离线渲染兜底
-        QRCode.toDataURL(inviteUrl, { width: 320, margin: 1, errorCorrectionLevel: "M" })
-          .then((dataUrl: string) => { if (active) setInviteQrDataUrl(dataUrl); })
-          .catch(() => {
-            if (active) {
-              setInviteQrDataUrl(`/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
-            }
-          });
+        if (active) {
+          setInviteQrDataUrl(`/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
+        }
       });
     return () => { active = false; };
   }, [growth?.inviteCode]);
 
   async function loadGrowth() {
     try {
-      const [overviewResponse, inviteesResponse, commissionsResponse, profileResponse, withdrawalsResponse] = await Promise.all([
-        fetch("/api/v1/growth/overview?timeZone=Asia%2FShanghai", { credentials: "include", cache: "no-store" }),
-        fetch("/api/v1/growth/invitees", { credentials: "include" }),
-        fetch("/api/v1/growth/commissions", { credentials: "include" }),
-        fetch("/api/v1/growth/payout-profile", { credentials: "include", cache: "no-store" }),
-        fetch("/api/v1/growth/withdrawals", { credentials: "include" }),
-      ]);
-      const [overviewPayload, inviteesPayload, commissionsPayload, profilePayload, withdrawalsPayload] = await Promise.all([
-        overviewResponse.json() as Promise<{ overview?: typeof growth }>,
-        inviteesResponse.json() as Promise<{ invitees?: typeof growthInvitees }>,
-        commissionsResponse.json() as Promise<{ commissions?: typeof growthCommissions }>,
-        profileResponse.json() as Promise<{ profile?: typeof payoutProfile }>,
-        withdrawalsResponse.json() as Promise<{ withdrawals?: typeof withdrawals }>,
-      ]);
-      if (overviewResponse.ok && overviewPayload.overview) {
-        setGrowth(overviewPayload.overview);
-        setPartnerProvince(overviewPayload.overview.partner.province ?? "");
-        setPartnerCity(overviewPayload.overview.partner.city ?? "");
+      // 1. 优先极速请求核心概览（签到、邀请码、基础统计），让主页秒开展现
+      const overviewResponse = await fetch("/api/v1/growth/overview?timeZone=Asia%2FShanghai", { credentials: "include", cache: "no-store" });
+      if (overviewResponse.ok) {
+        const overviewPayload = await overviewResponse.json() as { overview?: typeof growth };
+        if (overviewPayload.overview) {
+          setGrowth(overviewPayload.overview);
+          setPartnerProvince(overviewPayload.overview.partner.province ?? "");
+          setPartnerCity(overviewPayload.overview.partner.city ?? "");
+        }
       }
-      if (inviteesResponse.ok && inviteesPayload.invitees) setGrowthInvitees(inviteesPayload.invitees);
-      if (commissionsResponse.ok && commissionsPayload.commissions) setGrowthCommissions(commissionsPayload.commissions);
-      if (profileResponse.ok) setPayoutProfile(profilePayload.profile ?? null);
-      if (withdrawalsResponse.ok && withdrawalsPayload.withdrawals) setWithdrawals(withdrawalsPayload.withdrawals);
+
+      // 2. 异步增量拉取明细列表，避免阻塞个人主页核心信息渲染
+      void Promise.allSettled([
+        fetch("/api/v1/growth/invitees", { credentials: "include" }).then((r) => r.ok ? r.json() : null),
+        fetch("/api/v1/growth/commissions", { credentials: "include" }).then((r) => r.ok ? r.json() : null),
+        fetch("/api/v1/growth/payout-profile", { credentials: "include", cache: "no-store" }).then((r) => r.ok ? r.json() : null),
+        fetch("/api/v1/growth/withdrawals", { credentials: "include" }).then((r) => r.ok ? r.json() : null),
+      ]).then(([inviteesRes, commissionsRes, profileRes, withdrawalsRes]) => {
+        if (inviteesRes.status === "fulfilled" && inviteesRes.value?.invitees) setGrowthInvitees(inviteesRes.value.invitees);
+        if (commissionsRes.status === "fulfilled" && commissionsRes.value?.commissions) setGrowthCommissions(commissionsRes.value.commissions);
+        if (profileRes.status === "fulfilled" && profileRes.value?.profile) setPayoutProfile(profileRes.value.profile);
+        if (withdrawalsRes.status === "fulfilled" && withdrawalsRes.value?.withdrawals) setWithdrawals(withdrawalsRes.value.withdrawals);
+      });
     } catch {
       setGrowthNotice("暂时无法加载签到与推广信息，请检查网络后重试。");
     }
@@ -246,23 +245,34 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
   async function downloadInvitePoster() {
     if (!growth?.inviteCode) return;
     try {
+      setGrowthNotice("正在生成专属推广海报…");
       const inviteUrl = "https://jansee.cn/?ref=" + encodeURIComponent(growth.inviteCode);
-      const qrDataUrl = await QRCode.toDataURL(inviteUrl, { width: 480, margin: 2, errorCorrectionLevel: "H" })
-        .catch(() => `/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`);
+      
+      let qrDataUrl = "";
+      try {
+        qrDataUrl = await QRCode.toDataURL(inviteUrl, { width: 320, margin: 2, errorCorrectionLevel: "M" });
+      } catch {
+        // 客户端生成失败才降级
+      }
 
       const qr = new Image();
+      if (qrDataUrl && qrDataUrl.startsWith("data:")) {
+        qr.src = qrDataUrl;
+      } else {
+        qr.crossOrigin = "anonymous";
+        qr.src = `/api/v1/growth/qr/${encodeURIComponent(growth.inviteCode)}`;
+      }
       const qrLoaded = new Promise<void>((resolve, reject) => {
         qr.onload = () => resolve();
         qr.onerror = () => reject(new Error("专属二维码加载失败"));
       });
-      qr.crossOrigin = "anonymous";
-      qr.src = qrDataUrl;
       await qrLoaded;
 
       // 弹性加载 Logo 标志与文字标（若缺失不阻断海报生成）
       const loadSafeImage = (src: string) =>
         new Promise<HTMLImageElement | null>((resolve) => {
           const img = new Image();
+          img.crossOrigin = "anonymous";
           img.onload = () => resolve(img);
           img.onerror = () => resolve(null);
           img.src = src;

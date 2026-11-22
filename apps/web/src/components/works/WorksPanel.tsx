@@ -323,34 +323,6 @@ export function WorksPanel({
                     </svg>
                     下载原片 MP4
                   </button>
-                  <button
-                    type="button"
-                    className="work-btn-secondary"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "8px 14px",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(0, 0, 0, 0.12)",
-                      background: "#fff",
-                      color: "#374151",
-                      fontSize: "13px",
-                      fontWeight: 500,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => {
-                      const streamUrl = `${window.location.origin}/api/v1/works/${work.id}/stream`;
-                      copyText(`stream-${work.id}`, streamUrl, "成片加速直链");
-                    }}
-                    title="复制 CDN 加速直链"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                    </svg>
-                    复制直链
-                  </button>
                 </div>
 
                 {publishKit && (publishKit.title || publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (

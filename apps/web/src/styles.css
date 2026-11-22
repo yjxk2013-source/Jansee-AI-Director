@@ -1106,24 +1106,25 @@ textarea:focus-visible {
   padding: 0 0 10px;
 }
 
-/* 游客点收费场景的轻提示：浮在场景选择器上方，2.5 秒自动消失 */
+/* 游客点收费场景的轻提示：简短长条灰底样式 */
 .guest-tip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 2px);
+  bottom: calc(100% + 4px);
   transform: translateX(-50%);
   z-index: 5;
-  max-width: calc(100vw - 32px);
-  padding: 8px 16px;
-  border-radius: 20px;
-  background: var(--jansee-action, #252629);
-  color: #fff;
+  width: max-content;
+  max-width: min(calc(100vw - 32px), 480px);
+  padding: 6px 18px;
+  border-radius: 9999px;
+  background: #4b5563;
+  color: #ffffff;
   font-size: 12px;
-  font-weight: 500;
-  white-space: normal;
+  font-weight: 400;
+  white-space: nowrap;
   text-align: center;
-  line-height: 1.5;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   animation: nav-fade-in 0.16s ease-out;
   pointer-events: none;
 }
@@ -1269,13 +1270,15 @@ textarea:focus-visible {
   min-width: 0;
   min-height: 40px;
   max-height: 160px;
-  padding: 9px 2px 8px;
+  padding: 9px 8px 8px;
   font-size: 15px;
   line-height: 1.55;
+  text-align: left;
 }
 
 .composer-main textarea::placeholder {
   color: #858a91;
+  text-align: left;
 }
 
 .composer-actions {
@@ -11743,21 +11746,25 @@ body,
 .job-delivery-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 6px 0;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 6px;
 }
 
 .job-delivery-action-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 7px 14px;
+  height: 36px;
+  padding: 0 16px;
   font-size: 13px;
   font-weight: 500;
   border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid #d1d5db;
   background: #ffffff;
-  color: #1f2937;
+  color: #202124;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
@@ -11770,20 +11777,20 @@ body,
 }
 
 .job-delivery-action-btn:hover {
-  background: #f9fafb;
-  border-color: rgba(0, 0, 0, 0.24);
+  background: #f7f7f5;
+  border-color: #9ca3af;
   color: #111827;
 }
 
 .job-delivery-action-btn.primary {
-  background: #18191b;
-  color: #ffffff;
-  border-color: #18191b;
+  background: #ffffff;
+  color: #202124;
+  border: 1px solid #d1d5db;
 }
 
 .job-delivery-action-btn.primary:hover {
-  background: #28292c;
-  border-color: #28292c;
+  background: #f7f7f5;
+  border-color: #9ca3af;
 }
 
 .job-publish {
@@ -12700,29 +12707,32 @@ body,
 .work-card-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
 }
 
 .work-btn-download {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--jansee-border, #e5e7eb);
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
   background: #ffffff;
-  color: var(--jansee-text-primary, #202124);
-  font-size: 12px;
+  color: #202124;
+  font-size: 13px;
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .work-btn-download:hover {
   background: #f7f7f5;
-  border-color: #d1d5db;
+  border-color: #9ca3af;
+  color: #111827;
 }
 
 .work-btn-download svg {
@@ -12916,24 +12926,24 @@ body,
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 14px;
-  height: auto;
-  min-height: 34px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 16px;
   font-size: 13px;
   font-weight: 500;
   border-radius: 8px;
-  border: 1px solid #18191b;
-  background: #18191b;
-  color: #ffffff;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #202124;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
 }
 
 .work-cover-btn-download:hover {
-  background: #28292c;
-  border-color: #28292c;
-  color: #ffffff;
+  background: #f7f7f5;
+  border-color: #9ca3af;
+  color: #111827;
 }
 
 .work-cover-btn-download svg {

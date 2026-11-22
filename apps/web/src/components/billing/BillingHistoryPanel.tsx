@@ -148,10 +148,13 @@ export function BillingHistoryPanel({ user, kind }: { user: AuthUser | null; kin
     refunding: "退款处理中",
     refunded: "已退款",
   };
-  const isOrderExpired = (order: BillingOrder) =>
-    order.status === "pending" &&
-    Date.parse(order.paymentExpiresAt || new Date(Date.parse(order.createdAt) + 5 * 60 * 1000).toISOString()) <=
-    statusClock;
+  const isOrderExpired = (order: BillingOrder) => {
+    if (order.status !== "pending") return false;
+    const expiryTime = order.paymentExpiresAt
+      ? Date.parse(order.paymentExpiresAt)
+      : Date.parse(order.createdAt) + 5 * 60 * 1000;
+    return !Number.isNaN(expiryTime) && expiryTime <= statusClock;
+  };
   const ledgerType: Record<BillingLedgerEntry["type"], string> = {
     grant: "积分赠送",
     hold: "制作冻结",

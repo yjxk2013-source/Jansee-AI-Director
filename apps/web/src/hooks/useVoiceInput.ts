@@ -46,7 +46,13 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
       }
 
       const formData = new FormData();
-      const ext = audioBlob.type.includes("wav") ? "wav" : audioBlob.type.includes("mp4") ? "mp4" : "webm";
+      // 根据 blob 类型自适应文件拓展名
+      let ext = "webm";
+      if (audioBlob.type.includes("mp4") || audioBlob.type.includes("aac") || audioBlob.type.includes("m4a")) {
+        ext = "mp4";
+      } else if (audioBlob.type.includes("wav")) {
+        ext = "wav";
+      }
       formData.append("audio", audioBlob, `recording.${ext}`);
 
       const response = await fetch("/api/v1/voice/transcribe", {
@@ -64,6 +70,8 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
       const transcript = (result?.text || "").trim();
       if (transcript) {
         onAppendDraft(transcript);
+      } else {
+        onError("未识别到清晰语音，请靠近麦克风重试。");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "语音识别失败，请检查网络后重试。";

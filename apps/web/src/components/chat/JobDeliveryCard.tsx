@@ -126,11 +126,11 @@ export function JobDeliveryCard({
             </p>
           )}
 
-          {/* 一站式极速操作工具栏：无需跳出工作台即可完成全套交付物下载与分享 */}
+          {/* 一站式极速操作工具栏：下载原片与下载封面 */}
           <div className="job-delivery-actions">
             <button
               type="button"
-              className="job-delivery-action-btn primary"
+              className="job-delivery-action-btn"
               onClick={() => {
                 const workId = message.jobWorkId!;
                 const filename = `jansee-${workId.slice(0, 8)}.mp4`;
@@ -161,27 +161,9 @@ export function JobDeliveryCard({
               title="下载纯净宣发封面（无烧录字幕）"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="m21 15-5-5L5 21" />
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
               <span>下载封面</span>
-            </button>
-
-            <button
-              type="button"
-              className="job-delivery-action-btn"
-              onClick={() => {
-                const streamUrl = `${window.location.origin}/api/v1/works/${message.jobWorkId}/stream`;
-                void copyToClipboard(streamUrl, "成片直链");
-              }}
-              title="复制成片直链，方便分享或发至移动端"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-              <span>分享直链</span>
             </button>
           </div>
 

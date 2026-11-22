@@ -595,6 +595,16 @@ export function createPgBillingStore(pool: Pool): BillingStore {
     },
 
     async listUserOrders(userId) {
+      // 自动将超过 5 分钟未支付的 pending 订单结算为 closed 已失效
+      await pool.query(
+        `UPDATE billing_orders
+         SET status = 'closed'
+         WHERE user_id = $1
+           AND status = 'pending'
+           AND COALESCE(payment_expires_at, created_at + interval '5 minutes') <= now()`,
+        [userId],
+      ).catch(() => undefined);
+
       const result = await pool.query<OrderRow>("SELECT * FROM billing_orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100", [userId]);
       return result.rows.map(mapOrder);
     },

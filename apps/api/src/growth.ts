@@ -25,8 +25,9 @@ export function registerGrowthRoutes(app: FastifyInstance, options: GrowthRoutes
 
   app.get("/api/v1/growth/qr/:code", async (request, reply) => {
     const { code } = request.params as { code: string };
-    if (!/^[A-Z0-9]{8,16}$/i.test(code)) return reply.code(400).send({ error: { code: "INVALID_INVITE_CODE" } });
-    const inviteUrl = `https://jansee.cn/?ref=${encodeURIComponent(code.toUpperCase())}`;
+    const cleanCode = (code || "").trim();
+    if (!cleanCode || cleanCode.length > 32) return reply.code(400).send({ error: { code: "INVALID_INVITE_CODE" } });
+    const inviteUrl = `https://jansee.cn/?ref=${encodeURIComponent(cleanCode.toUpperCase())}`;
     const png = await QRCode.toBuffer(inviteUrl, { type: "png", width: 480, margin: 2, errorCorrectionLevel: "H" });
     return reply.type("image/png").header("cache-control", "private, max-age=300").send(png);
   });
