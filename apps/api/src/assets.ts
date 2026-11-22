@@ -10,6 +10,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
 import { authenticatedSession, type AuthStore, type AuthUser } from "./auth.js";
 import type { LocalObjectStorage } from "./storage-local.js";
+import { detectMediaMagicBytes, type DetectedMedia } from "./security-shield.js";
 import sharp from "sharp";
 
 const require = createRequire(import.meta.url);
@@ -48,17 +49,11 @@ export interface AssetStore {
   markAssetsExpired?(ids: string[]): Promise<void>;
 }
 export interface UploadOptions { authStore: AuthStore; assetStore: AssetStore; storage: LocalObjectStorage; allowedOrigins: string[] }
-type Detected = { mediaType: "image" | "video"; mimeType: string };
-function detectFile(bytes: Buffer): Detected | null {
-  if (bytes.length >= 6 && ["GIF87a", "GIF89a"].includes(bytes.toString("ascii", 0, 6))) return { mediaType: "image", mimeType: "image/gif" };
-  if (bytes.length >= 2 && bytes.toString("ascii", 0, 2) === "BM") return { mediaType: "image", mimeType: "image/bmp" };
-  if (bytes.length >= 4 && ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00) || (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a))) return { mediaType: "image", mimeType: "image/tiff" };
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mediaType: "image", mimeType: "image/jpeg" };
-  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return { mediaType: "image", mimeType: "image/png" };
-  if (bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return { mediaType: "image", mimeType: "image/webp" };
-  if (bytes.length >= 12 && bytes.toString("ascii", 4, 8) === "ftyp") { const brand = bytes.toString("ascii", 8, 12); if (["heic", "heix", "hevc", "hevx", "mif1", "msf1", "heif", "heim"].includes(brand)) return { mediaType: "image", mimeType: "image/heic" }; if (["avif", "avis"].includes(brand)) return { mediaType: "image", mimeType: "image/avif" }; if (brand === "qt  ") return { mediaType: "video", mimeType: "video/quicktime" }; return { mediaType: "video", mimeType: "video/mp4" }; }
-  if (bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return { mediaType: "video", mimeType: "video/webm" };
-  return null;
+export type Detected = { mediaType: "image" | "video"; mimeType: string };
+export function detectFile(bytes: Buffer): Detected | null {
+  const result = detectMediaMagicBytes(bytes);
+  if (!result || (result.mediaType !== "image" && result.mediaType !== "video")) return null;
+  return { mediaType: result.mediaType, mimeType: result.mimeType };
 }
 function safeName(value: string): string { const name = basename(value.replace(/\\/g, "/")).replace(/[\u0000-\u001f\u007f]/g, "").trim(); return (name || "upload").slice(0, 255); }
 

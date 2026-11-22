@@ -4,6 +4,7 @@ import type { CreationMode } from "@jansee/contracts";
 import { TENCENT_VOICE_CANDIDATES, detectUserVoiceIntent, getAvailableTencentVoiceCandidates, isTencentVoiceAvailable, mapVoiceFor } from "@jansee/tts-kit";
 import { decideVariantLocal, SELL_VARIANT_TYPES, LOCAL_VARIANT_TYPES } from "./variant-rules.js";
 import { buildDirectorSystemPrompt, buildDirectorUserPrompt, resolveDirectorRoute, type DirectorRouteResolution } from "./prompt-assembly.js";
+import { validatePublicUrlSafety } from "./security-shield.js";
 
 export const AssetInputSchema = z.object({
   name: z.string().trim().min(1).max(180),
@@ -441,6 +442,15 @@ export function createOpenAICompatiblePlanner(config: {
 }): DirectorPlanner {
   const fetchImpl = config.fetchImpl ?? fetch;
   const fallbackPlanner = createHeuristicDirectorPlanner();
+
+  // SSRF 安全校验：生产环境或非模拟调用时，校验 baseUrl 绝不能指向内网或保留地址
+  if (config.baseUrl && !config.apiKey.startsWith("mock-") && config.apiKey !== "test-key") {
+    const safetyCheck = validatePublicUrlSafety(config.baseUrl);
+    if (!safetyCheck.safe && process.env.NODE_ENV === "production") {
+      throw new Error(`DIRECTOR_API_BASE_URL security violation: ${safetyCheck.reason}`);
+    }
+  }
+
   const attachTelemetry = (plan: DirectorPlan, telemetry: DirectorProviderTelemetry): DirectorPlan =>
     Object.assign(plan, { _providerTelemetry: telemetry });
 

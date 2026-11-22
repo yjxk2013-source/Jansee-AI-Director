@@ -86,7 +86,11 @@ test("voice transcribe endpoint enforces authentication and origin security", as
 
   const validBoundary = "----jansee-test-valid-boundary";
   const head = Buffer.from(`--${validBoundary}\r\nContent-Disposition: form-data; name="audio"; filename="recording.webm"\r\nContent-Type: audio/webm\r\n\r\n`);
-  const fileBytes = Buffer.from("audio-mock-bytes-12345678");
+  // 标准 WebM EBML 魔数开头 (\x1A\x45\xDF\xA3)
+  const fileBytes = Buffer.concat([
+    Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]),
+    Buffer.from("mock-audio-data-stream"),
+  ]);
   const tail = Buffer.from(`\r\n--${validBoundary}--\r\n`);
   const validPayload = Buffer.concat([head, fileBytes, tail]);
 

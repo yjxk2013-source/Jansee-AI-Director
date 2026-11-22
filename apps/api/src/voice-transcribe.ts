@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { AuthStore } from "./auth.js";
 import { authenticatedUser } from "./assets.js";
+import { detectMediaMagicBytes } from "./security-shield.js";
 // @ts-expect-error keepOriginal is a runtime JS module in video-creator
 import { runKeepOriginalAsr } from "@jansee/video-creator/video/keepOriginal.js";
 
@@ -55,6 +56,20 @@ export function registerVoiceTranscribeRoutes(app: FastifyInstance, options: Voi
       }
       if (fileInfo.size > MAX_VOICE_BYTES) {
         return reply.code(413).send({ error: { code: "FILE_TOO_LARGE", message: "录音文件超过大小限制" } });
+      }
+
+      // 魔数检测：确保上传的为合法音频格式（WAV, WebM, OGG, MP3, MP4/M4A 等）
+      const handle = await import("node:fs/promises");
+      const fileHandle = await handle.open(audioPath, "r");
+      const head = Buffer.alloc(32);
+      try {
+        await fileHandle.read(head, 0, 32, 0);
+      } finally {
+        await fileHandle.close();
+      }
+      const detected = detectMediaMagicBytes(head);
+      if (!detected || (detected.mediaType !== "audio" && detected.mediaType !== "video")) {
+        return reply.code(415).send({ error: { code: "UNSUPPORTED_AUDIO_FORMAT", message: "录音文件格式无法识别或不受支持" } });
       }
 
       const workDir = join(tempDir, "whisper-work");
