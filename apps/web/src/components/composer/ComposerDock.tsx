@@ -1,4 +1,5 @@
 import {
+  useState,
   useRef,
   type Dispatch,
   type DragEvent,
@@ -92,9 +93,23 @@ export function ComposerDock({
   const dragCommittedRef = useRef(false);
   const touchStartYRef = useRef<number | null>(null);
   const isHoldingVoiceRef = useRef<boolean>(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+
+  const toggleVoiceMode = () => {
+    setIsVoiceMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        window.setTimeout(() => {
+          textareaRef.current?.focus();
+        }, 50);
+      }
+      return next;
+    });
+  };
 
   // 微信同款按住说话：触摸开始
   const handleVoiceTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     const touch = event.touches[0];
     if (touch) {
       touchStartYRef.current = touch.clientY;
@@ -106,6 +121,7 @@ export function ComposerDock({
 
   // 微信同款手指上滑：检测上滑超过 45px 提示取消
   const handleVoiceTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     if (!isHoldingVoiceRef.current || touchStartYRef.current === null) return;
     const touch = event.touches[0];
     if (touch) {
@@ -120,7 +136,8 @@ export function ComposerDock({
   };
 
   // 微信同款松手：根据是否处于取消区决定发送还是取消
-  const handleVoiceTouchEnd = () => {
+  const handleVoiceTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     if (isHoldingVoiceRef.current) {
       isHoldingVoiceRef.current = false;
       touchStartYRef.current = null;
@@ -128,7 +145,8 @@ export function ComposerDock({
     }
   };
 
-  const handleVoiceTouchCancel = () => {
+  const handleVoiceTouchCancel = (event: TouchEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     if (isHoldingVoiceRef.current) {
       isHoldingVoiceRef.current = false;
       touchStartYRef.current = null;
@@ -398,37 +416,50 @@ export function ComposerDock({
               </div>
             )}
           </div>
-          <textarea
-            ref={textareaRef}
-            id="director-message"
-            className="composer-textarea"
-            placeholder={activePlaceholder}
-            value={draft}
-            maxLength={2000}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              event.currentTarget.style.height = "auto";
-              event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 160)}px`;
-            }}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            aria-label="输入创作指令或需求"
-          />
-          <div className="composer-actions">
+
+          <button
+            type="button"
+            className={`voice-mode-toggle ${isVoiceMode ? "is-voice" : ""}`}
+            onClick={toggleVoiceMode}
+            aria-label={isVoiceMode ? "切换为键盘输入" : "切换为按住说话"}
+            title={isVoiceMode ? "切换为键盘输入" : "切换为按住说话"}
+          >
+            {isVoiceMode ? (
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" fill="none" strokeWidth="1.8" />
+                <line x1="6" y1="9" x2="6.01" y2="9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1="10" y1="9" x2="10.01" y2="9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1="14" y1="9" x2="14.01" y2="9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1="18" y1="9" x2="18.01" y2="9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1="6" y1="13" x2="6.01" y2="13" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1="10" y1="13" x2="14" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="18" y1="13" x2="18.01" y2="13" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="12" rx="3" stroke="currentColor" fill="none" strokeWidth="1.8" />
+                <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" stroke="currentColor" fill="none" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+
+          {isVoiceMode ? (
             <button
               type="button"
-              className={`voice-button ${isListening ? "is-listening" : ""} ${isCancelling ? "is-cancelling" : ""}`}
+              className={`voice-hold-bar ${isListening ? "is-holding" : ""} ${isCancelling ? "is-cancelling" : ""}`}
               onTouchStart={handleVoiceTouchStart}
               onTouchMove={handleVoiceTouchMove}
               onTouchEnd={handleVoiceTouchEnd}
               onTouchCancel={handleVoiceTouchCancel}
               onMouseDown={(e) => {
+                e.preventDefault();
                 if (e.button === 0) {
                   isHoldingVoiceRef.current = true;
                   void startVoiceInput();
                 }
               }}
-              onMouseUp={() => {
+              onMouseUp={(e) => {
+                e.preventDefault();
                 if (isHoldingVoiceRef.current) {
                   isHoldingVoiceRef.current = false;
                   stopVoiceInput(false);
@@ -440,31 +471,38 @@ export function ComposerDock({
                   stopVoiceInput(false);
                 }
               }}
-              onClick={toggleVoiceInput}
-              aria-label={
-                isListening
-                  ? isCancelling
-                    ? "松开手指取消发送"
-                    : `松开结束录音（剩余 ${listeningRemainingSeconds} 秒）`
-                  : "按住说话，松手识别"
-              }
-              title={
-                isListening
-                  ? isCancelling
-                    ? "松开手指取消发送"
-                    : `松开结束录音（剩余 ${listeningRemainingSeconds} 秒）`
-                  : "按住说话，松手识别"
-              }
+              aria-label="按住说话"
             >
               {isListening ? (
-                <span className="voice-countdown-number">{listeningRemainingSeconds}</span>
+                isCancelling ? (
+                  <span>松开手指，取消发送</span>
+                ) : (
+                  <span>松开发送（{listeningRemainingSeconds}s）</span>
+                )
               ) : (
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="3" width="6" height="12" rx="3" />
-                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" />
-                </svg>
+                <span>按住 说话</span>
               )}
             </button>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              id="director-message"
+              className="composer-textarea"
+              placeholder={activePlaceholder}
+              value={draft}
+              maxLength={2000}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                event.currentTarget.style.height = "auto";
+                event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 160)}px`;
+              }}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              aria-label="输入创作指令或需求"
+            />
+          )}
+
+          <div className="composer-actions">
             <button
               className={`send-button ${isAnyFileUploading ? "is-uploading" : ""}`}
               type="submit"

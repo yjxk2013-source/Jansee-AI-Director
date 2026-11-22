@@ -1149,13 +1149,11 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  padding: 5px 18px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .creation-scene-options button {
@@ -10048,20 +10046,105 @@ body,
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+  padding-bottom: calc(130px + env(safe-area-inset-bottom));
 }
 
 .chat-stage-active {
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 28px;
-  scroll-padding-bottom: 28px;
+  padding-bottom: calc(130px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(130px + env(safe-area-inset-bottom));
 }
 
 .composer-dock {
-  position: relative;
-  z-index: 4;
-  flex: 0 0 auto;
-  margin-top: 0;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 100%;
+  z-index: 20;
+  margin: 0;
+  padding: 10px 16px calc(14px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-top: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.03);
+  pointer-events: none;
+}
+
+.composer-dock > * {
+  pointer-events: auto;
+}
+
+.composer-dock .creation-scene-picker,
+.composer-dock .composer {
+  width: min(100%, 820px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 微信同款语音/键盘切换与长条按住说话 */
+.voice-mode-toggle {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 0;
+  border-radius: 50%;
+  color: #5f6368;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.voice-mode-toggle:hover {
+  color: #202124;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.voice-mode-toggle svg {
+  width: 22px;
+  height: 22px;
+}
+
+.voice-hold-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(218, 220, 224, 0.9);
+  border-radius: 20px;
+  background: rgba(241, 243, 244, 0.85);
+  color: #3c4043;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.voice-hold-bar:active,
+.voice-hold-bar.is-holding {
+  background: #dadce0;
+  border-color: #bdc1c6;
+  color: #202124;
+  font-weight: 600;
+}
+
+.voice-hold-bar.is-cancelling {
+  background: #fce8e6;
+  border-color: #fad2cf;
+  color: #c5221f;
 }
 
 @media (max-width: 760px) {
@@ -10083,15 +10166,16 @@ body,
 
   .chat-stage {
     min-height: 0;
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
   }
 
   .chat-stage-active {
-    padding-bottom: 24px;
-    scroll-padding-bottom: 24px;
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(120px + env(safe-area-inset-bottom));
   }
 
   .composer-dock {
-    flex: 0 0 auto;
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
   }
 
   .pending-attachments {
