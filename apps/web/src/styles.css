@@ -480,7 +480,7 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-.composer-dock > * {
+.composer-dock>* {
   pointer-events: auto;
 }
 
@@ -1405,20 +1405,53 @@ textarea:focus-visible {
   animation: voice-bar-pulse 0.8s ease-in-out infinite alternate;
 }
 
-.voice-bar-1 { height: 8px; animation-delay: 0.1s; }
-.voice-bar-2 { height: 16px; animation-delay: 0.3s; }
-.voice-bar-3 { height: 20px; animation-delay: 0s; }
-.voice-bar-4 { height: 14px; animation-delay: 0.4s; }
-.voice-bar-5 { height: 9px; animation-delay: 0.2s; }
+.voice-bar-1 {
+  height: 8px;
+  animation-delay: 0.1s;
+}
+
+.voice-bar-2 {
+  height: 16px;
+  animation-delay: 0.3s;
+}
+
+.voice-bar-3 {
+  height: 20px;
+  animation-delay: 0s;
+}
+
+.voice-bar-4 {
+  height: 14px;
+  animation-delay: 0.4s;
+}
+
+.voice-bar-5 {
+  height: 9px;
+  animation-delay: 0.2s;
+}
 
 @keyframes voice-bar-pulse {
-  0% { transform: scaleY(0.4); opacity: 0.6; }
-  100% { transform: scaleY(1.2); opacity: 1; }
+  0% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: scaleY(1.2);
+    opacity: 1;
+  }
 }
 
 @keyframes voice-bubble-pop {
-  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.92); }
-  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
 }
 
 .composer-main .voice-countdown-number {
@@ -10066,15 +10099,15 @@ body,
   z-index: 20;
   margin: 0;
   padding: 10px 16px calc(14px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border-top: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border-top: 1px solid rgba(255, 255, 255, 0.40);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
   pointer-events: none;
 }
 
-.composer-dock > * {
+.composer-dock>* {
   pointer-events: auto;
 }
 
@@ -10086,11 +10119,11 @@ body,
 }
 
 .composer-dock .composer {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
 /* 微信同款语音/键盘切换与长条按住说话 */
