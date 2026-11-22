@@ -449,7 +449,7 @@ function ClientApp() {
 
   return (
     <main
-      className="chat-app"
+      className={`app-shell ${isDragging ? "is-dragging" : ""}`}
       onDragEnter={(event) => {
         if (!Array.from(event.dataTransfer.types).includes("application/x-jansee-attachment")) {
           setIsDragging(true);
