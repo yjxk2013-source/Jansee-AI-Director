@@ -423,9 +423,14 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
             attachments: workbenchAttachments,
           }));
           const nextMessages = [...baseMessagesForWorkbench, planMessage, ...versionMessages];
-          setConversations((current) => current.map((c) => c.id === conversationId
-            ? { ...c, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
-            : c));
+          setConversations((current) => current.map((c) => {
+            if (c.id === conversationId) {
+              const updated = { ...c, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages };
+              void saveAccountConversation(updated);
+              return updated;
+            }
+            return c;
+          }));
         } else {
           const directorMessage: ChatMessage = {
             id: makeId(), role: "director",
@@ -440,9 +445,14 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
             attachments: workbenchAttachments,
           };
           const nextMessages = [...baseMessagesForWorkbench, directorMessage];
-          setConversations((current) => current.map((c) => c.id === conversationId
-            ? { ...c, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages }
-            : c));
+          setConversations((current) => current.map((c) => {
+            if (c.id === conversationId) {
+              const updated = { ...c, title: makeConversationTitle(nextMessages), updatedAt: Date.now(), messages: nextMessages };
+              void saveAccountConversation(updated);
+              return updated;
+            }
+            return c;
+          }));
         }
       } else {
         const mockScenes = submittingFiles.map((file, index) => ({

@@ -4,9 +4,10 @@ import type { SavedConversation, WorkItem, ChatMessage } from "../types/client.j
 interface UseJobPollingOptions {
   conversations: SavedConversation[];
   setConversations: React.Dispatch<React.SetStateAction<SavedConversation[]>>;
+  saveAccountConversation?: (conversation: SavedConversation) => void;
 }
 
-export function useJobPolling({ conversations, setConversations }: UseJobPollingOptions) {
+export function useJobPolling({ conversations, setConversations, saveAccountConversation }: UseJobPollingOptions) {
   const activeEventSourcesRef = useRef<Record<string, EventSource>>({});
 
   // 监听所有进行中的成片生成任务，采用 SSE 毫秒级长连接优先 + 自适应轮询兜底
@@ -45,12 +46,19 @@ export function useJobPolling({ conversations, setConversations }: UseJobPolling
           }).catch(() => undefined);
 
           setConversations((current: SavedConversation[]) =>
-            current.map((conversation: SavedConversation) => ({
-              ...conversation,
-              messages: conversation.messages.map((item: ChatMessage) =>
-                item.id === logMessageId ? { ...item, jobWorkId: work.id } : item
-              ),
-            }))
+            current.map((conversation: SavedConversation) => {
+              const hasTarget = conversation.messages.some((m) => m.id === logMessageId || m.jobId === jobId);
+              if (!hasTarget) return conversation;
+              const updated = {
+                ...conversation,
+                updatedAt: Date.now(),
+                messages: conversation.messages.map((item: ChatMessage) =>
+                  item.id === logMessageId || item.jobId === jobId ? { ...item, jobWorkId: work.id } : item
+                ),
+              };
+              if (saveAccountConversation) void saveAccountConversation(updated);
+              return updated;
+            })
           );
         })
         .catch(() => undefined);
@@ -108,6 +116,9 @@ export function useJobPolling({ conversations, setConversations }: UseJobPolling
         });
 
         const nextConversation = { ...conversation, updatedAt: Date.now(), messages };
+        if (saveAccountConversation && (jobData.status === "completed" || jobData.status === "failed")) {
+          void saveAccountConversation(nextConversation);
+        }
         const next = [...current];
         next[conversationIndex] = nextConversation;
         return next;

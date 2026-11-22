@@ -185,6 +185,7 @@ function ClientApp() {
   useJobPolling({
     conversations,
     setConversations,
+    saveAccountConversation,
   });
 
   // 4. 导演任务流与语音粗剪 Hook
@@ -312,14 +313,17 @@ function ClientApp() {
     };
   }, [refreshWallet]);
 
-  // 登录后拉取对话历史
+  // 登录后拉取对话历史，并支持跨端（PC与移动端APP）实时多端同步对齐
   useEffect(() => {
-    if (!authResolved) return;
-    const currentUserId = authUser?.id ?? "anonymous";
+    if (!authResolved || !authUser || authUser.isGuest) return;
+    const currentUserId = authUser.id;
     let active = true;
-    fetch("/api/v1/conversations", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((payload: { conversations?: SavedConversation[] } | null) => {
+
+    const syncConversations = async () => {
+      try {
+        const res = await fetch("/api/v1/conversations", { credentials: "include" });
+        if (!res.ok) return;
+        const payload = (await res.json()) as { conversations?: SavedConversation[] };
         if (!active || !payload?.conversations) return;
         const serverConversations = payload.conversations;
         const pendingConversations = loadPendingConversations(currentUserId);
@@ -329,17 +333,63 @@ function ClientApp() {
           const existing = map.get(c.id);
           if (!existing || c.updatedAt > existing.updatedAt) map.set(c.id, c);
         });
+        const localSaved = loadSavedConversations();
+        localSaved.forEach((localConv) => {
+          const serverConv = map.get(localConv.id);
+          if (!serverConv) {
+            map.set(localConv.id, localConv);
+            void saveAccountConversation(localConv);
+          } else {
+            const localHasJobs = localConv.messages.some((m) => m.jobId || m.jobWorkId);
+            const serverHasJobs = serverConv.messages.some((m) => m.jobId || m.jobWorkId);
+            if ((localHasJobs && !serverHasJobs) || localConv.messages.length > serverConv.messages.length || localConv.updatedAt > serverConv.updatedAt) {
+              map.set(localConv.id, localConv);
+              void saveAccountConversation(localConv);
+            }
+          }
+        });
         const merged = Array.from(map.values()).sort((a, b) => b.updatedAt - a.updatedAt);
         setConversations(merged);
         persistSavedConversations(merged);
-        setActiveConversationId(resolveActiveConversationId(merged));
+        setActiveConversationId((currentActiveId) => {
+          if (currentActiveId && merged.some((c) => c.id === currentActiveId && c.messages.length > 0)) {
+            return currentActiveId;
+          }
+          const resolved = resolveActiveConversationId(merged);
+          if (resolved) return resolved;
+          return merged.length > 0 && merged[0]!.messages.length > 0 ? merged[0]!.id : null;
+        });
         setConversationsOwnerId(currentUserId);
-      })
-      .catch(() => undefined);
+      } catch {
+        // 网络抖动静默重试
+      }
+    };
+
+    void syncConversations();
+
+    // 1. 移动端/桌面端窗口激活或切换回前台时，立即同步云端对话
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncConversations();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+
+    // 2. 双端保活轻量同步心跳（每 4 秒静默对齐最新会话）
+    const intervalTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void syncConversations();
+      }
+    }, 4000);
+
     return () => {
       active = false;
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
+      window.clearInterval(intervalTimer);
     };
-  }, [authResolved, authUser?.id]);
+  }, [authResolved, authUser, saveAccountConversation]);
 
   // 对话本地持久化
   useEffect(() => {
