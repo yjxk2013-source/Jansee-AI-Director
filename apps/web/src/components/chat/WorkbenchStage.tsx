@@ -45,7 +45,16 @@ export function WorkbenchStage({
             简于形<br />
             <span>胜于效</span>
           </h1>
-          <p className="welcome-copy">行至简处，见光影，见山海，见简兮。</p>
+          <div className="welcome-workflows" aria-label="简兮的两种视频创作方式">
+            <p className="welcome-workflow">
+              <span>出片流 · 自动创作</span>
+              <small>上传图片视频素材｜自动生成完整成片</small>
+            </p>
+            <p className="welcome-workflow">
+              <span>剪辑流 · 一句话剪辑</span>
+              <small>一句话描述剪辑效果｜自动完成视频剪辑</small>
+            </p>
+          </div>
         </div>
       ) : (
         <div className="workbench-stream" aria-live="polite">
