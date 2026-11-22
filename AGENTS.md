@@ -31,6 +31,9 @@
   - API routers / Controllers (e.g., `admin.ts`): must stay under 500 lines. Heavy database transactions, calculations, and hardware inspections must be placed in `services/`.
 - **Boy Scout Rule for Bugfixes & Optimization**: When modifying or fixing any file near the ceiling, always perform incremental extraction (顺手小步抽离) before adding new logic. Never patch bugs by nesting massive inline conditionals or copying blocks.
 - **Three-Tier Backend Separation**: Route Controller (validation/dispatch) -> Service (business logic & transactions) -> Store/Adapter (persistence/external systems). Pure logic must never be embedded directly inside Fastify route handlers.
+- **Admin Console Freeze Rule (后台管理面板绝对冻结铁律)**:
+  - 后台管理面板（包括 `AdminConsole.tsx`、`components/admin/**`、相关样式 `styles.css` 中后台相关区域及后端 `apps/api/src/admin.ts`、`admin-*.ts`）的所有样式、排版与业务功能已于 2026-11-22 整体冻结。
+  - **严禁擅自修改**：今后在未收到用户明确指令要求修改后台的情况下，任何 Agent 严禁触碰、修改、重构或删除后台管理面板相关的任何代码与配置。
 
 ## UI system
 - Use a refined, restrained, Gemini-inspired interface: generous whitespace, clear hierarchy, subtle surfaces, precise typography, and responsive layout.
