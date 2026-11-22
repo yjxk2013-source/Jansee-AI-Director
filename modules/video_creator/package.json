@@ -1,6 +1,6 @@
 {
   "name": "@jansee/video-creator",
-  "version": "0.1.0",
+  "version": "4.1.2",
   "private": true,
   "description": "JANSEE V4 video production module: storyboard composition, fixed-duration slicing, speech-aware editing and local ASR.",
   "type": "module",

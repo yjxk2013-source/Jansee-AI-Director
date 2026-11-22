@@ -1,6 +1,6 @@
 {
   "name": "@jansee/ffmpeg-kit",
-  "version": "1.0.0",
+  "version": "4.1.2",
   "private": true,
   "description": "简兮 (JANSEE) FFmpeg 基础零件（媒体探测 / 宪法特效参数 / 并发闸门）",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@jansee/tts-kit",
-  "version": "1.0.0",
+  "version": "4.1.2",
   "private": true,
   "description": "简兮 (JANSEE) TTS 语音合成中台（腾讯云单通道，跨视频类型共用）",
   "type": "module",

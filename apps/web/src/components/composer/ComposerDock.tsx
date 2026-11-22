@@ -249,17 +249,35 @@ export function ComposerDock({
         <div className="composer-main">
           <div className="upload-menu-anchor">
             <button
-              className="action-btn upload-btn"
+              className={`attach-button ${isUploadMenuOpen ? "is-active" : ""}`}
               type="button"
               onClick={() => setIsUploadMenuOpen((prev) => !prev)}
-              aria-label="添加制作素材"
+              aria-label="添加素材"
               aria-expanded={isUploadMenuOpen}
               aria-haspopup="menu"
+              title="添加素材"
             >
-              ＋
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
             </button>
             {isUploadMenuOpen && (
-              <div className="upload-menu" role="menu">
+              <div className="upload-menu" role="menu" aria-label="拍摄或选择素材">
+                <button
+                  type="button"
+                  className="upload-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsUploadMenuOpen(false);
+                    cameraCaptureInputRef.current?.click();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v11H3V8a1 1 0 0 1 1-1Z" />
+                    <circle cx="12" cy="13" r="3.5" />
+                  </svg>
+                  <span><strong>现场拍摄</strong><small>拍摄照片或录制视频</small></span>
+                </button>
                 <button
                   type="button"
                   className="upload-menu-item"
@@ -269,7 +287,12 @@ export function ComposerDock({
                     imageInputRef.current?.click();
                   }}
                 >
-                  图片素材
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="4" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                  <span><strong>选择照片</strong><small>从手机相册或电脑选择图片</small></span>
                 </button>
                 <button
                   type="button"
@@ -280,31 +303,26 @@ export function ComposerDock({
                     videoInputRef.current?.click();
                   }}
                 >
-                  视频素材
-                </button>
-                <button
-                  type="button"
-                  className="upload-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsUploadMenuOpen(false);
-                    cameraCaptureInputRef.current?.click();
-                  }}
-                >
-                  拍照或拍摄
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5" width="13" height="14" rx="3" />
+                    <path d="m16 10 5-3v10l-5-3z" />
+                  </svg>
+                  <span><strong>选择视频</strong><small>从手机相册或电脑选择视频</small></span>
                 </button>
               </div>
             )}
           </div>
           <textarea
             ref={textareaRef}
+            id="director-message"
             className="composer-textarea"
             placeholder={activePlaceholder}
             value={draft}
+            maxLength={2000}
             onChange={(event) => {
               setDraft(event.target.value);
-              event.target.style.height = "auto";
-              event.target.style.height = `${event.target.scrollHeight}px`;
+              event.currentTarget.style.height = "auto";
+              event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 160)}px`;
             }}
             onKeyDown={handleKeyDown}
             rows={1}
@@ -313,14 +331,14 @@ export function ComposerDock({
           <div className="composer-actions">
             <button
               type="button"
-              className={`action-btn voice-btn voice-button ${isListening ? "is-listening" : ""}`}
+              className={`voice-button ${isListening ? "is-listening" : ""}`}
               onClick={toggleVoiceInput}
               aria-label={
                 isListening
-                  ? `正在录音，剩余 ${listeningRemainingSeconds} 秒，点击完成录音`
-                  : "语音输入，将说话转为文字"
+                  ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）`
+                  : "语音输入"
               }
-              aria-pressed={isListening}
+              title={isListening ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）` : "语音输入"}
             >
               {isListening ? (
                 <div className="voice-countdown-indicator" aria-hidden="true">
@@ -338,45 +356,31 @@ export function ComposerDock({
                   <span className="voice-countdown-number">{listeningRemainingSeconds}</span>
                 </div>
               ) : (
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="22" />
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="12" rx="3" />
+                  <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" />
                 </svg>
               )}
             </button>
             <button
-              className="action-btn send-btn"
+              className={`send-button ${isAnyFileUploading ? "is-uploading" : ""}`}
               type="submit"
-              disabled={isDirectorThinking || isAnyFileUploading}
-              aria-label={isDirectorThinking ? "导演构思中" : "发送"}
+              disabled={isDirectorThinking || isAnyFileUploading || (!draft.trim() && files.length === 0)}
+              aria-label={isDirectorThinking ? "导演正在构思" : isAnyFileUploading ? "素材上传中" : "发送消息"}
+              title={isDirectorThinking ? "导演正在构思" : isAnyFileUploading ? "素材上传中，上传完成后可发送" : "发送"}
             >
               {isDirectorThinking ? (
-                <span className="director-pulse-icon" aria-hidden="true" />
+                <span className="send-loading" aria-hidden="true">···</span>
+              ) : isAnyFileUploading ? (
+                <div className="send-button-uploading-indicator" aria-hidden="true">
+                  <svg className="send-upload-ring-svg" viewBox="0 0 24 24">
+                    <circle className="send-upload-ring-bg" cx="12" cy="12" r="9" />
+                    <circle className="send-upload-ring-spin" cx="12" cy="12" r="9" />
+                  </svg>
+                </div>
               ) : (
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <line x1="12" y1="19" x2="12" y2="5" />
-                  <polyline points="5 12 12 5 19 12" />
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 19V5m-6 6 6-6 6 6" />
                 </svg>
               )}
             </button>

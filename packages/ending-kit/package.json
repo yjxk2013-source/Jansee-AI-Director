@@ -1,6 +1,6 @@
 {
   "name": "@jansee/ending-kit",
-  "version": "1.0.0",
+  "version": "4.1.2",
   "private": true,
   "description": "简兮结尾收束能力包（V4 15 款 CTA 卡 + PNG 渲染 + 确定性 seed；图片成片与视频配音两条链路共用同一份真源）",
   "type": "module",
