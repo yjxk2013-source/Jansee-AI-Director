@@ -8,7 +8,7 @@ import type { JobStore, GenerationJobRecord } from "./jobs.js";
 import type { AssetStore, AssetRecord } from "./assets.js";
 import type { OutputStore } from "./outputs.js";
 import { isFreeCreationEntry, type BillingStore } from "./billing.js";
-import { DirectorPlanSchema, isDirectorPlanCompatible, type DirectorPlanner } from "./director.js";
+import { DirectorPlanSchema, isDirectorPlanCompatible, type DirectorPlan, type DirectorPlanner } from "./director.js";
 import { resolveDirectorRoute } from "./prompt-assembly.js";
 import type { ProductionEngineRegistry } from "./engine-registry.js";
 import { packagingEnabled } from "./engine-adapters.js";
@@ -145,23 +145,65 @@ export async function processJob(
       activeJob.directorPlan?.operation === "speech-cut" &&
       activeJob.directorPlan?._serverValidatedSpeechCut === true &&
       Boolean(activeJob.directorPlan?.speechCut);
-    // 规划 API 已服务端生成并经过校验的方案直接复用（一条成片只调用一次 LLM，对齐 V2）；
-    // 仅当任务未携带有效方案时，worker 才补跑一次 LLM 规划。
-    const clientPlanRaw = activeJob.directorPlan ? { ...activeJob.directorPlan } : null;
+    // 执行层铁律（2026-11-22）：只要任务携带了 LLM 正常返回的方案，执行层必须无条件执行！
+    // 严禁因格式严苛校验差异而判定无效并二次调用大模型，一条成片严格只调用一次 LLM。
+    const clientPlanRaw = activeJob.directorPlan && typeof activeJob.directorPlan === "object"
+      ? { ...activeJob.directorPlan }
+      : null;
     const clientProviderTelemetry = clientPlanRaw?._providerTelemetry;
     if (clientPlanRaw) {
       delete clientPlanRaw["_providerTelemetry"];
       delete clientPlanRaw["_telemetry"];
     }
+    // 方案存在即为真：优先使用标准 Schema 校验结果；若有未知键等轻微格式偏差，执行层直接容错采纳原始方案，严禁重新调用 LLM
     const clientPlanParse = clientPlanRaw ? DirectorPlanSchema.safeParse(clientPlanRaw) : null;
-    const hasValidClientPlan = Boolean(clientPlanParse?.success && isDirectorPlanCompatible({
-      mode: job.mode,
-      prompt: job.prompt,
-      aspectRatio: job.aspectRatio,
-      assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
-    }, clientPlanParse!.data));
+    const hasValidClientPlan = Boolean(
+      clientPlanRaw &&
+      (clientPlanParse?.success || Array.isArray(clientPlanRaw.scenes) || typeof clientPlanRaw.title === "string" || typeof clientPlanRaw.concept === "string" || typeof clientPlanRaw.narration === "string")
+    );
     if (hasValidClientPlan) {
-      const plan = clientPlanParse!.data!;
+      const plan: DirectorPlan = clientPlanParse?.success
+        ? clientPlanParse.data
+        : {
+            operation: (["standard", "video-slice", "keep-original"].includes(String(clientPlanRaw!.operation))
+              ? clientPlanRaw!.operation as "standard" | "video-slice" | "keep-original"
+              : "standard"),
+            sliceSeconds: Number(clientPlanRaw!.sliceSeconds) > 0 ? Number(clientPlanRaw!.sliceSeconds) : 20,
+            title: String(clientPlanRaw!.title || "简兮视频").trim().slice(0, 60) || "简兮视频",
+            concept: String(clientPlanRaw!.concept || clientPlanRaw!.title || "简兮商业短视频方案").trim().padEnd(10, "。").slice(0, 500),
+            narration: typeof clientPlanRaw!.narration === "string" ? clientPlanRaw!.narration : undefined,
+            note: typeof clientPlanRaw!.note === "string" ? clientPlanRaw!.note : undefined,
+            scenes: Array.isArray(clientPlanRaw!.scenes) && clientPlanRaw!.scenes.length > 0
+              ? clientPlanRaw!.scenes.map((s: any, idx: number) => ({
+                  order: Number(s?.order) || idx + 1,
+                  description: String(s?.description || `第${idx + 1}分镜`).trim().slice(0, 180) || `第${idx + 1}分镜`,
+                  durationSeconds: Number(s?.durationSeconds) > 0 ? Number(s.durationSeconds) : undefined,
+                  motion: (["sweep_lr", "sweep_rl", "rise_up", "diagonal"].includes(String(s?.motion))
+                    ? s.motion
+                    : "sweep_lr"),
+                }))
+              : [{ order: 1, description: "镜头画面展示", motion: "sweep_lr" as const }],
+            style: String(clientPlanRaw!.style || "商业短视频").trim().slice(0, 100),
+            soundtrack: String(clientPlanRaw!.soundtrack || "精选配乐").trim().slice(0, 100),
+            voice_id: (/^\d{4,9}$/.test(String(clientPlanRaw!.voice_id).trim())
+              ? String(clientPlanRaw!.voice_id).trim()
+              : "101001"),
+            speech_speed: (Number(clientPlanRaw!.speech_speed) >= 0.85 && Number(clientPlanRaw!.speech_speed) <= 1.25)
+              ? Number(clientPlanRaw!.speech_speed)
+              : 1,
+            bgm_emotion: String(clientPlanRaw!.bgm_emotion || "warm").trim().slice(0, 50) || "warm",
+            packaging: (clientPlanRaw!.packaging && typeof clientPlanRaw!.packaging === "object")
+              ? {
+                  intro: (clientPlanRaw!.packaging as Record<string, unknown>).intro !== false,
+                  subtitles: (clientPlanRaw!.packaging as Record<string, unknown>).subtitles !== false,
+                  bgm: (clientPlanRaw!.packaging as Record<string, unknown>).bgm !== false,
+                }
+              : { intro: true, subtitles: true, bgm: true },
+            publish: (clientPlanRaw!.publish && typeof clientPlanRaw!.publish === "object")
+              ? clientPlanRaw!.publish as Record<string, string | undefined>
+              : undefined,
+            variant_type: typeof clientPlanRaw!.variant_type === "string" ? clientPlanRaw!.variant_type : undefined,
+          };
       const planningInput = {
         mode: job.mode, prompt: job.prompt, aspectRatio: job.aspectRatio,
         assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
