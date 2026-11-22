@@ -134,7 +134,30 @@
 
 ---
 
-## 四、工程开发宪法与防巨石铁律（所有开发必须遵守）
+## 四、解耦模块专修速查地图与全链路排障规范
+
+巨石解耦后，排查与修复 Bug 必须严格遵照“根据控制台标签定模块，直奔对应文件专修”的原则，严禁跨模块盲目翻看代码，严禁触碰冻结代码：
+
+### 1. 全链路日志标识与责任阶段速查
+- `[API-任务创建]` / `[API-任务入队]`：请求参数解析、权限鉴权与计费预扣。责任文件：`apps/api/src/jobs.ts`
+- `[Worker-受理]` / `[Worker-素材]` (阶段 1/4)：素材数量与存在性校验。责任文件：`apps/api/src/worker.ts`、`apps/api/src/assets.ts`
+- `[Worker-规划]` (阶段 2/4)：AI 导演方案解析与复用。责任文件：`apps/api/src/director.ts`、`apps/api/src/prompt-assembly.ts`
+- `[Worker-渲染]` / `[VideoEngine-*]` (阶段 3/4)：视频合成与渲染引擎执行。责任文件：`apps/api/src/engine-adapters.ts`、`apps/api/src/renderer.ts`
+- `[Worker-质检]` (阶段 4/4)：成片 Auto-QC 质检与发布。责任文件：`packages/ffmpeg-kit/autoQc.mjs`
+- `[Worker-异常]`：控制台统一标红打印确切阶段与完整错误堆栈。
+
+### 2. 核心创作场景专修文件对照表
+| 故障现象 / 业务场景 | 唯一专修文件 / 目录 | 严禁触碰的区域 |
+| :--- | :--- | :--- |
+| **图片成片 (image-film) 渲染错误/花屏/合成中断** | `apps/api/src/renderer.ts` (produceImageFilm 调用段)<br>`modules/visual_engine_v4/imageFilm.js` | 严禁改动任何前端 UI、路由及其他引擎 |
+| **视频配音 (video-dub) 对齐/旁白丢失/音画不同步** | `apps/api/src/renderer.ts` (produceVideoDub 调用段)<br>`packages/video-dub/dubKernel.js` | 严禁改动分镜与图片成片底层 |
+| **多视频分镜 (storyboard) 拼接/片尾/BGM人声避让** | `apps/api/src/engine-adapters.ts`<br>`modules/video_creator/` | 严禁改动前端与数据库层 |
+| **语音识别转写 (Whisper ASR) 听写错误/格式异常** | `apps/api/src/voice-transcribe.ts`<br>`apps/web/src/hooks/useVoiceInput.ts` | 严禁改动录音组件界面布局 |
+| **任务轮询卡顿 / 状态更新不同步** | `apps/web/src/hooks/useJobPolling.ts`<br>`apps/api/src/jobs.ts` (SSE 端点) | 严禁触碰前端 CSS 与任何视觉排版 |
+
+---
+
+## 五、工程开发宪法与防巨石铁律（所有开发必须遵守）
 
 - **前端布局与视觉绝对冻结铁律**：**严禁改动任何布局和样式，严禁动视觉呈现**。没有用户明确指令，绝不允许变更任何 CSS、排版、组件尺寸、微光质感等视觉表现。
 - **后台管理面板绝对冻结铁律**：管理面板全套样式、排版与业务逻辑永久冻结，严禁擅自触碰。
@@ -150,7 +173,7 @@
 
 ---
 
-## 五、验证基线（必须 100% 通过）
+## 六、验证基线（必须 100% 通过）
 
 1. `npm run typecheck` (`tsc -b`)：0 错误，0 警告。
 2. `npm run build`：Vite 前端打包与 Fastify 后端编译全部成功。

@@ -110,6 +110,7 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
     // 入口场景以客户端明确选择为准；旧客户端没有该字段时仍按提示词前缀/关键词推断。
     const creationScene: CreationEntryScene = parsed.data.creationScene ?? detectCreationScene(parsed.data.prompt, parsed.data.mode);
     const isFreeEntry = isFreeCreationEntry(creationScene);
+    console.info(`[API-任务创建] 收到请求: mode=${parsed.data.mode}, scene=${creationScene}, versions=${parsed.data.versions ?? 1}, 用户=${user.id.slice(0, 8)}`);
     // 游客（未绑定手机/邮箱）不带可消费积分：收费场景直接引导注册，防止匿名会话白嫖付费产能。
     // 资格检查必须在素材归属/计费检查之前——先问资格，再查资源。
     if (!isFreeEntry && !user.phone && !user.email) {
@@ -164,6 +165,7 @@ export function registerJobRoutes(app: FastifyInstance, options: JobRoutesOption
       if (options.billingStore && !isFreeEntry) {
         await options.billingStore.holdCredits(user.id, job.id, GENERATION_COST_CREDITS);
       }
+      console.info(`[API-任务入队 | 任务:${job.id.slice(0, 8)}] 单任务已入库排队 (mode=${job.mode})`);
       return reply.code(201).send({ job: jobSummary(job) });
     }
 

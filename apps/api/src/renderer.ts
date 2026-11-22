@@ -213,6 +213,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
                 ? { motion: planScenes[index]!.motion } : {}),
             })),
           };
+          console.info(`[ImageFilm-渲染 | 任务:${job.id.slice(0, 8)}] 开始图片成片 (素材=${assets.length}张, 音色=${voiceId}, 语速=${speechSpeed})`);
           const result = await (produceImageFilm as (input: Record<string, unknown>) => Promise<{ outputPath: string; videoSec: number; timings?: Record<string, number> }>)({
             taskId: job.id,
             taskDir,
@@ -286,6 +287,7 @@ export function createMediaRenderer(options: MediaRendererOptions): MediaRendere
             ...(typeof plan?.end_line === "string" ? { end_line: plan.end_line } : {}),
           };
           const engine = options.videoDubEngine ?? (produceVideoDub as VideoDubEngine);
+          console.info(`[VideoDub-渲染 | 任务:${job.id.slice(0, 8)}] 开始视频配音 (音色=${voiceId}, 语速=${speechSpeed})`);
           const result = await engine({
             taskId: job.id,
             taskDir,

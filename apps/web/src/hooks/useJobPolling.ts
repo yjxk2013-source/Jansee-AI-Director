@@ -113,6 +113,12 @@ export function useJobPolling({ conversations, setConversations }: UseJobPolling
         return next;
       });
 
+      if (jobData.status === "failed") {
+        console.warn(`[Jansee-任务监控 | ${jobId.slice(0, 8)}] [FAIL] 任务失败: ${jobData.errorMessage ?? "未知原因"}`);
+      } else if (jobData.status === "completed") {
+        console.info(`[Jansee-任务监控 | ${jobId.slice(0, 8)}] [SUCCESS] 任务已完成`);
+      }
+
       if (jobData.status === "completed") {
         attachWorkOutput(jobId, matchedAnchorId || jobId);
       }

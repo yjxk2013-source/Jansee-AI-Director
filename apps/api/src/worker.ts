@@ -72,6 +72,7 @@ export async function processJob(
   context: WorkerContext,
 ): Promise<boolean> {
   const { jobStore, assetStore, storage, renderer, outputStore } = context;
+  console.info(`[Worker-受理 | 任务:${job.id.slice(0, 8)}] 开始处理 模式=${job.mode} 用户=${job.userId.slice(0, 8)}`);
   // E2E 计时起点 = 系统受理任务的时间（worker 领取任务、status→inspecting 时写入 started_at），
   // 而不是用户点“开始创作”的 queued_at。并发受限时排在后面的任务会在队列里等待，
   // 若用 queued_at 会把排队时间算进自己的耗时（第 3/4/5/6 条越来越大）。
@@ -135,6 +136,7 @@ export async function processJob(
     if (assets.length === 0) {
       throw new Error("No valid assets found for this job");
     }
+    console.info(`[Worker-素材 | 任务:${job.id.slice(0, 8)}] 1/4 素材校验通过 (共 ${assets.length} 个素材)`);
 
     // 2. planning (40%): run the same director used by the planning API and persist its decision.
     await jobStore.updateJobStatus?.(job.userId, job.id, "planning", 40, undefined, context.workerId);
@@ -314,8 +316,11 @@ export async function processJob(
       console.info(`[jansee-director] plan ready job=${job.id} mode=${job.mode} scene=${String(providerTelemetry.scene ?? "unreported")}/${String(providerTelemetry.sceneSource ?? "unreported")} providerMode=${String(providerTelemetry.providerMode ?? "unreported")} selectedModel=${String(providerTelemetry.selectedModel ?? "heuristic")} fallbackUsed=${providerTelemetry.fallbackUsed === true} llmMs=${llmDurationMs} tokens=${Number(providerTelemetry.totalTokens ?? 0)} variant=${String(plan.variant_type ?? "none")} lockedVariant=${String(providerTelemetry.lockedVariant ?? "none")} variantMatched=${providerTelemetry.variantMatched === true} attempts=${JSON.stringify(providerTelemetry.modelAttempts ?? [])}`);
     }
 
+    console.info(`[Worker-规划 | 任务:${job.id.slice(0, 8)}] 2/4 导演方案就绪 (operation=${String(activeJob.directorPlan?.operation ?? "standard")}, voiceId=${String(activeJob.directorPlan?.voice_id ?? "未定")})`);
+
     // 3. rendering (70%)
     await jobStore.updateJobStatus?.(job.userId, job.id, "rendering", 70, undefined, context.workerId);
+    console.info(`[Worker-渲染 | 任务:${job.id.slice(0, 8)}] 3/4 引擎开始渲染...`);
     const renderStartedAt = Date.now();
     let renderResult: RenderResult | undefined;
     let renderResults: RenderResult[] = [];
@@ -423,6 +428,7 @@ export async function processJob(
 
     // 4. quality-check (90%)
     await jobStore.updateJobStatus?.(job.userId, job.id, "quality-check", 90, undefined, context.workerId);
+    console.info(`[Worker-质检 | 任务:${job.id.slice(0, 8)}] 4/4 渲染完成 (耗时=${rendererDurationMs}ms)，进入成片质检...`);
     if (!renderResult.sizeBytes || renderResult.sizeBytes <= 0) {
       throw new Error("Rendered video file is empty");
     }
@@ -543,9 +549,18 @@ export async function processJob(
       await context.billingStore?.settleCredits(job.userId, job.id);
       await jobStore.updateJobStatus?.(job.userId, job.id, "completed", 100, undefined, context.workerId);
     }
+    console.info(`[Worker-完成 | 任务:${job.id.slice(0, 8)}] [SUCCESS] 任务全部完成并交付！总耗时=${Date.now() - e2eStartTime}ms`);
     return true;
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
+    const failureStage = error.message.includes("AUTO_QC_REJECTED")
+      ? "quality-check(质检)"
+      : error.message.includes("ENGINE") || error.message.includes("RENDER") || error.message.includes("FFmpeg")
+      ? "rendering(渲染引擎)"
+      : activeJob.status === "planning"
+      ? "planning(导演策划)"
+      : "inspecting(素材检查)";
+    console.error(`[Worker-异常 | 任务:${job.id.slice(0, 8)}] [FAIL] 阶段: [${failureStage}] 执行失败:\n  原因: ${error.message}\n  堆栈: ${error.stack ?? "无堆栈"}`);
     if (leaseLost || error.message === "WORKER_LEASE_LOST") return false;
     if (activeJob.directorPlan && jobStore.updateDirectorPlan) {
       const previousTelemetry = (activeJob.directorPlan._telemetry as Record<string, unknown> | undefined) ?? {};

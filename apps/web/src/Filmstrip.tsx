@@ -252,7 +252,7 @@ export function Filmstrip({
         </div>
       </div>
 
-      {/* 工作台内嵌核心主监视舱：暗房物理透明度显影 ➔ 100%成片播放 */}
+      {/* 工作台内嵌核心主监视舱：暗房物理透明度显影 -> 100%成片播放 */}
       <div className="director-main-monitor">
         {message.jobWorkId ? (
           <div className="monitor-screen monitor-delivered">

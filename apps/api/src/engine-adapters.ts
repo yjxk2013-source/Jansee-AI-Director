@@ -208,6 +208,7 @@ const storyboardEngine: ProductionEngine = {
     if (!voiceId || !Number.isFinite(speechSpeed) || speechSpeed < 0.85 || speechSpeed > 1.25) {
       throw new Error("DIRECTOR_VOICE_SPEED_REQUIRED: 分镜导演方案必须明确提供有效腾讯音色和语速");
     }
+    console.info(`[VideoEngine-分镜 | 任务:${context.jobId.slice(0, 8)}] 开始分镜合成 (镜头数=${shots.length}, 音色=${voiceId}, 语速=${speechSpeed})`);
     const result = await composeStoryboard({
       taskDir: context.taskDir,
       shots,
@@ -249,6 +250,7 @@ function createRendererEngine(id: "image-film" | "video-dub"): ProductionEngine 
   return {
     id,
     async execute(context) {
+      console.info(`[VideoEngine-${id} | 任务:${context.jobId.slice(0, 8)}] 引擎开始执行渲染...`);
       const job = { ...context.job, directorPlan: context.directorPlan };
       const rendered = await context.renderer.render(job, [...context.assets], context.onProgress);
       return {
