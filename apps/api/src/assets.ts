@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -112,6 +112,41 @@ export function registerAssetRoutes(app: FastifyInstance, options: UploadOptions
         for (const item of staged) {
           await options.storage.putFile(item.key, item.path);
           stored.push(item.key);
+
+          // 视频素材即时抽帧预热：在本地暂存盘直接抽帧缓存，避免后续请求 preview 产生阻塞或黑屏
+          if (item.detected.mediaType === "video") {
+            try {
+              const cacheDir = join(tmpdir(), "jansee-video-thumbs");
+              await mkdir(cacheDir, { recursive: true });
+              const thumbPath = join(cacheDir, `${item.id}.jpg`);
+              const ffmpegBin = bundledFfmpeg || "ffmpeg";
+              try {
+                execFileSync(ffmpegBin, [
+                  "-nostdin",
+                  "-y",
+                  "-ss", "0.5",
+                  "-i", item.path,
+                  "-vframes", "1",
+                  "-vf", "scale='min(480,iw)':-2",
+                  "-q:v", "3",
+                  thumbPath,
+                ], { timeout: 8000, stdio: "ignore" });
+              } catch {
+                execFileSync(ffmpegBin, [
+                  "-nostdin",
+                  "-y",
+                  "-ss", "0.0",
+                  "-i", item.path,
+                  "-vframes", "1",
+                  "-vf", "scale='min(480,iw)':-2",
+                  "-q:v", "3",
+                  thumbPath,
+                ], { timeout: 8000, stdio: "ignore" });
+              }
+            } catch {
+              // 预抽帧失败不影响素材上传主流程
+            }
+          }
         }
         await options.assetStore.createAssets(user.id, records);
       } catch (error) {

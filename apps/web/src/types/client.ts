@@ -10,6 +10,7 @@ export type Attachment = {
   id?: string | undefined;
   url?: string | undefined;
   previewUrl?: string | undefined;
+  localPreviewUrl?: string | undefined;
 };
 
 export type WorkItem = {

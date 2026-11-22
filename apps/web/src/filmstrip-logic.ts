@@ -58,12 +58,19 @@ export function buildScriptLines(narration: string, sceneCount: number): string[
   });
 }
 
-/** 素材缩略图地址：服务端素材是长期来源，blob 只用于上传后、assetId 尚未回填的短暂窗口。 */
+/** 素材缩略图地址：优先使用已提取的高清本地图片帧，杜绝网络请求等待过程中的黑屏闪烁；服务端素材作为持久化来源 */
 export function filmstripPreviewUrl(attachment: {
   assetId?: string;
   previewUrl?: string;
   url?: string;
+  localPreviewUrl?: string;
 }): string {
+  if (typeof attachment.localPreviewUrl === "string" && attachment.localPreviewUrl) {
+    return attachment.localPreviewUrl;
+  }
+  if (typeof attachment.previewUrl === "string" && attachment.previewUrl.startsWith("data:image/")) {
+    return attachment.previewUrl;
+  }
   if (typeof attachment.assetId === "string" && attachment.assetId.trim()) {
     return `/api/v1/assets/${encodeURIComponent(attachment.assetId)}/preview`;
   }

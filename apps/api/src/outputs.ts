@@ -1,9 +1,22 @@
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { createReadStream, existsSync } from "node:fs";
+import { mkdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthStore } from "./auth.js";
 import { authenticatedUser } from "./assets.js";
 import type { ObjectStorage } from "./storage-local.js";
+
+const requireMod = createRequire(import.meta.url);
+const bundledFfmpegPath: string | null = (() => {
+  try {
+    return requireMod("ffmpeg-static") as string;
+  } catch {
+    return null;
+  }
+})();
 
 export interface WorkAssetSummary {
   assetId: string;
@@ -103,7 +116,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
         publish: out.publish ?? null,
         directorPlan: out.directorPlan ?? null,
         assets: out.assets ?? [],
-        coverUrl: out.coverStorageKey ? `/api/v1/works/${out.id}/cover` : null,
+        coverUrl: (out.coverStorageKey || out.mimeType === "video/mp4") ? `/api/v1/works/${out.id}/cover` : null,
         mimeType: out.mimeType,
         sizeBytes: out.sizeBytes,
         durationMs: out.durationMs,
@@ -143,10 +156,54 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       const cover = await options.outputStore.findOutputCoverById(user.id, id);
       if (cover?.coverStorageKey) coverKey = cover.coverStorageKey;
     }
-    if (!coverKey) {
-      const output = await options.outputStore.findOutputById(user.id, id);
-      if (output?.coverStorageKey) coverKey = output.coverStorageKey;
+    const output = await options.outputStore.findOutputById(user.id, id);
+    if (!coverKey && output?.coverStorageKey) {
+      coverKey = output.coverStorageKey;
     }
+
+    // 动态抽帧保底：针对历史作品或未生成封面的视频成片，现场提取首帧并缓存，杜绝 404 黑屏
+    if (!coverKey && output && output.mimeType === "video/mp4") {
+      try {
+        const cacheDir = join(tmpdir(), "jansee-work-covers");
+        await mkdir(cacheDir, { recursive: true });
+        const cachedCoverPath = join(cacheDir, `${id}.jpg`);
+        if (!existsSync(cachedCoverPath)) {
+          const videoFilePath = await options.storage.getFilePath(output.storageKey);
+          const ffmpegBin = process.env.FFMPEG_PATH || bundledFfmpegPath || "ffmpeg";
+          try {
+            execFileSync(ffmpegBin, [
+              "-nostdin",
+              "-y",
+              "-ss", "0.5",
+              "-i", videoFilePath,
+              "-vframes", "1",
+              "-q:v", "2",
+              cachedCoverPath,
+            ], { timeout: 8000, stdio: "ignore" });
+          } catch {
+            execFileSync(ffmpegBin, [
+              "-nostdin",
+              "-y",
+              "-ss", "0.0",
+              "-i", videoFilePath,
+              "-vframes", "1",
+              "-q:v", "2",
+              cachedCoverPath,
+            ], { timeout: 8000, stdio: "ignore" });
+          }
+        }
+        if (existsSync(cachedCoverPath)) {
+          const fileStat = await stat(cachedCoverPath);
+          reply.header("cache-control", "private, max-age=604800, immutable");
+          reply.header("content-type", "image/jpeg");
+          reply.header("content-length", fileStat.size);
+          return reply.send(createReadStream(cachedCoverPath));
+        }
+      } catch (err) {
+        console.warn(`[outputs] 成片动态抽帧兜底失败 work=${id}:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+
     if (!coverKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
 
     // 若存储返回远端高速直链（如腾讯云 COS / CDN），直接 302 重定向，享受边缘极速加载

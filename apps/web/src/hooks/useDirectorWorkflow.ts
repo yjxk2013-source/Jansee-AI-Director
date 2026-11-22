@@ -34,6 +34,7 @@ export interface UseDirectorWorkflowOptions {
   setActiveConversationId: React.Dispatch<React.SetStateAction<string | null>>;
   conversationsOwnerId: string | null;
   uploadPromisesRef: React.MutableRefObject<Map<string, Promise<string>>>;
+  videoFramesRef?: React.MutableRefObject<Map<string, string>> | undefined;
   startUploads: (batch: File[]) => void;
   saveAccountConversation: (conversation: SavedConversation) => void;
   refreshWallet: () => void;
@@ -60,6 +61,7 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
     setActiveConversationId,
     conversationsOwnerId,
     uploadPromisesRef,
+    videoFramesRef,
     startUploads,
     saveAccountConversation,
     refreshWallet,
@@ -139,12 +141,17 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
       text: submittingDraft,
       creationScene: submittingScene,
       creationMode: submittingMode,
-      attachments: submittingFiles.map((file) => ({
-        name: file.name,
-        kind: mediaKind(file)!,
-        size: file.size,
-        previewUrl: URL.createObjectURL(file),
-      })),
+      attachments: submittingFiles.map((file) => {
+        const key = fileKey(file);
+        const localFrame = videoFramesRef?.current?.get(key);
+        return {
+          name: file.name,
+          kind: mediaKind(file)!,
+          size: file.size,
+          previewUrl: localFrame || URL.createObjectURL(file),
+          ...(localFrame ? { localPreviewUrl: localFrame } : {}),
+        };
+      }),
       isWorkbench: true,
     };
     const baseMessages = [...messages, userMessage];
@@ -227,12 +234,15 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
 
         let attachments: Attachment[] = submittingFiles.map((file, index) => {
           const prior = (messagesWithAck.find((m) => m.id === userMessage.id)?.attachments?.[index]) as Record<string, unknown> | undefined;
+          const key = fileKey(file);
+          const localFrame = videoFramesRef?.current?.get(key) || (typeof prior?.localPreviewUrl === "string" ? prior.localPreviewUrl : undefined);
           return {
             name: file.name,
             kind: mediaKind(file)!,
             size: file.size,
             assetId: assetIds[index]!,
             ...(typeof prior?.previewUrl === "string" ? { previewUrl: prior.previewUrl } : {}),
+            ...(localFrame ? { localPreviewUrl: localFrame } : {}),
           };
         });
         const baseMessagesWithAssets = messagesWithAck.map((m) => m.id === userMessage.id ? { ...m, attachments } : m);
@@ -313,12 +323,15 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
           assetIds = await ensureUploads(submittingFiles);
           attachments = submittingFiles.map((file, index) => {
             const prior = (messagesWithAck.find((m) => m.id === userMessage.id)?.attachments?.[index]) as Record<string, unknown> | undefined;
+            const key = fileKey(file);
+            const localFrame = videoFramesRef?.current?.get(key) || (typeof prior?.localPreviewUrl === "string" ? prior.localPreviewUrl : undefined);
             return {
               name: file.name,
               kind: mediaKind(file)!,
               size: file.size,
               assetId: assetIds[index]!,
               ...(typeof prior?.previewUrl === "string" ? { previewUrl: prior.previewUrl } : {}),
+              ...(localFrame ? { localPreviewUrl: localFrame } : {}),
             };
           });
           response = await fetch("/api/v1/director/plan", {
@@ -407,6 +420,7 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
           ...(att.assetId
             ? { previewUrl: `/api/v1/assets/${encodeURIComponent(att.assetId)}/preview` }
             : (att.previewUrl ? { previewUrl: att.previewUrl } : {})),
+          ...(att.localPreviewUrl ? { localPreviewUrl: att.localPreviewUrl } : {}),
         }));
 
         if (batchTotal > 1 && createdJobs.length > 1) {

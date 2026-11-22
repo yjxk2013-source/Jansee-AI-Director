@@ -9,7 +9,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync, openSync, readSync, closeSync } from 'node:fs';
 import path from 'node:path';
 import ffmpegStatic from 'ffmpeg-static';
 import sharp from 'sharp';
@@ -68,7 +68,21 @@ export async function composePureCover({
   mkdirSync(outDir, { recursive: true });
 
   const ext = path.extname(bgSource).toLowerCase();
-  const isVideo = VIDEO_EXTS.has(ext);
+  let isVideo = VIDEO_EXTS.has(ext);
+  if (!isVideo) {
+    // 容器魔数特征探测：无后缀视频素材（如 COS/对象存储中的 UUID key）自适应识别
+    try {
+      const fd = openSync(bgSource, 'r');
+      const buf = Buffer.alloc(64);
+      readSync(fd, buf, 0, 64, 0);
+      closeSync(fd);
+      if (buf.length >= 12 && buf.subarray(4, 8).toString('latin1') === 'ftyp') {
+        isVideo = true;
+      } else if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) {
+        isVideo = true;
+      }
+    } catch (_) { }
+  }
 
   let rawFramePath = bgSource;
   let isTempFrame = false;
@@ -78,15 +92,28 @@ export async function composePureCover({
     rawFramePath = path.join(outDir, `_raw_bg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`);
     isTempFrame = true;
     const timeStr = Number(captureSec).toFixed(3);
-    await runFfmpeg([
-      '-nostdin',
-      '-y',
-      '-ss', timeStr,
-      '-i', bgSource,
-      '-vframes', '1',
-      '-q:v', '2',
-      rawFramePath,
-    ]);
+    try {
+      await runFfmpeg([
+        '-nostdin',
+        '-y',
+        '-ss', timeStr,
+        '-i', bgSource,
+        '-vframes', '1',
+        '-q:v', '2',
+        rawFramePath,
+      ]);
+    } catch {
+      // 容错降级：若指定时间戳（如 1.0s 超出短视频时长）抽帧失败，从 0.0s 抽取首帧
+      await runFfmpeg([
+        '-nostdin',
+        '-y',
+        '-ss', '0.000',
+        '-i', bgSource,
+        '-vframes', '1',
+        '-q:v', '2',
+        rawFramePath,
+      ]);
+    }
   }
 
   try {
@@ -117,7 +144,7 @@ export async function composePureCover({
 
     // 清理临时贴片
     if (existsSync(tempIntroPng)) {
-      try { unlinkSync(tempIntroPng); } catch (_) {}
+      try { unlinkSync(tempIntroPng); } catch (_) { }
     }
 
     return {
@@ -128,7 +155,7 @@ export async function composePureCover({
   } finally {
     // 清理临时底帧
     if (isTempFrame && existsSync(rawFramePath)) {
-      try { unlinkSync(rawFramePath); } catch (_) {}
+      try { unlinkSync(rawFramePath); } catch (_) { }
     }
   }
 }

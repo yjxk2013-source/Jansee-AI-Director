@@ -12,11 +12,13 @@ import { DirectorPlanSchema, isDirectorPlanCompatible, type DirectorPlan, type D
 import { resolveDirectorRoute } from "./prompt-assembly.js";
 import type { ProductionEngineRegistry } from "./engine-registry.js";
 import { packagingEnabled } from "./engine-adapters.js";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { stat } from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 // @ts-expect-error video-creator exports its mature JavaScript slicer
 import { prepareSlicer, composeSlicer, videoDurationSec } from "@jansee/video-creator/video/slicer.js";
 // @ts-expect-error ffmpeg-kit exposes media probing helpers
@@ -26,6 +28,15 @@ import { performAutoQc } from "@jansee/ffmpeg-kit/autoQc.mjs";
 // @ts-expect-error publish-kit is a JavaScript workspace package
 import { sanitizePublish } from "@jansee/publish-kit";
 import { prewarmCdnUrls } from "./cdn-prewarm.js";
+
+const requireMod = createRequire(import.meta.url);
+const bundledFfmpegPath: string | null = (() => {
+  try {
+    return requireMod("ffmpeg-static") as string;
+  } catch {
+    return null;
+  }
+})();
 
 const WORKER_ID = (hostname() + ":" + process.pid + ":" + randomUUID()).slice(0, 120);
 const WORKER_LEASE_SECONDS = 120;
@@ -115,8 +126,8 @@ export async function processJob(
         }
       }
     };
-    void heartbeat().catch(() => {});
-    heartbeatTimer = setInterval(() => { void heartbeat().catch(() => {}); }, WORKER_HEARTBEAT_MS);
+    void heartbeat().catch(() => { });
+    heartbeatTimer = setInterval(() => { void heartbeat().catch(() => { }); }, WORKER_HEARTBEAT_MS);
     heartbeatTimer.unref?.();
   }
   const ensureLease = () => {
@@ -167,45 +178,45 @@ export async function processJob(
       const plan: DirectorPlan = clientPlanParse?.success
         ? clientPlanParse.data
         : {
-            operation: (["standard", "video-slice", "keep-original"].includes(String(clientPlanRaw!.operation))
-              ? clientPlanRaw!.operation as "standard" | "video-slice" | "keep-original"
-              : "standard"),
-            sliceSeconds: Number(clientPlanRaw!.sliceSeconds) > 0 ? Number(clientPlanRaw!.sliceSeconds) : 20,
-            title: String(clientPlanRaw!.title || "简兮视频").trim().slice(0, 60) || "简兮视频",
-            concept: String(clientPlanRaw!.concept || clientPlanRaw!.title || "简兮商业短视频方案").trim().padEnd(10, "。").slice(0, 500),
-            narration: typeof clientPlanRaw!.narration === "string" ? clientPlanRaw!.narration : undefined,
-            note: typeof clientPlanRaw!.note === "string" ? clientPlanRaw!.note : undefined,
-            scenes: Array.isArray(clientPlanRaw!.scenes) && clientPlanRaw!.scenes.length > 0
-              ? clientPlanRaw!.scenes.map((s: any, idx: number) => ({
-                  order: Number(s?.order) || idx + 1,
-                  description: String(s?.description || `第${idx + 1}分镜`).trim().slice(0, 180) || `第${idx + 1}分镜`,
-                  durationSeconds: Number(s?.durationSeconds) > 0 ? Number(s.durationSeconds) : undefined,
-                  motion: (["sweep_lr", "sweep_rl", "rise_up", "diagonal"].includes(String(s?.motion))
-                    ? s.motion
-                    : "sweep_lr"),
-                }))
-              : [{ order: 1, description: "镜头画面展示", motion: "sweep_lr" as const }],
-            style: String(clientPlanRaw!.style || "商业短视频").trim().slice(0, 100),
-            soundtrack: String(clientPlanRaw!.soundtrack || "精选配乐").trim().slice(0, 100),
-            voice_id: (/^\d{4,9}$/.test(String(clientPlanRaw!.voice_id).trim())
-              ? String(clientPlanRaw!.voice_id).trim()
-              : "101001"),
-            speech_speed: (Number(clientPlanRaw!.speech_speed) >= 0.85 && Number(clientPlanRaw!.speech_speed) <= 1.25)
-              ? Number(clientPlanRaw!.speech_speed)
-              : 1,
-            bgm_emotion: String(clientPlanRaw!.bgm_emotion || "warm").trim().slice(0, 50) || "warm",
-            packaging: (clientPlanRaw!.packaging && typeof clientPlanRaw!.packaging === "object")
-              ? {
-                  intro: (clientPlanRaw!.packaging as Record<string, unknown>).intro !== false,
-                  subtitles: (clientPlanRaw!.packaging as Record<string, unknown>).subtitles !== false,
-                  bgm: (clientPlanRaw!.packaging as Record<string, unknown>).bgm !== false,
-                }
-              : { intro: true, subtitles: true, bgm: true },
-            publish: (clientPlanRaw!.publish && typeof clientPlanRaw!.publish === "object")
-              ? clientPlanRaw!.publish as Record<string, string | undefined>
-              : undefined,
-            variant_type: typeof clientPlanRaw!.variant_type === "string" ? clientPlanRaw!.variant_type : undefined,
-          };
+          operation: (["standard", "video-slice", "keep-original"].includes(String(clientPlanRaw!.operation))
+            ? clientPlanRaw!.operation as "standard" | "video-slice" | "keep-original"
+            : "standard"),
+          sliceSeconds: Number(clientPlanRaw!.sliceSeconds) > 0 ? Number(clientPlanRaw!.sliceSeconds) : 20,
+          title: String(clientPlanRaw!.title || "简兮视频").trim().slice(0, 60) || "简兮视频",
+          concept: String(clientPlanRaw!.concept || clientPlanRaw!.title || "简兮商业短视频方案").trim().padEnd(10, "。").slice(0, 500),
+          narration: typeof clientPlanRaw!.narration === "string" ? clientPlanRaw!.narration : undefined,
+          note: typeof clientPlanRaw!.note === "string" ? clientPlanRaw!.note : undefined,
+          scenes: Array.isArray(clientPlanRaw!.scenes) && clientPlanRaw!.scenes.length > 0
+            ? clientPlanRaw!.scenes.map((s: any, idx: number) => ({
+              order: Number(s?.order) || idx + 1,
+              description: String(s?.description || `第${idx + 1}分镜`).trim().slice(0, 180) || `第${idx + 1}分镜`,
+              durationSeconds: Number(s?.durationSeconds) > 0 ? Number(s.durationSeconds) : undefined,
+              motion: (["sweep_lr", "sweep_rl", "rise_up", "diagonal"].includes(String(s?.motion))
+                ? s.motion
+                : "sweep_lr"),
+            }))
+            : [{ order: 1, description: "镜头画面展示", motion: "sweep_lr" as const }],
+          style: String(clientPlanRaw!.style || "商业短视频").trim().slice(0, 100),
+          soundtrack: String(clientPlanRaw!.soundtrack || "精选配乐").trim().slice(0, 100),
+          voice_id: (/^\d{4,9}$/.test(String(clientPlanRaw!.voice_id).trim())
+            ? String(clientPlanRaw!.voice_id).trim()
+            : "101001"),
+          speech_speed: (Number(clientPlanRaw!.speech_speed) >= 0.85 && Number(clientPlanRaw!.speech_speed) <= 1.25)
+            ? Number(clientPlanRaw!.speech_speed)
+            : 1,
+          bgm_emotion: String(clientPlanRaw!.bgm_emotion || "warm").trim().slice(0, 50) || "warm",
+          packaging: (clientPlanRaw!.packaging && typeof clientPlanRaw!.packaging === "object")
+            ? {
+              intro: (clientPlanRaw!.packaging as Record<string, unknown>).intro !== false,
+              subtitles: (clientPlanRaw!.packaging as Record<string, unknown>).subtitles !== false,
+              bgm: (clientPlanRaw!.packaging as Record<string, unknown>).bgm !== false,
+            }
+            : { intro: true, subtitles: true, bgm: true },
+          publish: (clientPlanRaw!.publish && typeof clientPlanRaw!.publish === "object")
+            ? clientPlanRaw!.publish as Record<string, string | undefined>
+            : undefined,
+          variant_type: typeof clientPlanRaw!.variant_type === "string" ? clientPlanRaw!.variant_type : undefined,
+        };
       const planningInput = {
         mode: job.mode, prompt: job.prompt, aspectRatio: job.aspectRatio,
         assets: assets.map((asset) => ({ name: asset.originalName, kind: asset.mediaType, size: asset.sizeBytes })),
@@ -215,10 +226,10 @@ export async function processJob(
         ? clientProviderTelemetry as Record<string, unknown> : {};
       const planningDurationMs = Array.isArray(sourceTelemetry.modelAttempts)
         ? sourceTelemetry.modelAttempts.reduce<number>((total, attempt) => {
-            if (!attempt || typeof attempt !== "object") return total;
-            const duration = Number((attempt as Record<string, unknown>).durationMs ?? 0);
-            return total + (Number.isFinite(duration) && duration > 0 ? duration : 0);
-          }, 0)
+          if (!attempt || typeof attempt !== "object") return total;
+          const duration = Number((attempt as Record<string, unknown>).durationMs ?? 0);
+          return total + (Number.isFinite(duration) && duration > 0 ? duration : 0);
+        }, 0)
         : 0;
       providerTelemetry = {
         ...sourceTelemetry, scene: route.creationScene, sceneSource: route.sceneSource,
@@ -348,7 +359,7 @@ export async function processJob(
         });
         const uploadedSliceKeys: string[] = [];
         try {
-            for (const slice of composed.slices) {
+          for (const slice of composed.slices) {
             const outputPath = path.join(taskDir, "slices", slice.name);
             const fileStat = await stat(outputPath);
             if (!fileStat.size) throw new Error(`VIDEO_SLICE_EMPTY: ${slice.name}`);
@@ -358,7 +369,7 @@ export async function processJob(
             stagedStorageKeys.push(storageKey);
             const dimensions = probeVideoSize(outputPath);
             renderResults.push({ storageKey, mimeType: "video/mp4", sizeBytes: stored.sizeBytes, durationMs: Math.round(slice.durationSec * 1000), width: dimensions?.width ?? 1080, height: dimensions?.height ?? 1920 });
-        }
+          }
         } catch (error) {
           await Promise.all(uploadedSliceKeys.map((key) => storage.deleteObject(key).catch(() => undefined)));
           throw error;
@@ -388,7 +399,7 @@ export async function processJob(
           job: activeJob,
           renderer,
           onProgress: (p) => {
-            jobStore.updateJobStatus?.(job.userId, job.id, "rendering", p, undefined, context.workerId).catch(() => {});
+            jobStore.updateJobStatus?.(job.userId, job.id, "rendering", p, undefined, context.workerId).catch(() => { });
           },
         });
         const storageKey = engineResult.storageKey ?? `users/${job.userId}/outputs/${job.id}`;
@@ -415,7 +426,7 @@ export async function processJob(
       }
     } else {
       renderResult = await renderer.render(activeJob, assets, (p) => {
-        jobStore.updateJobStatus?.(job.userId, job.id, "rendering", p, undefined, context.workerId).catch(() => {});
+        jobStore.updateJobStatus?.(job.userId, job.id, "rendering", p, undefined, context.workerId).catch(() => { });
       });
       stagedStorageKeys.push(renderResult.storageKey);
       renderResults = [renderResult];
@@ -477,6 +488,46 @@ export async function processJob(
     // 5. completed (100%)
     const outputsToPersist = renderResults.length ? renderResults : [renderResult];
     for (const output of outputsToPersist) {
+      let coverStorageKey = output.coverStorageKey;
+      // 统一成片保底抽帧：若引擎未生成封面，直接从成品视频截取第 0.5s 或首帧作为纯净封面，杜绝黑屏
+      if (!coverStorageKey && output.mimeType === "video/mp4") {
+        try {
+          const videoFilePath = await storage.getFilePath(output.storageKey);
+          const tmpCoverDir = await mkdtemp(join(tmpdir(), "jansee-auto-cover-"));
+          const tmpCoverPath = join(tmpCoverDir, "cover.jpg");
+          const ffmpegBin = process.env.FFMPEG_PATH || bundledFfmpegPath || "ffmpeg";
+          try {
+            execFileSync(ffmpegBin, [
+              "-nostdin",
+              "-y",
+              "-ss", "0.5",
+              "-i", videoFilePath,
+              "-vframes", "1",
+              "-q:v", "2",
+              tmpCoverPath,
+            ], { timeout: 8000, stdio: "ignore" });
+          } catch {
+            execFileSync(ffmpegBin, [
+              "-nostdin",
+              "-y",
+              "-ss", "0.0",
+              "-i", videoFilePath,
+              "-vframes", "1",
+              "-q:v", "2",
+              tmpCoverPath,
+            ], { timeout: 8000, stdio: "ignore" });
+          }
+          if (existsSync(tmpCoverPath)) {
+            const key = `users/${job.userId}/covers/${job.id}`;
+            await storage.putFile(key, tmpCoverPath);
+            coverStorageKey = key;
+          }
+          await rm(tmpCoverDir, { recursive: true, force: true }).catch(() => undefined);
+        } catch (coverErr) {
+          console.warn(`[Worker | 任务:${job.id.slice(0, 8)}] 成片自动保底抽帧跳过:`, coverErr instanceof Error ? coverErr.message : String(coverErr));
+        }
+      }
+
       await outputStore.createOutput({
         jobId: job.id,
         userId: job.userId,
@@ -486,7 +537,7 @@ export async function processJob(
         durationMs: output.durationMs,
         width: output.width,
         height: output.height,
-        ...(output.coverStorageKey ? { coverStorageKey: output.coverStorageKey } : {}),
+        ...(coverStorageKey ? { coverStorageKey } : {}),
         ...(context.workerId ? { workerId: context.workerId } : {}),
       });
     }
@@ -556,44 +607,44 @@ export async function processJob(
     const failureStage = error.message.includes("AUTO_QC_REJECTED")
       ? "quality-check(质检)"
       : error.message.includes("ENGINE") || error.message.includes("RENDER") || error.message.includes("FFmpeg")
-      ? "rendering(渲染引擎)"
-      : activeJob.status === "planning"
-      ? "planning(导演策划)"
-      : "inspecting(素材检查)";
+        ? "rendering(渲染引擎)"
+        : activeJob.status === "planning"
+          ? "planning(导演策划)"
+          : "inspecting(素材检查)";
     console.error(`[Worker-异常 | 任务:${job.id.slice(0, 8)}] [FAIL] 阶段: [${failureStage}] 执行失败:\n  原因: ${error.message}\n  堆栈: ${error.stack ?? "无堆栈"}`);
     if (leaseLost || error.message === "WORKER_LEASE_LOST") return false;
     if (activeJob.directorPlan && jobStore.updateDirectorPlan) {
       const previousTelemetry = (activeJob.directorPlan._telemetry as Record<string, unknown> | undefined) ?? {};
       try {
-      await jobStore.updateDirectorPlan(job.userId, job.id, {
-        ...activeJob.directorPlan,
-        _telemetry: {
-          ...previousTelemetry,
-          llmDurationMs,
-          rendererDurationMs,
-          ffmpegDurationMs,
-          ttsDurationMs,
-          ttsChars,
-          e2eDurationMs: Date.now() - e2eStartTime,
-          providerMode: providerTelemetry.providerMode ?? previousTelemetry.providerMode ?? "unreported",
-          requestedModel: providerTelemetry.requestedModel ?? previousTelemetry.requestedModel ?? null,
-          selectedModel: providerTelemetry.selectedModel ?? previousTelemetry.selectedModel ?? null,
-          modelsAttempted: providerTelemetry.modelsAttempted ?? previousTelemetry.modelsAttempted ?? [],
-          fallbackUsed: providerTelemetry.fallbackUsed ?? previousTelemetry.fallbackUsed ?? false,
-          promptTokens: providerTelemetry.promptTokens ?? previousTelemetry.promptTokens ?? 0,
-          completionTokens: providerTelemetry.completionTokens ?? previousTelemetry.completionTokens ?? 0,
-          tokensUsed: providerTelemetry.totalTokens ?? previousTelemetry.tokensUsed ?? 0,
-          tokenUsageAvailable: providerTelemetry.usageAvailable ?? previousTelemetry.tokenUsageAvailable ?? false,
-          costEstimateYuan: estimateDirectorCostYuan(providerTelemetry) ?? previousTelemetry.costEstimateYuan ?? null,
-          costSource: providerTelemetry.usageAvailable !== true ? previousTelemetry.costSource ?? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? previousTelemetry.costSource ?? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? previousTelemetry.costSource ?? "unconfigured" : "director_model_pricing",
-          qualityPassed: qcSummaries.length > 0 ? false : previousTelemetry.qualityPassed ?? false,
-          qualityCheckCount: qcSummaries.length,
-          providerFailureReason: providerTelemetry.failureReason ?? previousTelemetry.providerFailureReason ?? null,
-          qualityChecks: qcSummaries,
-          failureStage: error.message.includes("AUTO_QC_REJECTED") ? "quality-check" : error.message.includes("ENGINE") || error.message.includes("RENDER") ? "rendering" : "processing",
-          failedAt: new Date().toISOString(),
-        },
-      }, context.workerId);
+        await jobStore.updateDirectorPlan(job.userId, job.id, {
+          ...activeJob.directorPlan,
+          _telemetry: {
+            ...previousTelemetry,
+            llmDurationMs,
+            rendererDurationMs,
+            ffmpegDurationMs,
+            ttsDurationMs,
+            ttsChars,
+            e2eDurationMs: Date.now() - e2eStartTime,
+            providerMode: providerTelemetry.providerMode ?? previousTelemetry.providerMode ?? "unreported",
+            requestedModel: providerTelemetry.requestedModel ?? previousTelemetry.requestedModel ?? null,
+            selectedModel: providerTelemetry.selectedModel ?? previousTelemetry.selectedModel ?? null,
+            modelsAttempted: providerTelemetry.modelsAttempted ?? previousTelemetry.modelsAttempted ?? [],
+            fallbackUsed: providerTelemetry.fallbackUsed ?? previousTelemetry.fallbackUsed ?? false,
+            promptTokens: providerTelemetry.promptTokens ?? previousTelemetry.promptTokens ?? 0,
+            completionTokens: providerTelemetry.completionTokens ?? previousTelemetry.completionTokens ?? 0,
+            tokensUsed: providerTelemetry.totalTokens ?? previousTelemetry.tokensUsed ?? 0,
+            tokenUsageAvailable: providerTelemetry.usageAvailable ?? previousTelemetry.tokenUsageAvailable ?? false,
+            costEstimateYuan: estimateDirectorCostYuan(providerTelemetry) ?? previousTelemetry.costEstimateYuan ?? null,
+            costSource: providerTelemetry.usageAvailable !== true ? previousTelemetry.costSource ?? "usage_unavailable" : providerTelemetry.costUsageAvailable !== true ? previousTelemetry.costSource ?? "token_breakdown_unavailable" : estimateDirectorCostYuan(providerTelemetry) === null ? previousTelemetry.costSource ?? "unconfigured" : "director_model_pricing",
+            qualityPassed: qcSummaries.length > 0 ? false : previousTelemetry.qualityPassed ?? false,
+            qualityCheckCount: qcSummaries.length,
+            providerFailureReason: providerTelemetry.failureReason ?? previousTelemetry.providerFailureReason ?? null,
+            qualityChecks: qcSummaries,
+            failureStage: error.message.includes("AUTO_QC_REJECTED") ? "quality-check" : error.message.includes("ENGINE") || error.message.includes("RENDER") ? "rendering" : "processing",
+            failedAt: new Date().toISOString(),
+          },
+        }, context.workerId);
       } catch {
         // Telemetry persistence must never prevent failure settlement and credit refunds.
       }

@@ -252,6 +252,24 @@ export function WorksPanel({
                     preload="metadata"
                     poster={work.coverUrl || coverDataUrls[work.id] || undefined}
                     aria-label={titleLabel}
+                    onLoadedData={() => {
+                      if (!coverDataUrls[work.id]) {
+                        const video = videoRefs.current[work.id];
+                        if (video && video.videoWidth > 0) {
+                          try {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = Math.min(video.videoWidth, 640);
+                            canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+                            const ctx = canvas.getContext("2d");
+                            if (ctx) {
+                              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                              const generatedUrl = canvas.toDataURL("image/jpeg", 0.85);
+                              setCoverDataUrls((prev) => ({ ...prev, [work.id]: generatedUrl }));
+                            }
+                          } catch (_) { }
+                        }
+                      }
+                    }}
                     onEnded={() => setActivePlayWorkId(null)}
                     onPause={() => {
                       if (activePlayWorkId === work.id) setActivePlayWorkId(null);
@@ -287,10 +305,25 @@ export function WorksPanel({
                   >
                     {work.coverUrl || coverDataUrls[work.id] ? (
                       <img
-                        src={work.coverUrl || coverDataUrls[work.id]}
+                        src={coverDataUrls[work.id] || work.coverUrl!}
                         alt={titleLabel}
                         loading="lazy"
                         className="work-card-cover-img"
+                        onError={() => {
+                          const video = videoRefs.current[work.id];
+                          if (video && video.videoWidth > 0) {
+                            try {
+                              const canvas = document.createElement("canvas");
+                              canvas.width = Math.min(video.videoWidth, 640);
+                              canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+                              const ctx = canvas.getContext("2d");
+                              if (ctx) {
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                setCoverDataUrls((prev) => ({ ...prev, [work.id]: canvas.toDataURL("image/jpeg", 0.85) }));
+                              }
+                            } catch (_) { }
+                          }
+                        }}
                       />
                     ) : (
                       <div className="work-card-cover-fallback">

@@ -6,7 +6,24 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [coverFailed, setCoverFailed] = useState(false);
+  const [capturedCover, setCapturedCover] = useState<string | null>(null);
   const [isActuallyPlaying, setIsActuallyPlaying] = useState(false);
+
+  const handleVideoLoadedData = () => {
+    const video = videoRef.current;
+    if (video && video.videoWidth > 0 && !capturedCover) {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.min(video.videoWidth, 640);
+        canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          setCapturedCover(canvas.toDataURL("image/jpeg", 0.85));
+        }
+      } catch (_) {}
+    }
+  };
 
   // 滑走（移出视口可见比例 < 25%）自动停止播放，杜绝后台继续发声，节省系统资源
   useEffect(() => {
@@ -77,10 +94,11 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
         ref={videoRef}
         className="job-delivery-video"
         src={streamUrl}
-        poster={coverFailed ? undefined : coverUrl}
+        poster={coverFailed && !capturedCover ? undefined : (capturedCover || coverUrl)}
         controls={isPlaying && isActuallyPlaying}
         playsInline
         preload="metadata"
+        onLoadedData={handleVideoLoadedData}
         onPause={handleVideoPause}
         onEnded={handleVideoEnded}
         onPlaying={() => setIsActuallyPlaying(true)}
@@ -106,18 +124,20 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
           }
         }}
       >
-        {coverFailed ? (
+        {coverFailed && !capturedCover ? (
           <div className="job-delivery-cover-placeholder">
             <span>视频成片 (点击播放)</span>
           </div>
         ) : (
           <img
-            src={coverUrl}
+            src={capturedCover || coverUrl}
             alt="成片封面"
             loading="lazy"
             decoding="async"
             className="job-delivery-cover-img"
-            onError={() => setCoverFailed(true)}
+            onError={() => {
+              if (!capturedCover) setCoverFailed(true);
+            }}
           />
         )}
         <div className="job-delivery-play-overlay">

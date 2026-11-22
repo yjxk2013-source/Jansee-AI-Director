@@ -2,6 +2,75 @@ import { useState, useRef, useEffect, useCallback, type TouchEvent } from "react
 import type { AuthUser } from "../types/client.js";
 import { fileKey, mediaKind } from "../utils/clientPlatform.js";
 
+/** 快速截取本地视频第一帧，生成轻量级 DataURL 缩略图 */
+export function extractVideoFrame(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof document === "undefined") {
+      resolve("");
+      return;
+    }
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+
+    let resolved = false;
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      video.removeAttribute("src");
+      video.load();
+    };
+
+    const capture = () => {
+      if (resolved) return;
+      try {
+        const canvas = document.createElement("canvas");
+        const vw = video.videoWidth || 640;
+        const vh = video.videoHeight || 360;
+        canvas.width = Math.min(vw, 480);
+        canvas.height = Math.round(canvas.width * (vh / vw));
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          resolved = true;
+          cleanup();
+          resolve(dataUrl);
+          return;
+        }
+      } catch (_) { }
+      resolved = true;
+      cleanup();
+      resolve("");
+    };
+
+    video.onloadeddata = () => {
+      try {
+        video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
+      } catch (_) {
+        capture();
+      }
+    };
+    video.onseeked = () => capture();
+    video.onerror = () => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolve("");
+      }
+    };
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolve("");
+      }
+    }, 2500);
+  });
+}
+
 interface UseComposerMediaOptions {
   authUser: AuthUser | null;
   onError: (msg: string) => void;
@@ -11,6 +80,7 @@ export function useComposerMedia({ authUser, onError }: UseComposerMediaOptions)
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const uploadPromisesRef = useRef<Map<string, Promise<string>>>(new Map());
+  const videoFramesRef = useRef<Map<string, string>>(new Map());
   const [uploadProgresses, setUploadProgresses] = useState<Record<string, number>>({});
 
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -25,10 +95,24 @@ export function useComposerMedia({ authUser, onError }: UseComposerMediaOptions)
   const dragCommittedRef = useRef(false);
   const touchDragStartedRef = useRef(false);
 
-  // 同步本地预览 blob URL
+  // 同步本地预览 blob URL 并异步秒级提取视频首帧 DataURL
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviewUrls(urls);
+
+    files.forEach((file) => {
+      if (mediaKind(file) === "video") {
+        const key = fileKey(file);
+        if (!videoFramesRef.current.has(key)) {
+          extractVideoFrame(file).then((frame) => {
+            if (frame) {
+              videoFramesRef.current.set(key, frame);
+            }
+          }).catch(() => undefined);
+        }
+      }
+    });
+
     return () => {
       urls.forEach((url) => URL.revokeObjectURL(url));
     };
@@ -295,6 +379,7 @@ export function useComposerMedia({ authUser, onError }: UseComposerMediaOptions)
     uploadProgresses,
     isAnyFileUploading,
     uploadPromisesRef,
+    videoFramesRef,
     imageInputRef,
     videoInputRef,
     cameraCaptureInputRef,
