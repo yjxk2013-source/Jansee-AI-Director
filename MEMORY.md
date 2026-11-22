@@ -1,11 +1,12 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间**：2026-11-23 05:00 (UTC+8) - 完成客户端持久缓存（Media Cache & SWR）与封面 304 协商缓存全面加速上线。
-> 1. **痛点根治**：彻底解决“APP 打开要很久，视频封面、宣发封面刷新慢，退出后重进又要重新刷新”的体验痛点；
-> 2. **首屏 0ms 秒开（SWR 离线持久化）**：`authUser`、`walletCredits`、`recentWorks`、`works` 列表由零状态瀑布流串行请求改造为 SWR 架构，打开 APP 即刻从本地离线缓存恢复渲染，后台静默校准拉取，消除白屏与等待闪烁；
-> 3. **全链路媒体封面离线持久缓存池（`mediaCache.ts`）**：引入原生 `CacheStorage`（支持现代移动端 WebView / PWA 大容量持久化）+ 内存 ObjectURL 映射池，视频封面与短视频宣发套件封面初次拉取后自动持久化，再次打开组件或重入 APP 0ms 同步出图，并由队列在空闲时段静默批量预热；
-> 4. **服务端 ETag 与 304 Not Modified 协商缓存**：后端 `/api/v1/works/:id/cover` 接口增加基于文件 mtime/size 的强 ETag 校验，客户端条件请求直接毫秒级返回 304，配合 `max-age=2592000, stale-while-revalidate=86400` 消除重复带宽消耗；
-> 5. **遵守冻结铁律与防巨石规范**：未修改任何 CSS 样式、类名与 DOM 布局排版，抽取 `WorkDeliveryCardItem` 单一职责子组件，基线测试 16 项 100% 通过。
+> **更新时间**：2026-11-23 05:15 (UTC+8) - 全网正式平滑部署上线发布 v4.1.9。
+> 1. **上线方式评估与执行**：本次改动属于客户端持久化缓存（Media CacheStorage & SWR 离线秒开）以及服务端 ETag / 304 协商缓存优化，无数据库结构变更、无破坏性视觉调整。采用**生产级容器热更新（Zero-Downtime Hot Reload）**，无感知增量构建镜像并无缝替换 `deploy-web` 与 `deploy-api` 容器，PostgreSQL 数据层持续在线，实现零停机热发布；
+> 2. **痛点根治**：彻底解决“APP 打开要很久，视频封面、宣发封面刷新慢，退出后重进又要重新刷新”的体验痛点；
+> 3. **首屏 0ms 秒开（SWR 离线持久化）**：`authUser`、`walletCredits`、`recentWorks`、`works` 列表由零状态瀑布流串行请求改造为 SWR 架构，打开 APP 即刻从本地离线缓存恢复渲染，后台静默校准拉取，消除白屏与等待闪烁；
+> 4. **全链路媒体封面离线持久缓存池（`mediaCache.ts`）**：引入原生 `CacheStorage`（支持现代移动端 WebView / PWA 大容量持久化）+ 内存 ObjectURL 映射池，视频封面与短视频宣发套件封面初次拉取后自动持久化，再次打开组件或重入 APP 0ms 同步出图，并由队列在空闲时段静默批量预热；
+> 5. **服务端 ETag 与 304 Not Modified 协商缓存**：后端 `/api/v1/works/:id/cover` 接口增加基于文件 mtime/size 的强 ETag 校验，客户端条件请求直接毫秒级返回 304，配合 `max-age=2592000, stale-while-revalidate=86400` 消除重复带宽消耗；
+> 6. **全网健康检测**：`203.195.243.42` 云端已完成上线验证，`deploy-web` / `deploy-api` / `deploy-postgres` 容器全量 healthy，外网 HTTPS 访问 200 OK，生产服务稳健运行。
 
 ---
 

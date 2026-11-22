@@ -145,7 +145,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     return reply.header("cache-control", "no-store").send({ work: output });
   });
 
-    // 纯净宣发封面（无烧录台词、无 AI 角标）。与视频预览一致，登录用户可读自己的封面。
+  // 纯净宣发封面（无烧录台词、无 AI 角标）。与视频预览一致，登录用户可读自己的封面。
   app.route({
     method: ["GET", "HEAD"],
     url: "/api/v1/works/:id/cover",
