@@ -11268,10 +11268,6 @@ body,
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   animation: filmstrip-fadein 0.25s ease-out;
-  /* 高度锁定为成片载入标准高度，确保制作到成片交付全流程高度恒定无跳动 */
-  min-height: 540px;
-  display: flex;
-  flex-direction: column;
 }
 
 @keyframes filmstrip-fadein {
@@ -11536,6 +11532,125 @@ body,
   font-style: italic;
 }
 
+/* 工作台内嵌核心主监视舱：暗房物理透明度显影 ➔ 100% 成片放映 */
+.director-main-monitor {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 14px 0 8px;
+}
+
+.monitor-screen {
+  width: min(100%, 320px);
+  aspect-ratio: 9 / 16;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+/* 制作中：暗房底片显影态 */
+.monitor-developing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.developing-cover-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: contrast(1.08) brightness(0.95);
+  pointer-events: none;
+}
+
+.developing-center-indicator {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 70%);
+}
+
+.developing-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #ffffff;
+  animation: spin 1s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.developing-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  font-family: var(--jansee-font-mono, monospace);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 发丝级进度底线 */
+.hairline-progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  z-index: 15;
+}
+
+.hairline-progress-bar {
+  height: 100%;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+  transition: width 0.3s ease;
+}
+
+/* 成片就绪放映态 */
+.monitor-delivered {
+  position: relative;
+}
+
+.monitor-delivered .job-delivery-player-box {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.filmstrip-archive-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--jansee-font-sans, sans-serif);
+}
+
+@media (max-width: 768px) {
+  .monitor-screen {
+    width: min(88vw, 320px);
+    border-radius: 12px;
+  }
+}
+
 /* 底部音频引擎与微光示波器 */
 .filmstrip-footer {
   margin-top: 10px;
@@ -11663,57 +11778,35 @@ body,
   margin-top: 10px;
 }
 
-/* 成片后双栏协同布局：成片靠左主屏独占，素材靠右纵向滚动浏览 */
-.workbench-delivered-stage {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: stretch;
-  margin-top: 14px;
-  width: 100%;
-  min-height: 540px;
-  animation: fadeInDelivered 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes fadeInDelivered {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.workbench-delivered-video-col {
+/* 成片极致呈现效果：去除大按钮与长文案，大画幅沉浸居中看片 */
+.job-delivery {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
   width: 100%;
 }
 
-.workbench-delivered-video-col .job-delivery {
-  margin-top: 0;
-  height: 100%;
-}
-
-.workbench-delivered-video-col .job-delivery-player-box {
-  width: 100%;
-  max-width: 340px;
-  height: 100%;
-  max-height: 540px;
+.job-delivery-player-box {
+  width: min(100%, 340px);
   aspect-ratio: 9 / 16;
-  border-radius: 12px;
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .job-delivery-archive-hint {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  width: 100%;
+  max-width: 340px;
+  padding: 8px 14px;
   border-radius: 8px;
   background: rgba(20, 21, 23, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -11724,112 +11817,16 @@ body,
   user-select: none;
 }
 
-/* 右侧素材栏：限制高度并支持上下滑动 */
-.workbench-delivered-filmstrip-col {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.workbench-delivered-filmstrip-col .director-filmstrip-panel {
-  margin-top: 0;
-  height: 100%;
-  min-height: 540px;
-  max-height: 540px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-track-wrapper {
-  flex: 1;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-right: 6px;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-track-wrapper::-webkit-scrollbar {
-  width: 5px;
-  height: auto;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-track-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-track-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-track {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-frame {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  grid-template-rows: auto auto;
-  gap: 8px 12px;
-  padding: 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-frame-perforations-top,
-.workbench-delivered-filmstrip-col .filmstrip-frame-perforations-bottom {
-  display: none;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-thumbnail-box {
-  grid-row: 1 / 3;
-  width: 120px;
-  aspect-ratio: 9 / 16;
-  max-height: 160px;
-  border-radius: 6px;
-}
-
-.workbench-delivered-filmstrip-col .filmstrip-script-notes {
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-/* 窄屏/移动端自适应 */
+/* 移动端/小屏幕成片呈现自适应：充满黄金可视宽度，消灭左右鸡肋空白 */
 @media (max-width: 768px) {
-  .workbench-delivered-stage {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  .job-delivery-player-box {
+    width: min(88vw, 340px);
+    border-radius: 12px;
   }
-  .workbench-delivered-video-col .job-delivery-player-box {
-    max-width: 280px;
-    margin: 0 auto;
+  .job-delivery-archive-hint {
+    max-width: min(88vw, 340px);
+    font-size: 11px;
   }
-  .workbench-delivered-filmstrip-col .director-filmstrip-panel {
-    max-height: 380px;
-  }
-}
-
-.job-delivery-player-box {
-  width: min(100%, 280px);
-  aspect-ratio: 9 / 16;
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #000;
-  border: 1px solid #e5e7eb;
 }
 
 .job-delivery-cover-wrap {
@@ -11876,28 +11873,36 @@ body,
 }
 
 .job-delivery-play-icon {
-  width: 44px;
-  height: 44px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  background: rgba(32, 33, 36, 0.85);
+  background: rgba(24, 25, 27, 0.88);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(4px);
-  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .job-delivery-play-icon svg {
-  width: 22px;
-  height: 22px;
-  margin-left: 2px;
+  width: 26px;
+  height: 26px;
+  margin-left: 3px;
+  fill: currentColor;
 }
 
 .job-delivery-cover-wrap:hover .job-delivery-play-icon {
-  transform: scale(1.08);
-  background: rgba(0, 0, 0, 0.95);
+  transform: translate(-50%, -50%) scale(1.1);
+  background: rgba(35, 38, 42, 0.95);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), 0 0 16px rgba(255, 255, 255, 0.15);
 }
 
 .job-delivery-video {

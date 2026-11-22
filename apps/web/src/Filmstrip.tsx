@@ -7,16 +7,25 @@ import {
   revealFromProgress,
   revealFromTime,
 } from "./filmstrip-logic";
+import { JobDeliveryVideoPlayer } from "./components/video/JobDeliveryVideoPlayer";
 
-/** 与主消息流共用同一套消息形状；这里只声明组件实际用到的字段。 */
+/** 与主消息流共用同一套消息形状；这里声明组件实际用到的字段。 */
 type FilmstripMessage = {
   id: string;
   jobId?: string;
+  jobWorkId?: string;
   jobStatus?: string;
   jobProgress?: number;
   jobDirectorPlan?: Record<string, unknown>;
   creationScene?: "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut";
   attachments?: Array<{ id?: string; assetId?: string; name?: string; kind?: "image" | "video"; url?: string; previewUrl?: string }>;
+};
+
+export type FilmstripProps = {
+  message: FilmstripMessage;
+  fallbackScene: FilmstripMessage["creationScene"];
+  activePlayingVideoId?: string | null;
+  setActivePlayingVideoId?: (id: string | null | ((curr: string | null) => string | null)) => void;
 };
 
 function prefersReducedMotion(): boolean {
@@ -136,7 +145,12 @@ export type FilmstripProps = {
   fallbackScene: FilmstripMessage["creationScene"];
 };
 
-export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
+export function Filmstrip({
+  message,
+  fallbackScene,
+  activePlayingVideoId = null,
+  setActivePlayingVideoId,
+}: FilmstripProps) {
   const plan = message.jobDirectorPlan;
   const hasPlan = Boolean(plan && Object.keys(plan).length > 0);
   const scenes = (plan?.scenes as Array<Record<string, unknown>>) || [];
@@ -156,7 +170,13 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
   const { shown: conceptShown, typing: conceptTyping } = useTypewriter(concept, hasPlan, 42);
 
   const bgmText = bgmLabel(plan?.bgm_emotion);
-  const settled = status === "quality-check" || status === "completed";
+  const settled = Boolean(message.jobWorkId) || status === "quality-check" || status === "completed";
+
+  // 首镜素材底片或封面：用于暗房物理透明度显影
+  const firstAtt = attachments[0];
+  const developingCoverUrl = firstAtt
+    ? filmstripPreviewUrl(firstAtt as { assetId?: string; previewUrl?: string; url?: string })
+    : (message.jobWorkId ? `/api/v1/works/${message.jobWorkId}/cover` : undefined);
 
   const scene = message.creationScene ?? fallbackScene;
   const sceneName = scene === "online-ecommerce" ? "带货视频"
@@ -180,9 +200,9 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
           {status === "queued" && "排队调度中 · 准备算力"}
           {status === "inspecting" && "素材底片校验 · 构图分析"}
           {status === "planning" && "导演分镜执笔 · 台词显影"}
-          {status === "rendering" && `多轨避让混音与转场压制 · ${Math.round(progress || 45)}%`}
+          {status === "rendering" && `暗房多轨混音与转场压制 · ${Math.round(progress || 45)}%`}
           {status === "quality-check" && "画质与音频合规复验 · 即将成片"}
-          {status === "completed" && "成片已交付 · 请到「我的作品」查看与下载"}
+          {(status === "completed" || message.jobWorkId) && "成片已定影交付 · 支持在线沉浸预览"}
         </div>
       </div>
 
@@ -195,6 +215,7 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
         </div>
       )}
 
+      {/* 胶卷分镜走带轨道 */}
       <div className="filmstrip-track-wrapper">
         <div className="filmstrip-track">
           {frameSource.map((att, idx) => {
@@ -236,6 +257,49 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
         </div>
       </div>
 
+      {/* 工作台内嵌核心主监视舱：暗房物理透明度显影 ➔ 100%成片播放 */}
+      <div className="director-main-monitor">
+        {message.jobWorkId ? (
+          <div className="monitor-screen monitor-delivered">
+            <JobDeliveryVideoPlayer
+              workId={message.jobWorkId}
+              activeId={activePlayingVideoId ?? null}
+              onPlay={(id) => setActivePlayingVideoId?.(id)}
+              onPause={() => setActivePlayingVideoId?.((curr) => (curr === message.jobWorkId ? null : curr))}
+            />
+          </div>
+        ) : (
+          <div className="monitor-screen monitor-developing">
+            {developingCoverUrl ? (
+              <img
+                src={developingCoverUrl}
+                alt="底片显影中"
+                className="developing-cover-image"
+                style={{ opacity: Math.max(0.06, Math.min(0.96, (progress || 15) / 100)) }}
+              />
+            ) : null}
+
+            <div className="developing-center-indicator">
+              <span className="developing-spinner" aria-hidden="true" />
+              <span className="developing-text">
+                {status === "queued" ? "排队调度中…"
+                  : status === "inspecting" ? "素材底片校验中…"
+                  : status === "planning" ? "导演分镜执笔中…"
+                  : `暗房多轨显影中 (${Math.round(progress || 20)}%)`}
+              </span>
+            </div>
+
+            <div className="hairline-progress-track">
+              <div
+                className="hairline-progress-bar"
+                style={{ width: `${Math.min(100, Math.max(5, progress || 10))}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 工作台底部：音频引擎信息与出片归档提示 */}
       <div className="filmstrip-footer">
         <div className="filmstrip-sound-engine">
           <span className="sound-engine-dot" />
@@ -244,8 +308,14 @@ export function Filmstrip({ message, fallbackScene }: FilmstripProps) {
             {bgmText ? ` · BGM ${bgmText}` : " · 混音避让已就绪"}
           </span>
         </div>
-        <div className="filmstrip-wave-bars" aria-hidden="true">
-          <span /><span /><span /><span /><span />
+        <div className="filmstrip-archive-note">
+          {message.jobWorkId ? (
+            <span>成片预览就绪 · 高清原片下载请至「我的作品」</span>
+          ) : (
+            <div className="filmstrip-wave-bars" aria-hidden="true">
+              <span /><span /><span /><span /><span />
+            </div>
+          )}
         </div>
       </div>
     </div>

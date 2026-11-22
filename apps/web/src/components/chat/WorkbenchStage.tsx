@@ -62,60 +62,34 @@ export function WorkbenchStage({
             return (
               <div className="workbench-card message-row" key={message.id}>
                 <div className="message-content" style={{ width: "100%", maxWidth: "none" }}>
-                  {/* 成片后：成片靠左，素材靠右上下滚动；成片前：保持全宽工作台不变 */}
-                  {message.jobWorkId ? (
-                    <div className="workbench-delivered-stage">
-                      <div className="workbench-delivered-video-col">
-                        <JobDeliveryCard
-                          message={message}
-                          fallbackScene={creationScene}
-                          activePlayingVideoId={activePlayingVideoId}
-                          setActivePlayingVideoId={setActivePlayingVideoId}
-                          onRestoreDraft={onRestoreDraft}
-                          onRequestDownload={onRequestDownload}
-                          onShowNotice={onShowNotice}
-                        />
-                      </div>
-                      <div className="workbench-delivered-filmstrip-col">
-                        <Filmstrip message={message} fallbackScene={creationScene} />
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* 片场分镜手稿 / 冲洗走带流：创作中带 isWorkbench 或 jobId 即时呈现 */}
-                      {(message.isWorkbench || message.jobId) && message.jobStatus !== "failed" && (
-                        <Filmstrip message={message} fallbackScene={creationScene} />
-                      )}
-
-                      <JobDeliveryCard
-                        message={message}
-                        fallbackScene={creationScene}
-                        activePlayingVideoId={activePlayingVideoId}
-                        setActivePlayingVideoId={setActivePlayingVideoId}
-                        onRestoreDraft={onRestoreDraft}
-                        onRequestDownload={onRequestDownload}
-                        onShowNotice={onShowNotice}
-                      />
-                    </>
+                  {/* 新版黑曜石一体化工作台：一个工作台就是一条商业片（胶卷走带 + 监视屏显影 + 成片放映） */}
+                  {(message.isWorkbench || message.jobId || message.jobWorkId) && message.jobStatus !== "failed" && (
+                    <Filmstrip
+                      message={message}
+                      fallbackScene={creationScene}
+                      activePlayingVideoId={activePlayingVideoId}
+                      setActivePlayingVideoId={setActivePlayingVideoId}
+                    />
                   )}
 
-                  {message.plan && message.speechCutSessionId && (
-                    <div className="director-plan">
-                      <div className="plan-heading">
-                        {(message.jobDirectorPlan as Record<string, any>)?._providerTelemetry?.selectedModel
-                          ? `AI 导演独家构思 · 《${String((message.jobDirectorPlan as Record<string, unknown>).title || "定制商业成片")}》`
-                          : "AI 导演独家构思 · 创作方案"}
-                      </div>
-                      <ol>
-                        {message.plan.map((step) => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                      {message.speechCutSessionId && !message.jobId && (
-                        <div
-                          className="speech-cut-review"
-                          style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(0,0,0,0.10)" }}
-                        >
+                  {/* 任务失败容错处理（不占用正常成片空间） */}
+                  {message.jobStatus === "failed" && (
+                    <JobDeliveryCard
+                      message={message}
+                      fallbackScene={creationScene}
+                      activePlayingVideoId={activePlayingVideoId}
+                      setActivePlayingVideoId={setActivePlayingVideoId}
+                      onRestoreDraft={onRestoreDraft}
+                      onRequestDownload={onRequestDownload}
+                      onShowNotice={onShowNotice}
+                    />
+                  )}
+
+                  {message.speechCutSessionId && !message.jobId && (
+                    <div
+                      className="speech-cut-review"
+                      style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(0,0,0,0.10)" }}
+                    >
                           {message.speechCutStatus === "analyzing" && (
                             <p role="status" style={{ margin: 0, color: "#666" }}>
                               正在识别原声与停顿，请稍候…
@@ -202,8 +176,6 @@ export function WorkbenchStage({
                           })()}
                         </div>
                       )}
-                    </div>
-                  )}
                 </div>
               </div>
             );
