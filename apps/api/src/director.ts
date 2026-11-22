@@ -326,6 +326,12 @@ export function createHeuristicDirectorPlanner(): DirectorPlanner {
           subtitles: !explicitlyDisabled(text, "字幕"),
           bgm: !explicitlyDisabled(text, "背景音乐|BGM|配乐|音乐"),
         },
+        publish: {
+          caption: `${text.slice(0, 30)}，让好内容自然发声。 #商用短视频 #优质创作`,
+          cover_title: `${text.slice(0, 15)} 商业成片精选`,
+          pinned_comment: "欢迎在评论区留言交流。",
+          post_time: "晚间 18:00-21:00 黄金时段",
+        },
         ...(variantType ? { variant_type: variantType } : {}),
       };
     },
@@ -391,6 +397,52 @@ function normalizeDirectorVoiceId(parsed: Record<string, unknown>): void {
   if (typeof raw === "number" && Number.isFinite(raw)) {
     parsed.voice_id = String(Math.trunc(raw));
   }
+}
+
+/**
+ * 确保宣发封面引流标题有效：
+ * 商业视频在作品库及社交媒体分发时依赖 cover_title；
+ * 若大模型偶尔留空或输出空字符串，自动基于 caption、title、note 或 prompt 智能提炼 10~25 字爆款标题，杜绝前端空占位。
+ */
+function ensureValidCoverTitle(parsed: Record<string, unknown>, prompt: string): void {
+  const publish = (parsed.publish && typeof parsed.publish === "object" && !Array.isArray(parsed.publish))
+    ? { ...(parsed.publish as Record<string, unknown>) }
+    : {};
+  parsed.publish = publish;
+
+  const rawCoverTitle = typeof publish.cover_title === "string" ? publish.cover_title.trim() : "";
+  if (rawCoverTitle.length >= 6) {
+    publish.cover_title = rawCoverTitle.slice(0, 50);
+    return;
+  }
+
+  const caption = typeof publish.caption === "string" ? publish.caption.trim() : "";
+  const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+  const note = typeof parsed.note === "string" ? parsed.note.trim() : "";
+  const narration = typeof parsed.narration === "string" ? parsed.narration.trim() : "";
+
+  let candidate = "";
+  if (caption) {
+    const firstSentence = caption.split(/[#\n。！!？?]/)[0]?.trim() || "";
+    if (firstSentence.length >= 8 && firstSentence.length <= 28) {
+      candidate = firstSentence;
+    }
+  }
+  if (!candidate && narration) {
+    const firstSentence = narration.split(/[。！!？?]/)[0]?.trim() || "";
+    if (firstSentence.length >= 8 && firstSentence.length <= 28) {
+      candidate = firstSentence;
+    }
+  }
+  if (!candidate && title) {
+    candidate = note ? `${title} · ${note}` : `${title} 商业成片`;
+  }
+  if (!candidate) {
+    const cleanPrompt = prompt.replace(/\[.*?\]/g, "").replace(/出\d+条视频/g, "").trim();
+    candidate = cleanPrompt.slice(0, 25);
+  }
+
+  publish.cover_title = candidate.slice(0, 30);
 }
 
 /**
@@ -638,6 +690,7 @@ export function createOpenAICompatiblePlanner(config: {
           if (!parsed.packaging || typeof parsed.packaging !== "object") {
             parsed.packaging = { intro: true, subtitles: true, bgm: true };
           }
+          ensureValidCoverTitle(parsed, input.prompt);
           normalizePlanForRoute(parsed, route);
           const validatedPlan = DirectorPlanSchema.parse(parsed);
           // 赛马每条都必须出片（2026-11-20 用户定案）：变体偏离不再整版失败。

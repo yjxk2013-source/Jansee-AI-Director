@@ -40,7 +40,7 @@ const LOCAL_PERSONA_RULES = [
 const PUBLISH_RULES_CONTENT = [
   "【发布方案生成规范】：",
   "1. caption（发布正文）：给「刷到但还没看视频」的人的黄金吸睛钩子，严禁复述旁白台词（重复即扣分，信息互补），口语化、有网感，≤150字。结尾必须带 3-5 个垂直长尾话题标签（如 #打工人救星 #私藏宝藏好物）。",
-  "2. cover_title（爆款发布标题）：10~25字，给抖音/小红书/视频号填写的引流标题，直击痛点与利益点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」。",
+  "2. cover_title（平台爆款封面标题）：10~25字，给抖音/小红书/视频号填写的引流大标题，直击痛点与利益点（如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」）。必须必填，严禁输出空字符串 \"\"，与视频内主标题 title 互补互衬。",
   "3. pinned_comment（置顶评论）：高转化与互动钩子（≤50字），抛出让观众极有欲望站队、讨论的互动问句或客观到店指引。",
   "4. post_time（发布时机建议）：一句话黄金时段建议（如「晚间 19:30-21:30 黄金流量档」）。",
 ].join("\n");
@@ -202,7 +202,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     packaging: { intro: true, subtitles: true, bgm: true },
     publish: {
       caption: "发布正文文案（≤150字，不复述旁白台词，文末带 3-5 个垂直长尾话题标签，如 #打工人救星 #私藏宝藏好物）",
-      cover_title: "平台发布爆款标题（10~25字，给抖音/小红书/视频号填写的引流标题，直击痛点与利益点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」）",
+      cover_title: "平台爆款引流标题（必填，10~25字，用于抖音/小红书封面与发布，直击痛点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」，严禁为空）",
       pinned_comment: "高转化置顶互动评论（≤50字，抛出互动问题或客观指引，拉升评论区停留互动）",
       post_time: "黄金发布时段建议（一句话，如「晚间 19:30-21:30 黄金流量档」）",
     },
@@ -273,7 +273,7 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     "视听铁律：1.相邻分镜叠画转场0.7s（禁跳切）；2.两段式音量避让：口播段BGM=0.10，纯画面段BGM=0.22；3.packaging 只需给 intro/subtitles/bgm（合规片尾由系统固定生成，无需你决定，也不要输出 ending 字段）；4.operation: standard（默认口播成片）/ video-slice（视频高光切片）。除非用户在文案中明确指示「保留原声/不配音」，否则严禁输出 keep-original。",
     "",
     "===== 发布方案规则 =====",
-    "publish必填：caption(正文+3-5个精准长尾话题标签)、cover_title(10-25字爆款标题)、pinned_comment(互动引流或置顶问句)、post_time(建议发布时段)。严禁过时年份与虚构物流。",
+    "publish四项全必填：caption(正文+3-5个精准长尾话题标签)、cover_title(10-25字爆款引流标题，严禁留空或填空字符串，必须吸睛)、pinned_comment(互动引流或置顶问句)、post_time(建议发布时段)。严禁过时年份与虚构物流。",
     "",
     "===== 统一 JSON 输出格式契约 (Strict JSON Only) =====",
     ...contractSections,
@@ -322,7 +322,7 @@ export function buildDirectorUserPrompt(input: DirectorPlanResolvedInput): strin
 
   promptInstructions.push(
     "切记：第一句台词必须是抓人的黄金3秒钩子，去播音腔，不要编造用户未提及的任何数据或事实！",
-    "标题与说明行规范：title 必须为 4~6 字高级主标题（不可写成引流长句）；note 为 6~16 字调性说明行（不可复述旁白，不可写套话，不可留空）；publish.cover_title 为 10~25 字爆款发布标题。",
+    "标题与说明行规范：title 必须为 4~6 字片头画面主标题（不可写成引流长句）；note 为 6~16 字调性说明行（不可复述旁白，不可写套话，不可留空）；publish.cover_title 必须且必填 10~25 字平台爆款引流标题（用于抖音/小红书封面，严禁为空字符串）。",
   );
 
   return JSON.stringify({
