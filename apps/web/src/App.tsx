@@ -384,23 +384,21 @@ function ClientApp() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
-  const triggerDownloadFile = useCallback(async (url: string, filename: string) => {
+  const triggerDownloadFile = useCallback((url: string, filename: string) => {
     showNotice("正在启动高清成片下载…");
     try {
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("下载请求失败");
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = objectUrl;
+      a.href = url;
       a.download = filename;
+      a.rel = "noopener noreferrer";
       document.body.appendChild(a);
       a.click();
-      a.remove();
-      URL.revokeObjectURL(objectUrl);
-      showNotice("高清成片已保存到本地。");
+      setTimeout(() => {
+        a.remove();
+      }, 1000);
+      showNotice("高清成片已开始下载，请查看浏览器下载列表。");
     } catch {
-      showNotice("下载失败，请稍后重试。");
+      window.location.href = url;
     }
   }, [showNotice]);
 

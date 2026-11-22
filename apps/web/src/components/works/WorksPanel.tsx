@@ -269,6 +269,8 @@ export function WorksPanel({
                     style={{
                       position: "absolute",
                       inset: 0,
+                      width: "100%",
+                      height: "100%",
                       opacity: activePlayWorkId === work.id ? 0 : 1,
                       pointerEvents: activePlayWorkId === work.id ? "none" : "auto",
                       transition: "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
