@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type {
   AuthUser,
+  ChatMessage,
   SavedConversation,
   WorkItem,
 } from "./types/client.js";
@@ -349,6 +350,44 @@ function ClientApp() {
           }
         });
         const merged = Array.from(map.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+
+        // 自动自愈：检查是否有已完成且有效的作品在当前工作台会话中遗漏挂载
+        try {
+          const worksRes = await fetch("/api/v1/works", { credentials: "include" });
+          if (worksRes.ok) {
+            const worksData = await worksRes.json() as { works?: WorkItem[] };
+            const readyWorks = (worksData.works ?? []).filter((w) => !w.expiresAt || Date.parse(w.expiresAt) > Date.now());
+            if (readyWorks.length > 0) {
+              const allMessageWorkIds = new Set(merged.flatMap((c) => c.messages.map((m) => m.jobWorkId)).filter(Boolean));
+              const allMessageJobIds = new Set(merged.flatMap((c) => c.messages.map((m) => m.jobId)).filter(Boolean));
+              const unattachedWorks = readyWorks.filter((w) => !allMessageWorkIds.has(w.id) && !allMessageJobIds.has(w.jobId));
+              if (unattachedWorks.length > 0 && merged.length > 0) {
+                const targetConv = merged[0]!;
+                const restoredMessages: ChatMessage[] = unattachedWorks.map((work) => ({
+                  id: `restored-${work.id}`,
+                  role: "director",
+                  text: `《${work.title || "商业成片"}》已定影交付，欢迎沉浸预览～`,
+                  createdAt: Date.parse(work.createdAt) || Date.now(),
+                  jobId: work.jobId,
+                  jobWorkId: work.id,
+                  jobStatus: "completed",
+                  jobProgress: 100,
+                  jobDirectorPlan: (work.directorPlan as Record<string, unknown>) ?? {
+                    title: work.title || "商业成片",
+                    publish: work.publish ?? {},
+                  },
+                  attachments: work.coverUrl ? [{ name: "cover.jpg", size: 0, id: `cover-${work.id}`, url: work.coverUrl, previewUrl: work.coverUrl, kind: "image" as const }] : [],
+                }));
+                targetConv.messages = [...targetConv.messages, ...restoredMessages];
+                targetConv.updatedAt = Date.now();
+                void saveAccountConversation(targetConv);
+              }
+            }
+          }
+        } catch {
+          // 自愈网络容错
+        }
+
         setConversations(merged);
         persistSavedConversations(merged);
         setActiveConversationId((currentActiveId) => {

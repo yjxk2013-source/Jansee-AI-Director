@@ -7,6 +7,9 @@ export type Attachment = {
   kind: "image" | "video";
   size: number;
   assetId?: string;
+  id?: string;
+  url?: string;
+  previewUrl?: string;
 };
 
 export type WorkItem = {
@@ -22,6 +25,7 @@ export type WorkItem = {
   status: string;
   createdAt: string;
   expiresAt: string | null;
+  title?: string | null;
   publish?: {
     caption?: string;
     cover_title?: string;
