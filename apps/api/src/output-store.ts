@@ -15,9 +15,13 @@ interface OutputRow {
   status: string;
   created_at: Date;
   expires_at: Date | null;
+  director_plan?: Record<string, unknown> | null;
 }
 
 function mapOutput(row: OutputRow): OutputRecord {
+  const plan = row.director_plan && typeof row.director_plan === "object" ? row.director_plan as Record<string, unknown> : null;
+  const publish = plan?.publish && typeof plan.publish === "object" ? plan.publish as Record<string, string | undefined> : undefined;
+  const title = typeof plan?.title === "string" ? plan.title.trim() : undefined;
   return {
     id: row.id,
     jobId: row.job_id,
@@ -32,6 +36,9 @@ function mapOutput(row: OutputRow): OutputRecord {
     status: row.status,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
+    ...(title ? { title } : {}),
+    ...(publish ? { publish } : {}),
+    ...(plan ? { directorPlan: plan } : {}),
   };
 }
 
@@ -82,7 +89,11 @@ export function createPgOutputStore(pool: Pool): OutputStore {
 
     async listUserOutputs(userId: string) {
       const result = await pool.query<OutputRow>(
-        "SELECT * FROM generated_outputs WHERE user_id = $1 AND status = 'ready' AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC",
+        `SELECT o.*, j.director_plan
+         FROM generated_outputs o
+         LEFT JOIN generation_jobs j ON j.id = o.job_id
+         WHERE o.user_id = $1 AND o.status = 'ready' AND o.deleted_at IS NULL AND (o.expires_at IS NULL OR o.expires_at > now())
+         ORDER BY o.created_at DESC`,
         [userId],
       );
       return result.rows.map(mapOutput);
@@ -90,7 +101,11 @@ export function createPgOutputStore(pool: Pool): OutputStore {
 
     async findOutputById(userId: string, outputId: string) {
       const result = await pool.query<OutputRow>(
-        "SELECT * FROM generated_outputs WHERE user_id = $1 AND id = $2 AND status = 'ready' AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > now()) LIMIT 1",
+        `SELECT o.*, j.director_plan
+         FROM generated_outputs o
+         LEFT JOIN generation_jobs j ON j.id = o.job_id
+         WHERE o.user_id = $1 AND o.id = $2 AND o.status = 'ready' AND o.deleted_at IS NULL AND (o.expires_at IS NULL OR o.expires_at > now())
+         LIMIT 1`,
         [userId, outputId],
       );
       const row = result.rows[0];

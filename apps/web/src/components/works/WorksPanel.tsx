@@ -7,6 +7,7 @@ function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[
   let title = "";
   const workPlan = work.directorPlan as Record<string, unknown> | undefined;
   if (typeof workPlan?.title === "string" && workPlan.title.trim()) title = workPlan.title.trim();
+  if (!title && typeof work.title === "string" && work.title.trim()) title = work.title.trim();
 
   let base: NonNullable<WorkItem["publish"]> | null = null;
   if (work.publish && (work.publish.caption || work.publish.cover_title || work.publish.pinned_comment)) {

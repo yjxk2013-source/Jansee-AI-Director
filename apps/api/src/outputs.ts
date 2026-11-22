@@ -19,6 +19,14 @@ export interface OutputRecord {
   status: string;
   createdAt: Date;
   expiresAt: Date | null;
+  title?: string | null;
+  publish?: {
+    caption?: string;
+    cover_title?: string;
+    pinned_comment?: string;
+    post_time?: string;
+  } | null;
+  directorPlan?: Record<string, unknown> | null;
 }
 
 export interface NewOutput {
@@ -83,6 +91,9 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       works: outputs.map((out) => ({
         id: out.id,
         jobId: out.jobId,
+        title: out.title ?? null,
+        publish: out.publish ?? null,
+        directorPlan: out.directorPlan ?? null,
         coverUrl: out.coverStorageKey ? `/api/v1/works/${out.id}/cover` : null,
         mimeType: out.mimeType,
         sizeBytes: out.sizeBytes,
