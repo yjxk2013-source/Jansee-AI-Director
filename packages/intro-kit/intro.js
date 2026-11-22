@@ -114,37 +114,15 @@ export function buildIntroSvg({
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
   <defs>
-    <!-- 顶部 100% 纯黑到透明电影遮罩：0% (1.0 纯黑) -> 35% (0.85) -> 65% (0.45) -> 88% (0.15) -> 100% (0% 全透明) -->
-    <linearGradient id="topCinematicMask" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="1.0" />
-      <stop offset="35%" stop-color="#000000" stop-opacity="0.85" />
-      <stop offset="65%" stop-color="#000000" stop-opacity="0.45" />
-      <stop offset="88%" stop-color="#000000" stop-opacity="0.15" />
-      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
-    </linearGradient>
-
-    <!-- 底部透明到 100% 纯黑电影遮罩：0% (0% 全透明) -> 12% (0.15) -> 35% (0.45) -> 65% (0.85) -> 100% (1.0 纯黑) -->
-    <linearGradient id="bottomCinematicMask" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0" />
-      <stop offset="12%" stop-color="#000000" stop-opacity="0.15" />
-      <stop offset="35%" stop-color="#000000" stop-opacity="0.45" />
-      <stop offset="65%" stop-color="#000000" stop-opacity="0.85" />
-      <stop offset="100%" stop-color="#000000" stop-opacity="1.0" />
-    </linearGradient>
-
     <filter id="editorialGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000000" flood-opacity="0.95" />
       <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#000000" flood-opacity="0.90" />
     </filter>
   </defs>
 
-  <!-- 1. 顶部 100% 纯黑到透明电影渐变遮罩（确保任何背景下遮罩层次一目了然） -->
-  <rect x="0" y="0" width="${W}" height="${topMaskH}" fill="url(#topCinematicMask)" />
+  <!-- 纯净通透设计：移除大面积黑曜石暗色遮罩，底图与素材画面 100% 纯净展示，花字以轻盈微光立体呈现 -->
 
-  <!-- 2. 底部透明到 100% 纯黑电影渐变遮罩（托起贯穿细线与地点副标） -->
-  <rect x="0" y="${botMaskY}" width="${W}" height="${botMaskH}" fill="url(#bottomCinematicMask)" />
-
-  <!-- 3. 【顶部图层】：简兮 tpl_fashion_v1 经典大标题与微光发丝短线 -->
+  <!-- 1. 【顶部图层】：简兮 tpl_fashion_v1 经典大标题与微光发丝短线 -->
   <g filter="url(#editorialGlow)">
     <!-- 装饰英文小标 -->
     <text

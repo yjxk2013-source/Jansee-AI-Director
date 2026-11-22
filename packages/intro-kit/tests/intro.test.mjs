@@ -10,7 +10,7 @@ import {
   INTRO_TIMING,
 } from '../index.js';
 
-test('intro-kit: SVG 结构与黑曜石羽化暗晕完整', () => {
+test('intro-kit: SVG 结构与纯净花字排版完整', () => {
   const svg = buildIntroSvg({
     title: '一杯好茶',
     brandEn: 'CHINESE TEA RETREAT',
@@ -18,8 +18,8 @@ test('intro-kit: SVG 结构与黑曜石羽化暗晕完整', () => {
     height: 1920,
   });
 
-  assert.ok(svg.includes('topCinematicMask'), '必须包含顶部黑曜石渐变定义');
-  assert.ok(svg.includes('bottomCinematicMask'), '必须包含底部黑曜石渐变定义');
+  assert.ok(!svg.includes('topCinematicMask'), '必须已移除顶部大面积黑色遮罩');
+  assert.ok(!svg.includes('bottomCinematicMask'), '必须已移除底部大面积黑色遮罩');
   assert.ok(svg.includes('一杯好茶'), '包含主标题文字');
   assert.ok(svg.includes('CHINESE TEA RETREAT'), '包含装饰英文');
   assert.ok(svg.includes('height="1.5"'), '包含发丝微光分割线');
