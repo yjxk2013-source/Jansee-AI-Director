@@ -411,7 +411,8 @@ function ensureValidCoverTitle(parsed: Record<string, unknown>, prompt: string):
   parsed.publish = publish;
 
   const rawCoverTitle = typeof publish.cover_title === "string" ? publish.cover_title.trim() : "";
-  if (rawCoverTitle.length >= 6) {
+  // 尊重大模型创作：只要 LLM 输出了非空内容，完全按 LLM 填写为准；只有真正为空时才触发兜底提取
+  if (rawCoverTitle.length > 0) {
     publish.cover_title = rawCoverTitle.slice(0, 50);
     return;
   }
