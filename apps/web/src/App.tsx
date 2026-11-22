@@ -349,13 +349,13 @@ function ClientApp() {
                 const restoredMessages: ChatMessage[] = unattachedWorks.map((work) => {
                   const materials: Attachment[] = (work.assets && work.assets.length > 0)
                     ? work.assets.map((a, i): Attachment => ({
-                        id: `att-${work.id}-${a.assetId || i}`,
-                        assetId: a.assetId,
-                        name: a.name || `素材 0${i + 1}`,
-                        kind: (a.kind || "image") as "image" | "video",
-                        size: a.size || 0,
-                        ...(a.assetId ? { previewUrl: `/api/v1/assets/${encodeURIComponent(a.assetId)}/preview` } : {}),
-                      }))
+                      id: `att-${work.id}-${a.assetId || i}`,
+                      assetId: a.assetId,
+                      name: a.name || `素材 0${i + 1}`,
+                      kind: (a.kind || "image") as "image" | "video",
+                      size: a.size || 0,
+                      ...(a.assetId ? { previewUrl: `/api/v1/assets/${encodeURIComponent(a.assetId)}/preview` } : {}),
+                    }))
                     : (work.coverUrl ? [{ name: "cover.jpg", size: 0, id: `cover-${work.id}`, url: work.coverUrl, previewUrl: work.coverUrl, kind: "image" as const }] : []);
 
                   return {

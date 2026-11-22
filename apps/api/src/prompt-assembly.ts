@@ -59,7 +59,7 @@ const SCENE_MARKER_RE = /^\[User-selected creation scene:\s*(?:online-ecommerce|
 
 /** 把前端明确选择的创作场景写成服务端可识别的提示词前缀（幂等，旧前缀会被替换）。 */
 export function withCreationSceneMarker(prompt: string, scene?: CreationEntryScene): string {
-  if (!scene) return prompt;
+  if (!scene || scene === "quick-cut") return prompt.replace(SCENE_MARKER_RE, "");
   return `[User-selected creation scene: ${scene}.]\n${prompt.replace(SCENE_MARKER_RE, "")}`;
 }
 
