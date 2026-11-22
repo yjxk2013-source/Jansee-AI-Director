@@ -1209,9 +1209,9 @@ textarea:focus-visible {
   margin-left: 3px;
   border: 1px solid currentColor;
   border-radius: 50%;
-  color: #26734d;
+  color: #80868b;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   vertical-align: middle;
   white-space: nowrap;
