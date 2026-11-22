@@ -111,3 +111,62 @@ export function revealFromTime(total: number, elapsedMs: number, reducedMotion: 
   const step = revealStepMs(total, reducedMotion);
   return Math.min(total, Math.floor(elapsedMs / step) + 1);
 }
+
+/**
+ * 暗房 35 秒平滑显影引擎：
+ * - 0 ~ 5s: 轮廓微光显影 (5% -> 25%)
+ * - 5 ~ 28s: 细节平顺显影 (25% -> 88%)
+ * - 28 ~ 35s: 渐近饱和定影态 (88% -> 95%)
+ * - > 35s: 平稳等待成片 (95%)，提示质检定影中
+ * - 若 settled 或 status 为 completed: 瞬时拉满至 100% 亮屏定影
+ */
+export function calculateDarkroomDeveloping(
+  elapsedMs: number,
+  realProgress: number,
+  settled: boolean,
+  status?: string,
+): {
+  progress: number;
+  opacity: number;
+  label: string;
+} {
+  if (settled || status === "completed") {
+    return {
+      progress: 100,
+      opacity: 1.0,
+      label: "成片已定影交付 · 支持在线沉浸预览",
+    };
+  }
+
+  let timeProgress = 5;
+  if (elapsedMs <= 5000) {
+    timeProgress = 5 + (elapsedMs / 5000) * 20;
+  } else if (elapsedMs <= 28000) {
+    timeProgress = 25 + ((elapsedMs - 5000) / 23000) * 63;
+  } else if (elapsedMs <= 35000) {
+    timeProgress = 88 + ((elapsedMs - 28000) / 7000) * 7;
+  } else {
+    timeProgress = 95;
+  }
+
+  const boundedReal = Math.min(95, Math.max(0, realProgress));
+  const effectiveProgress = Math.min(95, Math.max(timeProgress, boundedReal));
+  const opacity = Math.max(0.06, Math.min(0.96, effectiveProgress / 100));
+
+  let label = `暗房多轨显影中 (${Math.round(effectiveProgress)}%)`;
+  if (status === "queued") {
+    label = "排队调度中…";
+  } else if (status === "inspecting") {
+    label = "素材底片校验中…";
+  } else if (status === "planning") {
+    label = "导演分镜执笔中…";
+  } else if (status === "quality-check" || elapsedMs >= 35000 || effectiveProgress >= 93) {
+    label = "底片显影完成 · 画质质检定影中…";
+  }
+
+  return {
+    progress: Math.round(effectiveProgress),
+    opacity,
+    label,
+  };
+}

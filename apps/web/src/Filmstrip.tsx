@@ -2,23 +2,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   bgmLabel,
   buildScriptLines,
+  calculateDarkroomDeveloping,
   filmstripPreviewUrl,
   motionLabel,
   revealFromProgress,
   revealFromTime,
 } from "./filmstrip-logic";
 import { JobDeliveryVideoPlayer } from "./components/video/JobDeliveryVideoPlayer";
+import type { Attachment } from "./types/client.js";
 
 /** 与主消息流共用同一套消息形状；这里声明组件实际用到的字段。 */
 type FilmstripMessage = {
   id: string;
-  jobId?: string;
-  jobWorkId?: string;
-  jobStatus?: string;
-  jobProgress?: number;
-  jobDirectorPlan?: Record<string, unknown>;
-  creationScene?: "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut";
-  attachments?: Array<{ id?: string; assetId?: string; name?: string; kind?: "image" | "video"; url?: string; previewUrl?: string }>;
+  jobId?: string | undefined;
+  jobWorkId?: string | undefined;
+  jobStatus?: string | undefined;
+  jobProgress?: number | undefined;
+  jobDirectorPlan?: Record<string, unknown> | undefined;
+  creationScene?: "online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut" | undefined;
+  attachments?: Attachment[] | undefined;
 };
 
 export type FilmstripProps = {
@@ -132,6 +134,37 @@ function useRevealCount(total: number, hasPlan: boolean, status: string | undefi
   return revealed;
 }
 
+/** 暗房 35 秒平滑显影 Hook：双轨平滑推进 + 软着陆质检定影态 */
+function useDarkroomDevelopingState(
+  status: string | undefined,
+  progress: number,
+  settled: boolean,
+): { progress: number; opacity: number; label: string } {
+  const startedAtRef = useRef<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (settled) {
+      startedAtRef.current = null;
+      return;
+    }
+    if (startedAtRef.current === null) {
+      startedAtRef.current = Date.now();
+    }
+    const timer = window.setInterval(() => {
+      if (startedAtRef.current !== null) {
+        setElapsed(Date.now() - startedAtRef.current);
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [settled]);
+
+  return useMemo(
+    () => calculateDarkroomDeveloping(elapsed, progress, settled, status),
+    [elapsed, progress, settled, status],
+  );
+}
+
 /** 单镜台词：未揭示时保持“构思中”占位；揭示后逐字打出。独立组件以满足 hooks 规则。 */
 function ScriptLine({ text, active }: { text: string; active: boolean }) {
   const { shown, typing } = useTypewriter(text, active, 26);
@@ -151,8 +184,8 @@ export function Filmstrip({
   const scenes = (plan?.scenes as Array<Record<string, unknown>>) || [];
   const attachments = message.attachments || [];
 
-  // 镜头数优先用方案分镜，方案未到时用素材占位。
-  const total = Math.max(1, scenes.length || attachments.length || 4);
+  // 镜头数取分镜数与素材数的较大值，保证多张素材绝不被截断
+  const total = Math.max(1, scenes.length, attachments.length);
   // 台词用与后端 renderer.ts 完全相同的分桶算法分配到每个镜头，保证工作台与成片逐镜一致。
   const narration = typeof plan?.narration === "string" ? plan.narration.trim() : "";
   const scriptLines = useMemo(() => buildScriptLines(narration, total), [narration, total]);
@@ -166,6 +199,7 @@ export function Filmstrip({
 
   const bgmText = bgmLabel(plan?.bgm_emotion);
   const settled = Boolean(message.jobWorkId) || status === "quality-check" || status === "completed";
+  const darkroom = useDarkroomDevelopingState(status, progress, settled);
 
   // 首镜素材底片或封面：用于暗房物理透明度显影
   const firstAtt = attachments[0];
@@ -179,9 +213,11 @@ export function Filmstrip({
       : scene === "personal-creation" ? "个人创作"
         : "一句话剪辑";
 
-  const frameSource: Array<Record<string, unknown>> = attachments.length > 0
-    ? attachments as Array<Record<string, unknown>>
-    : Array.from({ length: total }, (_, i) => ({ id: `stub-${i}`, name: `镜头 0${i + 1}`, kind: "image" as const }));
+  const frameSource: Array<Record<string, unknown>> = Array.from({ length: total }, (_, idx) => {
+    const att = attachments[idx];
+    if (att) return att as Record<string, unknown>;
+    return { id: `scene-stub-${idx}`, name: `镜头 0${idx + 1}`, kind: "image" as const };
+  });
 
   return (
     <div className={`director-filmstrip-panel${settled ? " is-settled" : ""}`} aria-label="片场分镜手稿与冲洗监视舱">
@@ -270,24 +306,21 @@ export function Filmstrip({
                 src={developingCoverUrl}
                 alt="底片显影中"
                 className="developing-cover-image"
-                style={{ opacity: Math.max(0.06, Math.min(0.96, (progress || 15) / 100)) }}
+                style={{ opacity: darkroom.opacity }}
               />
             ) : null}
 
             <div className="developing-center-indicator">
               <span className="developing-spinner" aria-hidden="true" />
               <span className="developing-text">
-                {status === "queued" ? "排队调度中…"
-                  : status === "inspecting" ? "素材底片校验中…"
-                    : status === "planning" ? "导演分镜执笔中…"
-                      : `暗房多轨显影中 (${Math.round(progress || 20)}%)`}
+                {darkroom.label}
               </span>
             </div>
 
             <div className="hairline-progress-track">
               <div
                 className="hairline-progress-bar"
-                style={{ width: `${Math.min(100, Math.max(5, progress || 10))}%` }}
+                style={{ width: `${darkroom.progress}%` }}
               />
             </div>
           </div>

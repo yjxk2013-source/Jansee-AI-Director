@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type {
+  Attachment,
   AuthUser,
   ChatMessage,
   SavedConversation,
@@ -351,36 +352,86 @@ function ClientApp() {
         });
         const merged = Array.from(map.values()).sort((a, b) => b.updatedAt - a.updatedAt);
 
-        // 自动自愈：检查是否有已完成且有效的作品在当前工作台会话中遗漏挂载
+        // 自动自愈与素材补齐：检查是否有已完成且有效的作品在当前工作台会话中遗漏挂载或素材不全
         try {
           const worksRes = await fetch("/api/v1/works", { credentials: "include" });
           if (worksRes.ok) {
             const worksData = await worksRes.json() as { works?: WorkItem[] };
             const readyWorks = (worksData.works ?? []).filter((w) => !w.expiresAt || Date.parse(w.expiresAt) > Date.now());
             if (readyWorks.length > 0) {
+              const workMap = new Map<string, WorkItem>();
+              readyWorks.forEach((w) => {
+                workMap.set(w.id, w);
+                if (w.jobId) workMap.set(w.jobId, w);
+              });
+
+              // 补齐已有消息中丢失的多素材列表（如历史恢复时仅存了单张封面）
+              let hasEnriched = false;
+              merged.forEach((conv) => {
+                conv.messages = conv.messages.map((m) => {
+                  const matchedWork = (m.jobWorkId ? workMap.get(m.jobWorkId) : null)
+                    || (m.jobId ? workMap.get(m.jobId) : null);
+                  if (matchedWork && matchedWork.assets && matchedWork.assets.length > 1) {
+                    const currentAtts = m.attachments ?? [];
+                    if (currentAtts.length <= 1) {
+                      hasEnriched = true;
+                      return {
+                        ...m,
+                        attachments: matchedWork.assets.map((a, i): Attachment => ({
+                          id: `att-${matchedWork.id}-${a.assetId || i}`,
+                          assetId: a.assetId,
+                          name: a.name || `素材 0${i + 1}`,
+                          kind: (a.kind || "image") as "image" | "video",
+                          size: a.size || 0,
+                          ...(a.assetId ? { previewUrl: `/api/v1/assets/${encodeURIComponent(a.assetId)}/preview` } : {}),
+                        })),
+                      };
+                    }
+                  }
+                  return m;
+                });
+              });
+
               const allMessageWorkIds = new Set(merged.flatMap((c) => c.messages.map((m) => m.jobWorkId)).filter(Boolean));
               const allMessageJobIds = new Set(merged.flatMap((c) => c.messages.map((m) => m.jobId)).filter(Boolean));
               const unattachedWorks = readyWorks.filter((w) => !allMessageWorkIds.has(w.id) && !allMessageJobIds.has(w.jobId));
               if (unattachedWorks.length > 0 && merged.length > 0) {
                 const targetConv = merged[0]!;
-                const restoredMessages: ChatMessage[] = unattachedWorks.map((work) => ({
-                  id: `restored-${work.id}`,
-                  role: "director",
-                  text: `《${work.title || "商业成片"}》已定影交付，欢迎沉浸预览～`,
-                  createdAt: Date.parse(work.createdAt) || Date.now(),
-                  jobId: work.jobId,
-                  jobWorkId: work.id,
-                  jobStatus: "completed",
-                  jobProgress: 100,
-                  jobDirectorPlan: (work.directorPlan as Record<string, unknown>) ?? {
-                    title: work.title || "商业成片",
-                    publish: work.publish ?? {},
-                  },
-                  attachments: work.coverUrl ? [{ name: "cover.jpg", size: 0, id: `cover-${work.id}`, url: work.coverUrl, previewUrl: work.coverUrl, kind: "image" as const }] : [],
-                }));
+                const restoredMessages: ChatMessage[] = unattachedWorks.map((work) => {
+                  const materials: Attachment[] = (work.assets && work.assets.length > 0)
+                    ? work.assets.map((a, i): Attachment => ({
+                        id: `att-${work.id}-${a.assetId || i}`,
+                        assetId: a.assetId,
+                        name: a.name || `素材 0${i + 1}`,
+                        kind: (a.kind || "image") as "image" | "video",
+                        size: a.size || 0,
+                        ...(a.assetId ? { previewUrl: `/api/v1/assets/${encodeURIComponent(a.assetId)}/preview` } : {}),
+                      }))
+                    : (work.coverUrl ? [{ name: "cover.jpg", size: 0, id: `cover-${work.id}`, url: work.coverUrl, previewUrl: work.coverUrl, kind: "image" as const }] : []);
+
+                  return {
+                    id: `restored-${work.id}`,
+                    role: "director",
+                    text: `《${work.title || "商业成片"}》已定影交付，欢迎沉浸预览～`,
+                    createdAt: Date.parse(work.createdAt) || Date.now(),
+                    jobId: work.jobId,
+                    jobWorkId: work.id,
+                    jobStatus: "completed",
+                    jobProgress: 100,
+                    jobDirectorPlan: (work.directorPlan as Record<string, unknown>) ?? {
+                      title: work.title || "商业成片",
+                      publish: work.publish ?? {},
+                    },
+                    attachments: materials,
+                  };
+                });
                 targetConv.messages = [...targetConv.messages, ...restoredMessages];
                 targetConv.updatedAt = Date.now();
-                void saveAccountConversation(targetConv);
+                hasEnriched = true;
+              }
+
+              if (hasEnriched && merged.length > 0) {
+                void saveAccountConversation(merged[0]!);
               }
             }
           }

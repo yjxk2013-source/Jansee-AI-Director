@@ -402,7 +402,12 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
 
         const baseMessagesForWorkbench = baseMessagesWithAssets.map((m) =>
           m.id === userMessage.id ? { ...m, isWorkbench: false } : m);
-        const workbenchAttachments = attachments;
+        const workbenchAttachments: Attachment[] = attachments.map((att) => ({
+          ...att,
+          ...(att.assetId
+            ? { previewUrl: `/api/v1/assets/${encodeURIComponent(att.assetId)}/preview` }
+            : (att.previewUrl ? { previewUrl: att.previewUrl } : {})),
+        }));
 
         if (batchTotal > 1 && createdJobs.length > 1) {
           const planMessage: ChatMessage = {

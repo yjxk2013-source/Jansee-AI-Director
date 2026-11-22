@@ -6,10 +6,10 @@ export type Attachment = {
   name: string;
   kind: "image" | "video";
   size: number;
-  assetId?: string;
-  id?: string;
-  url?: string;
-  previewUrl?: string;
+  assetId?: string | undefined;
+  id?: string | undefined;
+  url?: string | undefined;
+  previewUrl?: string | undefined;
 };
 
 export type WorkItem = {
@@ -34,6 +34,7 @@ export type WorkItem = {
     tags?: string[];
   };
   directorPlan?: Record<string, unknown>;
+  assets?: Array<{ assetId: string; name?: string; kind?: "image" | "video"; size?: number }>;
 };
 
 export type ChatMessage = {
