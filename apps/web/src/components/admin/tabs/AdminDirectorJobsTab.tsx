@@ -120,23 +120,23 @@ export function AdminDirectorJobsTab({
 
       {filteredJobs.length > pageSize && (
         <div className="director-pagination">
-          <span>共 {filteredJobs.length} 条记录 · 第 {currentPage} / {totalPages} 页</span>
-          <div className="director-pagination-actions">
-            <button
-              type="button"
-              disabled={currentPage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              上一页
-            </button>
-            <button
-              type="button"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              下一页
-            </button>
-          </div>
+          <button
+            type="button"
+            className="admin-user-credit-btn director-page-btn"
+            disabled={currentPage <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            上一页
+          </button>
+          <span className="director-page-info">共 {filteredJobs.length} 条记录 · 第 {currentPage} / {totalPages} 页</span>
+          <button
+            type="button"
+            className="admin-user-credit-btn director-page-btn"
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            下一页
+          </button>
         </div>
       )}
     </div>
