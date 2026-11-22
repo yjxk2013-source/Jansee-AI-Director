@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 export interface UseVoiceInputOptions {
   onAppendDraft: (text: string) => void;
@@ -6,9 +6,10 @@ export interface UseVoiceInputOptions {
 }
 
 export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) {
-  const [isListening, setIsListening] = useState(false);
-  const [listeningRemainingSeconds, setListeningRemainingSeconds] = useState(60);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [listeningRemainingSeconds, setListeningRemainingSeconds] = useState(60);
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -16,6 +17,8 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
   const voiceTimerRef = useRef<number | null>(null);
   const recordingStartTimeRef = useRef<number>(0);
   const isCancelledRef = useRef<boolean>(false);
+  const sessionSeqRef = useRef<number>(0);
+  const isPendingCancelRef = useRef<boolean>(false);
 
   // 释放硬件麦克风资源
   const releaseHardware = useCallback(() => {
@@ -41,6 +44,7 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
 
   // 上传录音文件至后端本地 Whisper 进行转写
   const sendAudioToWhisper = useCallback(async (audioBlob: Blob) => {
+    setIsTranscribing(true);
     try {
       // 1. 如果用户未登录/未初始化会话，先自动获取访客 session，避免 401 报错
       try {
@@ -50,12 +54,18 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
       }
 
       const formData = new FormData();
-      // 根据 blob 类型自适应文件拓展名
-      let ext = "webm";
-      if (audioBlob.type.includes("mp4") || audioBlob.type.includes("aac") || audioBlob.type.includes("m4a")) {
-        ext = "mp4";
+      // 根据 blob 类型自适应文件拓展名（iOS 默认为 mp4/aac，安卓等默认为 webm）
+      let ext = "mp4";
+      if (audioBlob.type.includes("webm")) {
+        ext = "webm";
       } else if (audioBlob.type.includes("wav")) {
         ext = "wav";
+      } else if (audioBlob.type.includes("ogg")) {
+        ext = "ogg";
+      } else if (audioBlob.type.includes("mp3") || audioBlob.type.includes("mpeg")) {
+        ext = "mp3";
+      } else if (audioBlob.type.includes("aac")) {
+        ext = "aac";
       }
       formData.append("audio", audioBlob, `recording.${ext}`);
 
@@ -70,54 +80,59 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
         throw new Error(errorPayload?.error?.message || `语音识别失败（HTTP ${response.status}）`);
       }
 
-      const result = await response.json() as { text?: string };
+      const result = (await response.json()) as { text?: string };
       const transcript = (result?.text || "").trim();
       if (transcript) {
         onAppendDraft(transcript);
+        if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+          try {
+            navigator.vibrate(25);
+          } catch {
+            // no-op
+          }
+        }
       } else {
         onError("未识别到清晰语音，请靠近麦克风重试。");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "语音识别失败，请检查网络后重试。";
       onError(msg);
+    } finally {
+      setIsTranscribing(false);
     }
   }, [onAppendDraft, onError]);
 
   const stopVoiceInput = useCallback((cancel = false) => {
     isCancelledRef.current = cancel;
+    isPendingCancelRef.current = true;
     clearTimer();
-    const duration = Date.now() - recordingStartTimeRef.current;
-    const recorder = mediaRecorderRef.current;
 
+    const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") {
       try {
         recorder.stop();
       } catch {
         releaseHardware();
+        setIsRecording(false);
+        setIsCancelling(false);
       }
     } else {
       releaseHardware();
+      setIsRecording(false);
+      setIsCancelling(false);
+      setListeningRemainingSeconds(60);
     }
-
-    setIsListening(false);
-    setIsCancelling(false);
-    setListeningRemainingSeconds(60);
-
-    // 非手动取消但说话过短时，提示用户
-    if (!cancel && duration > 0 && duration < 500) {
-      onError("说话时间太短");
-    }
-  }, [clearTimer, onError, releaseHardware]);
+  }, [clearTimer, releaseHardware]);
 
   const beginVoiceSession = useCallback(() => {
-    setIsListening(true);
+    setIsRecording(true);
     setIsCancelling(false);
     setListeningRemainingSeconds(60);
     clearTimer();
     recordingStartTimeRef.current = Date.now();
     isCancelledRef.current = false;
 
-    // 微信同款：轻微触感震动反馈（如果设备支持）
+    // 轻微触感震动反馈（如果设备支持）
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
       try {
         navigator.vibrate(15);
@@ -143,8 +158,16 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
       return;
     }
 
+    if (isRecording || isTranscribing || mediaStreamRef.current) {
+      return;
+    }
+
+    const currentSession = ++sessionSeqRef.current;
+    isPendingCancelRef.current = false;
+    isCancelledRef.current = false;
+    onError("");
+
     try {
-      onError("");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -152,20 +175,42 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
           autoGainControl: true,
         },
       });
+
+      // 核心防竞态：如果在请求授权期间用户已松开取消或重置，立即释放并不启动录制
+      if (sessionSeqRef.current !== currentSession || isPendingCancelRef.current) {
+        stream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {
+            // no-op
+          }
+        });
+        return;
+      }
+
       mediaStreamRef.current = stream;
 
-      let mimeType = "";
-      if (typeof MediaRecorder !== "undefined") {
-        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-          mimeType = "audio/webm;codecs=opus";
-        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
-          mimeType = "audio/webm";
-        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
-          mimeType = "audio/mp4";
+      // 自适应探测浏览器支持的最佳音频格式，iOS Safari 优先采用 mp4 / aac
+      let chosenMime = "";
+      if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+        const candidates = [
+          "audio/mp4",
+          "audio/mp4;codecs=mp4a.40.2",
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/aac",
+          "audio/ogg",
+          "audio/wav",
+        ];
+        for (const cand of candidates) {
+          if (MediaRecorder.isTypeSupported(cand)) {
+            chosenMime = cand;
+            break;
+          }
         }
       }
 
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const recorder = chosenMime ? new MediaRecorder(stream, { mimeType: chosenMime }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
@@ -176,33 +221,42 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
       };
 
       recorder.onstop = () => {
-        const recordedBlob = new Blob(audioChunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
+        const mime = recorder.mimeType || chosenMime || "audio/mp4";
+        const recordedBlob = new Blob(audioChunksRef.current, { type: mime });
         audioChunksRef.current = [];
         releaseHardware();
 
-        // 如果用户上滑取消，或者按键时间太短（<500ms），直接废弃丢弃
         const duration = Date.now() - recordingStartTimeRef.current;
-        if (isCancelledRef.current || duration < 500) {
+        const cancelled = isCancelledRef.current;
+        setIsRecording(false);
+        setIsCancelling(false);
+        setListeningRemainingSeconds(60);
+
+        if (cancelled) {
           return;
         }
 
-        if (recordedBlob.size > 1000) {
-          void sendAudioToWhisper(recordedBlob);
+        if (duration < 300 || recordedBlob.size === 0) {
+          onError("说话时间太短");
+          return;
         }
+
+        void sendAudioToWhisper(recordedBlob);
       };
 
       recorder.onerror = () => {
-        stopVoiceInput(true);
+        releaseHardware();
+        setIsRecording(false);
+        setIsCancelling(false);
         onError("录音过程发生异常，请重试。");
       };
 
-      recorder.start(300); // 300ms 分片切片
+      // 关键：不传 timeslice（严禁 start(300)），避免破坏 iOS Safari MP4 container header
+      recorder.start();
       beginVoiceSession();
     } catch (err) {
       releaseHardware();
-      setIsListening(false);
+      setIsRecording(false);
       setIsCancelling(false);
       const errorName = (err as Error)?.name || "";
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
@@ -213,18 +267,29 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
         onError("无法启动录音，请检查麦克风权限。");
       }
     }
-  }, [beginVoiceSession, onError, releaseHardware, sendAudioToWhisper, stopVoiceInput]);
+  }, [beginVoiceSession, isRecording, isTranscribing, onError, releaseHardware, sendAudioToWhisper]);
 
   const toggleVoiceInput = useCallback(() => {
-    if (isListening || mediaRecorderRef.current) {
+    if (isRecording || isTranscribing || mediaRecorderRef.current) {
       stopVoiceInput(false);
       return;
     }
     void startVoiceInput();
-  }, [isListening, startVoiceInput, stopVoiceInput]);
+  }, [isRecording, isTranscribing, startVoiceInput, stopVoiceInput]);
+
+  useEffect(() => {
+    return () => {
+      clearTimer();
+      releaseHardware();
+    };
+  }, [clearTimer, releaseHardware]);
+
+  const isListening = isRecording || isTranscribing;
 
   return {
     isListening,
+    isRecording,
+    isTranscribing,
     isCancelling,
     setIsCancelling,
     listeningRemainingSeconds,

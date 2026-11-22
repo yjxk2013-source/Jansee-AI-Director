@@ -103,6 +103,11 @@ export function detectMediaMagicBytes(bytes: Buffer): DetectedMedia | null {
     return { mediaType: "audio", mimeType: "audio/flac" };
   }
 
+  // 13. AAC 音频 (ADTS 帧头: 12 bits 0xFFF, layer=00, 即 b0 === 0xFF && (b1 & 0xF6) === 0xF0)
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1]! & 0xf6) === 0xf0) {
+    return { mediaType: "audio", mimeType: "audio/aac" };
+  }
+
   return null;
 }
 

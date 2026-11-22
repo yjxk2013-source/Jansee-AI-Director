@@ -58,7 +58,7 @@ export function registerVoiceTranscribeRoutes(app: FastifyInstance, options: Voi
         return reply.code(413).send({ error: { code: "FILE_TOO_LARGE", message: "录音文件超过大小限制" } });
       }
 
-      // 魔数检测：确保上传的为合法音频格式（WAV, WebM, OGG, MP3, MP4/M4A 等）
+      // 魔数检测：确保上传的为合法音频格式（WAV, WebM, OGG, MP3, MP4/M4A, AAC 等）
       const handle = await import("node:fs/promises");
       const fileHandle = await handle.open(audioPath, "r");
       const head = Buffer.alloc(32);
@@ -71,6 +71,19 @@ export function registerVoiceTranscribeRoutes(app: FastifyInstance, options: Voi
       if (!detected || (detected.mediaType !== "audio" && detected.mediaType !== "video")) {
         return reply.code(415).send({ error: { code: "UNSUPPORTED_AUDIO_FORMAT", message: "录音文件格式无法识别或不受支持" } });
       }
+
+      // 根据识别出的真实类型赋予标准化文件扩展名，确保 FFmpeg 解封装准确无误
+      let normalizedExt = "mp4";
+      if (detected.mimeType.includes("wav")) normalizedExt = "wav";
+      else if (detected.mimeType.includes("webm")) normalizedExt = "webm";
+      else if (detected.mimeType.includes("ogg")) normalizedExt = "ogg";
+      else if (detected.mimeType.includes("mpeg")) normalizedExt = "mp3";
+      else if (detected.mimeType.includes("flac")) normalizedExt = "flac";
+      else if (detected.mimeType.includes("aac")) normalizedExt = "aac";
+
+      const typedAudioPath = join(tempDir, `recording-input.${normalizedExt}`);
+      await handle.rename(audioPath, typedAudioPath);
+      audioPath = typedAudioPath;
 
       const workDir = join(tempDir, "whisper-work");
       const asr = options.transcribeAudio

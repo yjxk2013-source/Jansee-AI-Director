@@ -1,6 +1,7 @@
 import {
   useState,
   useRef,
+  useEffect,
   type Dispatch,
   type DragEvent,
   type FormEvent,
@@ -92,13 +93,19 @@ export function ComposerDock({
   const draggedFileIndexRef = useRef<number | null>(null);
   const dragCommittedRef = useRef(false);
   const touchStartYRef = useRef<number | null>(null);
+  const touchStartTimeRef = useRef<number>(0);
   const isHoldingVoiceRef = useRef<boolean>(false);
+  const [isTapMode, setIsTapMode] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
 
   const toggleVoiceMode = () => {
     setIsVoiceMode((prev) => {
       const next = !prev;
       if (!next) {
+        if (isListening) {
+          stopVoiceInput(true);
+        }
+        setIsTapMode(false);
         window.setTimeout(() => {
           textareaRef.current?.focus();
         }, 50);
@@ -107,19 +114,27 @@ export function ComposerDock({
     });
   };
 
-  // 微信同款按住说话：触摸开始
+  // 微信同款按住说话 + 点击录音自适应：触摸开始
   const handleVoiceTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
     event.preventDefault();
+    if (isListening && isTapMode) {
+      // 轻点模式下正在录音，再次点击表示结束并识别
+      setIsTapMode(false);
+      stopVoiceInput(false);
+      return;
+    }
+
     const touch = event.touches[0];
     if (touch) {
       touchStartYRef.current = touch.clientY;
+      touchStartTimeRef.current = Date.now();
       isHoldingVoiceRef.current = true;
       setIsCancelling(false);
       void startVoiceInput();
     }
   };
 
-  // 微信同款手指上滑：检测上滑超过 45px 提示取消
+  // 手指上滑检测：长按时检测上滑超过 45px 提示取消
   const handleVoiceTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (!isHoldingVoiceRef.current || touchStartYRef.current === null) return;
@@ -135,13 +150,21 @@ export function ComposerDock({
     }
   };
 
-  // 微信同款松手：根据是否处于取消区决定发送还是取消
+  // 触摸结束：判断按压时长，短按切换为轻点常态录音，长按松开即完成识别
   const handleVoiceTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (isHoldingVoiceRef.current) {
       isHoldingVoiceRef.current = false;
       touchStartYRef.current = null;
-      stopVoiceInput(isCancelling);
+      const pressDuration = Date.now() - touchStartTimeRef.current;
+
+      // 若按压时间小于 350ms，视为用户轻点录音（或刚点完苹果麦克风授权弹窗），保持录音转入轻点模式
+      if (pressDuration < 350 && !isCancelling) {
+        setIsTapMode(true);
+      } else {
+        setIsTapMode(false);
+        stopVoiceInput(isCancelling);
+      }
     }
   };
 
@@ -150,9 +173,63 @@ export function ComposerDock({
     if (isHoldingVoiceRef.current) {
       isHoldingVoiceRef.current = false;
       touchStartYRef.current = null;
+      setIsTapMode(false);
       stopVoiceInput(true);
     }
   };
+
+  // 桌面端鼠标操作支持
+  const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (e.button !== 0) return;
+    if (isListening && isTapMode) {
+      setIsTapMode(false);
+      stopVoiceInput(false);
+      return;
+    }
+    touchStartTimeRef.current = Date.now();
+    isHoldingVoiceRef.current = true;
+    void startVoiceInput();
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (isHoldingVoiceRef.current) {
+      isHoldingVoiceRef.current = false;
+      const pressDuration = Date.now() - touchStartTimeRef.current;
+      if (pressDuration < 350) {
+        setIsTapMode(true);
+      } else {
+        setIsTapMode(false);
+        stopVoiceInput(false);
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isHoldingVoiceRef.current) {
+      isHoldingVoiceRef.current = false;
+      const pressDuration = Date.now() - touchStartTimeRef.current;
+      if (pressDuration >= 350) {
+        setIsTapMode(false);
+        stopVoiceInput(false);
+      }
+    }
+  };
+
+  const handleBarClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (isListening && isTapMode) {
+      setIsTapMode(false);
+      stopVoiceInput(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isListening) {
+      setIsTapMode(false);
+    }
+  }, [isListening]);
 
   const clearAttachmentDragVisuals = () => {
     document.querySelectorAll(".pending-attachment.is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
@@ -194,8 +271,10 @@ export function ComposerDock({
                   <span className="voice-bar voice-bar-4" />
                   <span className="voice-bar voice-bar-5" />
                 </div>
-                <span className="voice-record-title">正在倾听... 松开即识别</span>
-                <span className="voice-record-tip">手指上滑，取消发送</span>
+                <span className="voice-record-title">正在倾听...</span>
+                <span className="voice-record-tip">
+                  {isTapMode ? "轻点下方按钮完成录音并识别" : "松开即识别 · 手指上滑取消"}
+                </span>
               </>
             )}
           </div>
@@ -451,36 +530,22 @@ export function ComposerDock({
               onTouchMove={handleVoiceTouchMove}
               onTouchEnd={handleVoiceTouchEnd}
               onTouchCancel={handleVoiceTouchCancel}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                if (e.button === 0) {
-                  isHoldingVoiceRef.current = true;
-                  void startVoiceInput();
-                }
-              }}
-              onMouseUp={(e) => {
-                e.preventDefault();
-                if (isHoldingVoiceRef.current) {
-                  isHoldingVoiceRef.current = false;
-                  stopVoiceInput(false);
-                }
-              }}
-              onMouseLeave={() => {
-                if (isHoldingVoiceRef.current) {
-                  isHoldingVoiceRef.current = false;
-                  stopVoiceInput(false);
-                }
-              }}
-              aria-label="按住说话"
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onClick={handleBarClick}
+              aria-label="语音输入"
             >
               {isListening ? (
                 isCancelling ? (
                   <span>松开手指，取消发送</span>
+                ) : isTapMode ? (
+                  <span>轻点完成录音并识别（{listeningRemainingSeconds}s）</span>
                 ) : (
                   <span>松开发送（{listeningRemainingSeconds}s）</span>
                 )
               ) : (
-                <span>按住 说话</span>
+                <span>按住说话 / 轻点录音</span>
               )}
             </button>
           ) : (
