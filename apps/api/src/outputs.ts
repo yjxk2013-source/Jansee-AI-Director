@@ -8,6 +8,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthStore } from "./auth.js";
 import { authenticatedUser } from "./assets.js";
 import type { ObjectStorage } from "./storage-local.js";
+// @ts-expect-error intro-kit exposes composePureCover
+import { composePureCover } from "@jansee/intro-kit";
 
 const requireMod = createRequire(import.meta.url);
 const bundledFfmpegPath: string | null = (() => {
@@ -161,7 +163,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       coverKey = output.coverStorageKey;
     }
 
-    // 动态抽帧保底：针对历史作品或未生成封面的视频成片，现场提取首帧并缓存，杜绝 404 黑屏
+    // 动态抽帧保底：针对历史作品或未生成封面的视频成片，现场通过 composePureCover 叠加开场设计，生成无字幕、无AI标纯净封面
     if (!coverKey && output && output.mimeType === "video/mp4") {
       try {
         const cacheDir = join(tmpdir(), "jansee-work-covers");
@@ -169,28 +171,22 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
         const cachedCoverPath = join(cacheDir, `${id}.jpg`);
         if (!existsSync(cachedCoverPath)) {
           const videoFilePath = await options.storage.getFilePath(output.storageKey);
-          const ffmpegBin = process.env.FFMPEG_PATH || bundledFfmpegPath || "ffmpeg";
-          try {
-            execFileSync(ffmpegBin, [
-              "-nostdin",
-              "-y",
-              "-ss", "0.5",
-              "-i", videoFilePath,
-              "-vframes", "1",
-              "-q:v", "2",
-              cachedCoverPath,
-            ], { timeout: 8000, stdio: "ignore" });
-          } catch {
-            execFileSync(ffmpegBin, [
-              "-nostdin",
-              "-y",
-              "-ss", "0.0",
-              "-i", videoFilePath,
-              "-vframes", "1",
-              "-q:v", "2",
-              cachedCoverPath,
-            ], { timeout: 8000, stdio: "ignore" });
-          }
+          const plan = (output.directorPlan ?? {}) as Record<string, unknown>;
+          const introTitle = String(output.publish?.cover_title || output.title || plan.title || "JANSEE FILM").trim();
+          const introEn = String(plan.site || "JANSEE FILM").trim();
+          const introNote = String(plan.concept || "一席留白 · 静待亲临").trim();
+          await composePureCover({
+            bgSource: videoFilePath,
+            title: introTitle,
+            brandEn: introEn,
+            site: introEn,
+            note: introNote,
+            idx: "NO. 01 / CINEMATIC COVER",
+            width: output.width || 1080,
+            height: output.height || 1920,
+            outPath: cachedCoverPath,
+            captureSec: 1.0,
+          });
         }
         if (existsSync(cachedCoverPath)) {
           const fileStat = await stat(cachedCoverPath);
@@ -200,7 +196,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
           return reply.send(createReadStream(cachedCoverPath));
         }
       } catch (err) {
-        console.warn(`[outputs] 成片动态抽帧兜底失败 work=${id}:`, err instanceof Error ? err.message : String(err));
+        console.warn(`[outputs] 成片动态加开场纯净封面兜底失败 work=${id}:`, err instanceof Error ? err.message : String(err));
       }
     }
 

@@ -27,6 +27,8 @@ import { probeVideoSize, hasAudioStream, probeDurationSec } from "@jansee/ffmpeg
 import { performAutoQc } from "@jansee/ffmpeg-kit/autoQc.mjs";
 // @ts-expect-error publish-kit is a JavaScript workspace package
 import { sanitizePublish } from "@jansee/publish-kit";
+// @ts-expect-error intro-kit exposes composePureCover
+import { composePureCover } from "@jansee/intro-kit";
 import { prewarmCdnUrls } from "./cdn-prewarm.js";
 
 const requireMod = createRequire(import.meta.url);
@@ -489,34 +491,42 @@ export async function processJob(
     const outputsToPersist = renderResults.length ? renderResults : [renderResult];
     for (const output of outputsToPersist) {
       let coverStorageKey = output.coverStorageKey;
-      // 统一成片保底抽帧：若引擎未生成封面，直接从成品视频截取第 0.5s 或首帧作为纯净封面，杜绝黑屏
+      // 统一成片保底：若引擎未生成封面，调用 composePureCover 生成带开场设计的纯净海报（无字幕、无AI标）
       if (!coverStorageKey && output.mimeType === "video/mp4") {
         try {
-          const videoFilePath = await storage.getFilePath(output.storageKey);
+          const firstAsset = assets[0];
+          let bgSource: string | undefined;
+          if (firstAsset) {
+            try {
+              bgSource = await storage.getFilePath(firstAsset.storageKey);
+            } catch (_) {}
+          }
+          if (!bgSource) {
+            bgSource = await storage.getFilePath(output.storageKey);
+          }
           const tmpCoverDir = await mkdtemp(join(tmpdir(), "jansee-auto-cover-"));
           const tmpCoverPath = join(tmpCoverDir, "cover.jpg");
-          const ffmpegBin = process.env.FFMPEG_PATH || bundledFfmpegPath || "ffmpeg";
-          try {
-            execFileSync(ffmpegBin, [
-              "-nostdin",
-              "-y",
-              "-ss", "0.5",
-              "-i", videoFilePath,
-              "-vframes", "1",
-              "-q:v", "2",
-              tmpCoverPath,
-            ], { timeout: 8000, stdio: "ignore" });
-          } catch {
-            execFileSync(ffmpegBin, [
-              "-nostdin",
-              "-y",
-              "-ss", "0.0",
-              "-i", videoFilePath,
-              "-vframes", "1",
-              "-q:v", "2",
-              tmpCoverPath,
-            ], { timeout: 8000, stdio: "ignore" });
-          }
+          const plan = (activeJob.directorPlan ?? {}) as Record<string, unknown>;
+          const introTitle = String(
+            (plan.publish as Record<string, unknown> | undefined)?.cover_title ||
+            plan.intro_title ||
+            plan.title ||
+            "JANSEE FILM"
+          ).trim();
+          const introEn = String(plan.intro_en || plan.site || "JANSEE FILM").trim();
+          const introNote = String(plan.intro_note || plan.concept || "一席留白 · 静待亲临").trim();
+          await composePureCover({
+            bgSource,
+            title: introTitle,
+            brandEn: introEn,
+            site: introEn,
+            note: introNote,
+            idx: "NO. 01 / CINEMATIC COVER",
+            width: output.width || 1080,
+            height: output.height || 1920,
+            outPath: tmpCoverPath,
+            captureSec: 1.0,
+          });
           if (existsSync(tmpCoverPath)) {
             const key = `users/${job.userId}/covers/${job.id}`;
             await storage.putFile(key, tmpCoverPath);
@@ -524,7 +534,7 @@ export async function processJob(
           }
           await rm(tmpCoverDir, { recursive: true, force: true }).catch(() => undefined);
         } catch (coverErr) {
-          console.warn(`[Worker | 任务:${job.id.slice(0, 8)}] 成片自动保底抽帧跳过:`, coverErr instanceof Error ? coverErr.message : String(coverErr));
+          console.warn(`[Worker | 任务:${job.id.slice(0, 8)}] 纯净宣发封面保底制作异常:`, coverErr instanceof Error ? coverErr.message : String(coverErr));
         }
       }
 

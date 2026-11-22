@@ -6,7 +6,7 @@ import { composeStoryboard, runKeepOriginalAsr } from "@jansee/video-creator";
 // @ts-expect-error workspace package is JavaScript with runtime exports
 import { appendEndingTail } from "@jansee/ending-kit";
 // @ts-expect-error workspace package is JavaScript with runtime exports
-import { renderIntroPng } from "@jansee/intro-kit";
+import { renderIntroPng, composePureCover } from "@jansee/intro-kit";
 // @ts-expect-error workspace package is JavaScript with runtime exports
 import { selectBgmByEmotion } from "@jansee/audio-kit/bgm.js";
 // @ts-expect-error workspace package is JavaScript with runtime exports
@@ -236,12 +236,45 @@ const storyboardEngine: ProductionEngine = {
     }
     const outputPath = tailed?.output || result.output;
     const size = probeVideoSize(outputPath);
+
+    // 纯净宣发封面海报：基于首镜原视频纯净原画 + 开场排版设计 + 100%纯黑羽化遮罩，绝不含台词字幕与AI标识
+    let coverStorageKey: string | undefined;
+    const coverPath = path.join(context.taskDir, "cover.jpg");
+    try {
+      const introTitle = String(
+        (plan.publish as Record<string, unknown> | undefined)?.cover_title ||
+        plan.intro_title ||
+        plan.title ||
+        "JANSEE FILM"
+      ).trim();
+      const introEn = String(plan.intro_en || plan.site || "JANSEE FILM").trim();
+      const introNote = String(plan.intro_note || plan.concept || "一席留白 · 静待亲临").trim();
+      await composePureCover({
+        bgSource: shots[0]!.file,
+        title: introTitle,
+        brandEn: introEn,
+        site: introEn,
+        note: introNote,
+        idx: `NO. 01 / ${String(shots.length).padStart(2, "0")} SHOTS`,
+        width: size?.width || canvas.width,
+        height: size?.height || canvas.height,
+        outPath: coverPath,
+        captureSec: 1.0,
+      });
+      const key = `users/${context.userId}/covers/${context.jobId}`;
+      await context.storage.putFile(key, coverPath);
+      coverStorageKey = key;
+    } catch (covErr) {
+      console.warn("[storyboard] 纯净封面海报生成异常(非阻断):", covErr);
+    }
+
     return {
       outputPath,
       durationMs: Math.round(Number(tailed?.durationSec || result.durationSec || 0) * 1000),
       width: size?.width || 1080,
       height: size?.height || 1920,
       warnings,
+      ...(coverStorageKey ? { coverStorageKey } : {}),
     };
   },
 };

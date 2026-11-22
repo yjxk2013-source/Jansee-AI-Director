@@ -182,32 +182,17 @@ export async function produceVideoDub({ taskId, taskDir, videoFile, cut, voiceId
   mkdirSync(workDir, { recursive: true });
 
   /* —— 0.4 开场微光花字包装：共享层 @jansee/intro-kit，简兮经典 tpl_fashion_v1 上下双向微光排版 —— */
+  /* —— 0.4 开场微光花字包装与纯净宣发封面（加开场设计、无台词字幕、无 AI 标） —— */
   let introFile = null;
+  const introTitle = String(cut?.publish?.cover_title || cut?.intro_title || cut?.title || cut?.shots?.[0]?.line || 'JANSEE FILM').trim();
+  const introEn = String(cut?.intro_en || cut?.site || 'JANSEE FILM').trim();
+  const introNote = String(cut?.intro_note || cut?.concept || cut?.shots?.[1]?.line || cut?.end_line || '留一席留白 · 慢下来品味').trim();
+  const introIdx = String(cut?.intro_idx || 'NO. 01 / CINEMATIC DUB').trim();
+
   try {
     if (cut?.intro_on !== false) {
-    const introTitle = String(cut?.intro_title || cut?.title || cut?.publish?.cover_title || cut?.shots?.[0]?.line || '').trim();
-    const introEn = String(cut?.intro_en || cut?.site || '').trim();
-    const introNote = String(cut?.intro_note || cut?.shots?.[1]?.line || cut?.end_line || '留一席留白 · 慢下来品味').trim();
-    const introIdx = String(cut?.intro_idx || 'NO. 01 / CINEMATIC DUB').trim();
-    const introPng = path.join(workDir, 'intro.png');
-    renderIntroPng({
-      title: introTitle,
-      brandEn: introEn,
-      site: introEn,
-      note: introNote,
-      idx: introIdx,
-      width: videoSize?.width || 1080,
-      height: videoSize?.height || 1920,
-      outPath: introPng,
-    });
-    introFile = introPng;
-    console.log(`[video-dub] 开场花字与纯黑遮罩就绪: ${introPng}`);
-
-    // 生成纯净宣发封面海报（方案 A：无台词字幕、无 AI 角标、电影级纯黑羽化遮罩）
-    try {
-      const coverOut = path.join(taskDir, 'cover.jpg');
-      await composePureCover({
-        bgSource: videoFile,
+      const introPng = path.join(workDir, 'intro.png');
+      renderIntroPng({
         title: introTitle,
         brandEn: introEn,
         site: introEn,
@@ -215,17 +200,34 @@ export async function produceVideoDub({ taskId, taskDir, videoFile, cut, voiceId
         idx: introIdx,
         width: videoSize?.width || 1080,
         height: videoSize?.height || 1920,
-        outPath: coverOut,
-        captureSec: 1.0,
+        outPath: introPng,
       });
-      console.log(`[video-dub] 纯净宣发封面海报就绪: ${coverOut}`);
-    } catch (coverErr) {
-      console.error('[video-dub] 封面海报制作跳过（不阻断成片）:', coverErr?.message || coverErr);
-    }
+      introFile = introPng;
+      console.log(`[video-dub] 开场花字与纯黑遮罩就绪: ${introPng}`);
     }
   } catch (err) {
     console.error('[video-dub] 开场花字制作失败，本条不出开场花字:', err?.message || err);
     introFile = null;
+  }
+
+  // 严格按规范生成加了开场设计的纯净宣发封面海报（无台词字幕、无 AI 角标、电影级纯黑羽化遮罩）
+  try {
+    const coverOut = path.join(taskDir, 'cover.jpg');
+    await composePureCover({
+      bgSource: videoFile,
+      title: introTitle,
+      brandEn: introEn,
+      site: introEn,
+      note: introNote,
+      idx: introIdx,
+      width: videoSize?.width || 1080,
+      height: videoSize?.height || 1920,
+      outPath: coverOut,
+      captureSec: 1.0,
+    });
+    console.log(`[video-dub] 加开场设计纯净宣发封面海报就绪: ${coverOut}`);
+  } catch (coverErr) {
+    console.error('[video-dub] 纯净封面海报制作跳过（不阻断成片）:', coverErr?.message || coverErr);
   }
   mark('intro');
 
