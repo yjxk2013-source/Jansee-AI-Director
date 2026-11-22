@@ -150,7 +150,7 @@ export function BillingHistoryPanel({ user, kind }: { user: AuthUser | null; kin
   };
   const isOrderExpired = (order: BillingOrder) =>
     order.status === "pending" &&
-    Date.parse(order.paymentExpiresAt || new Date(Date.parse(order.createdAt) + 30 * 60 * 1000).toISOString()) <=
+    Date.parse(order.paymentExpiresAt || new Date(Date.parse(order.createdAt) + 5 * 60 * 1000).toISOString()) <=
     statusClock;
   const ledgerType: Record<BillingLedgerEntry["type"], string> = {
     grant: "积分赠送",

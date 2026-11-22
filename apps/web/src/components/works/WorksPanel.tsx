@@ -261,7 +261,7 @@ export function WorksPanel({
                     onClick={() => {
                       setActivePlayWorkId(work.id);
                       const video = videoRefs.current[work.id];
-                      if (video) void video.play().catch(() => {});
+                      if (video) void video.play().catch(() => { });
                     }}
                     role="button"
                     tabIndex={0}
@@ -278,7 +278,7 @@ export function WorksPanel({
                         e.preventDefault();
                         setActivePlayWorkId(work.id);
                         const video = videoRefs.current[work.id];
-                        if (video) void video.play().catch(() => {});
+                        if (video) void video.play().catch(() => { });
                       }
                     }}
                   >
@@ -400,15 +400,25 @@ export function WorksPanel({
           >
             <button
               type="button"
-              className="payment-dialog-close"
               aria-label="关闭预览"
               onClick={() => setPreviewingCoverUrl(null)}
               style={{
-                top: "-12px",
-                right: "-12px",
-                background: "#252629",
-                color: "#fff",
-                border: "1px solid rgba(255,255,255,0.2)",
+                position: "absolute",
+                top: "22px",
+                right: "22px",
+                width: "28px",
+                height: "28px",
+                padding: 0,
+                display: "grid",
+                placeItems: "center",
+                background: "transparent",
+                color: "#ffffff",
+                border: "none",
+                fontSize: "24px",
+                lineHeight: 1,
+                cursor: "pointer",
+                zIndex: 10,
+                textShadow: "0 1px 4px rgba(0,0,0,0.8)",
               }}
             >
               ×

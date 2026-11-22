@@ -33,21 +33,6 @@ export function PublishStudio({
     <div className="work-publish-studio">
       <div className="work-publish-studio-top">
         <span className="work-publish-tag">短视频宣发套件</span>
-        <button
-          type="button"
-          className="work-copy-btn work-copy-all-btn"
-          onClick={() => {
-            const blocks: string[] = [];
-            if (publishKit.title) blocks.push(`【标题】\n${publishKit.title}`);
-            if (publishKit.cover_title) blocks.push(`【建议封面标题】\n${publishKit.cover_title}`);
-            if (publishKit.caption) blocks.push(`【发布文案与话题】\n${publishKit.caption}`);
-            if (publishKit.pinned_comment) blocks.push(`【黄金置顶评论】\n${publishKit.pinned_comment}`);
-            if (publishKit.post_time) blocks.push(`【建议发布时段】\n${publishKit.post_time}`);
-            copyText(`all-${work.id}`, blocks.join("\n\n"), "完整宣发包");
-          }}
-        >
-          {copiedKey === `all-${work.id}` ? "已复制全部" : "一键复制全部"}
-        </button>
       </div>
 
       {publishKit.title && (

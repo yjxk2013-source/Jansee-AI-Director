@@ -341,20 +341,7 @@ export function ComposerDock({
               title={isListening ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）` : "语音输入"}
             >
               {isListening ? (
-                <div className="voice-countdown-indicator" aria-hidden="true">
-                  <svg className="voice-countdown-svg" viewBox="0 0 52 52">
-                    <circle className="voice-countdown-bg" cx="26" cy="26" r="23" />
-                    <circle
-                      className="voice-countdown-progress"
-                      cx="26"
-                      cy="26"
-                      r="23"
-                      strokeDasharray="144.51"
-                      strokeDashoffset={144.51 * (1 - listeningRemainingSeconds / 60)}
-                    />
-                  </svg>
-                  <span className="voice-countdown-number">{listeningRemainingSeconds}</span>
-                </div>
+                <span className="voice-countdown-number">{listeningRemainingSeconds}</span>
               ) : (
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="9" y="3" width="6" height="12" rx="3" />

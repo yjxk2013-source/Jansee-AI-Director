@@ -463,7 +463,7 @@ export function createPgBillingStore(pool: Pool): BillingStore {
         `UPDATE billing_orders
          SET status = 'closed'
          WHERE user_id = $1 AND payment_provider = 'opcpay' AND status = 'pending'
-           AND COALESCE(payment_expires_at, created_at + interval '30 minutes') <= $2`,
+           AND COALESCE(payment_expires_at, created_at + interval '5 minutes') <= $2`,
         [userId, cutoff],
       );
       return result.rowCount ?? 0;

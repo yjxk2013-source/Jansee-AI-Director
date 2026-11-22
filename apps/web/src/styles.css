@@ -1301,55 +1301,16 @@ textarea:focus-visible {
 }
 
 .composer-main .voice-button.is-listening {
-  position: relative;
   color: #625bc8;
   background: #f0efff;
-  box-shadow: 0 0 0 3px #625bc812;
-}
-
-.composer-main .voice-countdown-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.composer-main .voice-countdown-svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.composer-main .voice-countdown-bg {
-  fill: none;
-  stroke: rgba(98, 91, 200, 0.18);
-  stroke-width: 2.4;
-}
-
-.composer-main .voice-countdown-progress {
-  fill: none;
-  stroke: #625bc8;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s linear;
 }
 
 .composer-main .voice-countdown-number {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #625bc8;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1;
-  letter-spacing: -0.3px;
   user-select: none;
 }
 
@@ -12951,15 +12912,34 @@ body,
 
 /* 下载封面为主操作：深色实底；截取帧为次要操作：白底描边。两者同高、等宽。 */
 .work-cover-btn-download {
-  border-color: var(--jansee-action, #252629);
-  background: var(--jansee-action, #252629);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  height: auto;
+  min-height: 34px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid #18191b;
+  background: #18191b;
   color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
 .work-cover-btn-download:hover {
-  background: var(--jansee-action-hover, #111214);
-  border-color: var(--jansee-action-hover, #111214);
+  background: #28292c;
+  border-color: #28292c;
   color: #ffffff;
+}
+
+.work-cover-btn-download svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
 }
 
 .work-cover-btn-action svg {
@@ -13034,7 +13014,7 @@ body,
     width: 64px;
   }
 
-  /* 窄屏下两个封面操作按钮纵向堆叠、占满宽度，保证文字完整与触摸目标。 */
+  /* 窄屏下封面操作按钮与下载原片MP4规格对齐 */
   .work-cover-actions {
     flex-direction: column;
     gap: 8px;
@@ -13042,8 +13022,9 @@ body,
 
   .work-cover-btn-action {
     width: 100%;
-    height: 34px;
-    padding: 0 10px;
-    font-size: 12px;
+    min-height: 36px;
+    height: auto;
+    padding: 7px 14px;
+    font-size: 13px;
   }
 }

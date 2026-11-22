@@ -38,6 +38,13 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
   // 上传录音文件至后端本地 Whisper 进行转写
   const sendAudioToWhisper = useCallback(async (audioBlob: Blob) => {
     try {
+      // 1. 如果用户未登录/未初始化会话，先自动获取访客 session，避免 401 报错
+      try {
+        await fetch("/api/v1/auth/guest", { method: "POST", credentials: "include" });
+      } catch {
+        // ignore
+      }
+
       const formData = new FormData();
       const ext = audioBlob.type.includes("wav") ? "wav" : audioBlob.type.includes("mp4") ? "mp4" : "webm";
       formData.append("audio", audioBlob, `recording.${ext}`);
