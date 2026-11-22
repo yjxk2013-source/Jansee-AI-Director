@@ -12137,6 +12137,11 @@ body,
     padding: 12px;
   }
 
+  .director-jobs-viewport .director-delivery-card {
+    gap: 12px;
+  }
+}
+
 .director-pagination {
   display: flex;
   align-items: center;
@@ -12149,8 +12154,14 @@ body,
 
 .director-page-info {
   color: #737579;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1;
   text-align: center;
+}
+
+.director-page-btn {
+  font-size: 11px !important;
+  padding: 5px 12px !important;
 }
 
 .director-page-btn:disabled {
@@ -12158,11 +12169,6 @@ body,
   cursor: not-allowed;
   border-color: #e5e7eb;
   color: #9aa0a6;
-}
-
-.director-jobs-viewport .director-delivery-card {
-    gap: 12px;
-  }
 }
 
 
