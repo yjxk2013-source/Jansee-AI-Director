@@ -11268,6 +11268,10 @@ body,
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   animation: filmstrip-fadein 0.25s ease-out;
+  /* 高度锁定为成片载入标准高度，确保制作到成片交付全流程高度恒定无跳动 */
+  min-height: 540px;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes filmstrip-fadein {
@@ -11667,6 +11671,7 @@ body,
   align-items: stretch;
   margin-top: 14px;
   width: 100%;
+  min-height: 540px;
   animation: fadeInDelivered 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -11690,11 +11695,14 @@ body,
 
 .workbench-delivered-video-col .job-delivery {
   margin-top: 0;
+  height: 100%;
 }
 
 .workbench-delivered-video-col .job-delivery-player-box {
   width: 100%;
   max-width: 340px;
+  height: 100%;
+  max-height: 540px;
   aspect-ratio: 9 / 16;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -11726,7 +11734,8 @@ body,
 .workbench-delivered-filmstrip-col .director-filmstrip-panel {
   margin-top: 0;
   height: 100%;
-  max-height: 640px;
+  min-height: 540px;
+  max-height: 540px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
