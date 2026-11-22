@@ -10066,11 +10066,11 @@ body,
   z-index: 20;
   margin: 0;
   padding: 10px 16px calc(14px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-top: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.05);
   pointer-events: none;
 }
 
@@ -10083,6 +10083,14 @@ body,
   width: min(100%, 820px);
   margin-left: auto;
   margin-right: auto;
+}
+
+.composer-dock .composer {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
 /* 微信同款语音/键盘切换与长条按住说话 */
