@@ -34,6 +34,10 @@
 - **Admin Console Freeze Rule (后台管理面板绝对冻结铁律)**:
   - 后台管理面板（包括 `AdminConsole.tsx`、`components/admin/**`、相关样式 `styles.css` 中后台相关区域及后端 `apps/api/src/admin.ts`、`admin-*.ts`）的所有样式、排版与业务功能已于 2026-11-22 整体冻结。
   - **严禁擅自修改**：今后在未收到用户明确指令要求修改后台的情况下，任何 Agent 严禁触碰、修改、重构或删除后台管理面板相关的任何代码与配置。
+- **Frontend Layout & Visual Presentation Freeze Rule (前端全局布局与视觉呈现绝对冻结铁律)**:
+  - 前端界面与黑曜石工作台已于 2026-11-22 彻底达到产品预期并正式定稿，**前端全局布局、排版与视觉样式即刻进入绝对锁定与冻结状态**。
+  - **范围**：涵盖 `apps/web/src/styles.css`、`App.tsx`、`WorkbenchStage.tsx`（暗房主监视屏、双栏成片交付等）、`ComposerDock.tsx`（底栏与素材栏）、`components/works/**`、`components/auth/**`、`components/billing/**` 及全站所有页面的 DOM 结构排布、尺寸比例、间距、调色与微光质感。
+  - **严禁动视觉呈现**：**没有用户的明确指令，严禁改变任何布局和样式！** 以后的所有系统调整与迭代全部限定在纯底层逻辑与纯功能性支持（如接口联调、状态处理、音视频管线、容灾兜底等），坚决不得触碰、篡改或扰动现有的视觉呈现与排版结构。
 
 ## UI system
 - Use a refined, restrained, Gemini-inspired interface: generous whitespace, clear hierarchy, subtle surfaces, precise typography, and responsive layout.

@@ -90,92 +90,92 @@ export function WorkbenchStage({
                       className="speech-cut-review"
                       style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(0,0,0,0.10)" }}
                     >
-                          {message.speechCutStatus === "analyzing" && (
-                            <p role="status" style={{ margin: 0, color: "#666" }}>
-                              正在识别原声与停顿，请稍候…
-                            </p>
-                          )}
-                          {message.speechCutStatus === "failed" && (
-                            <p role="alert" style={{ margin: 0, color: "#a33" }}>
-                              {message.speechCutError || "语音分析失败，请重新上传素材后再试。"}
-                            </p>
-                          )}
-                          {message.speechCutStatus === "awaiting_confirmation" && (() => {
-                            const suggestions = message.speechCutSuggestions ?? [];
-                            const selectedIds = message.speechCutSelectedIds ?? [];
-                            const reasonLabel = (reason: string) =>
-                              reason === "pause"
-                                ? "明显停顿"
-                                : reason === "repeat"
-                                  ? "重复表达"
-                                  : reason === "phrase"
-                                    ? "冗余语句"
-                                    : "口头语";
-                            return (
-                              <div>
-                                <strong style={{ display: "block", marginBottom: "8px" }}>识别完成 · 请确认剪辑建议</strong>
-                                <p style={{ margin: "0 0 10px", color: "#777", fontSize: "12px" }}>
-                                  默认勾选建议删除的片段；取消勾选即可保留。简兮不会擅自删除未确认内容。
-                                </p>
-                                {suggestions.length ? (
-                                  <div style={{ display: "grid", gap: "6px", maxHeight: "220px", overflowY: "auto" }}>
-                                    {suggestions.map((suggestion) => (
-                                      <label
-                                        key={suggestion.id}
-                                        style={{
-                                          display: "flex",
-                                          gap: "9px",
-                                          alignItems: "flex-start",
-                                          padding: "8px 10px",
-                                          borderRadius: "7px",
-                                          background: "rgba(0,0,0,0.035)",
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedIds.includes(suggestion.id)}
-                                          onChange={(event) =>
-                                            toggleSpeechCutSuggestion(message.id, suggestion.id, event.currentTarget.checked)
-                                          }
-                                          style={{ marginTop: "3px" }}
-                                        />
-                                        <span style={{ minWidth: 0, flex: 1 }}>
-                                          <span style={{ display: "block", fontSize: "13px" }}>{suggestion.word}</span>
-                                          <small style={{ color: "#888" }}>
-                                            {reasonLabel(suggestion.reason)} · {suggestion.start.toFixed(1)}s–
-                                            {suggestion.end.toFixed(1)}s
-                                          </small>
-                                        </span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p style={{ margin: "8px 0", color: "#666", fontSize: "13px" }}>
-                                    没有检测到明确需要删除的口头语或停顿，可直接确认保留原声完成包装。
-                                  </p>
-                                )}
-                                <button
-                                  type="button"
-                                  className="panel-primary-action"
-                                  style={{ marginTop: "12px", width: "auto", padding: "8px 16px", fontSize: "14px" }}
-                                  disabled={message.speechCutSubmitting}
-                                  onClick={() =>
-                                    confirmSpeechCut(message.id, message.speechCutSessionId!, selectedIds)
-                                  }
-                                >
-                                  {message.speechCutSubmitting ? "正在提交…" : "确认精剪并开始制作（免费）"}
-                                </button>
-                                {message.speechCutError && (
-                                  <p role="alert" style={{ margin: "8px 0 0", color: "#a33", fontSize: "13px" }}>
-                                    {message.speechCutError}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                      {message.speechCutStatus === "analyzing" && (
+                        <p role="status" style={{ margin: 0, color: "#666" }}>
+                          正在识别原声与停顿，请稍候…
+                        </p>
                       )}
+                      {message.speechCutStatus === "failed" && (
+                        <p role="alert" style={{ margin: 0, color: "#a33" }}>
+                          {message.speechCutError || "语音分析失败，请重新上传素材后再试。"}
+                        </p>
+                      )}
+                      {message.speechCutStatus === "awaiting_confirmation" && (() => {
+                        const suggestions = message.speechCutSuggestions ?? [];
+                        const selectedIds = message.speechCutSelectedIds ?? [];
+                        const reasonLabel = (reason: string) =>
+                          reason === "pause"
+                            ? "明显停顿"
+                            : reason === "repeat"
+                              ? "重复表达"
+                              : reason === "phrase"
+                                ? "冗余语句"
+                                : "口头语";
+                        return (
+                          <div>
+                            <strong style={{ display: "block", marginBottom: "8px" }}>识别完成 · 请确认剪辑建议</strong>
+                            <p style={{ margin: "0 0 10px", color: "#777", fontSize: "12px" }}>
+                              默认勾选建议删除的片段；取消勾选即可保留。简兮不会擅自删除未确认内容。
+                            </p>
+                            {suggestions.length ? (
+                              <div style={{ display: "grid", gap: "6px", maxHeight: "220px", overflowY: "auto" }}>
+                                {suggestions.map((suggestion) => (
+                                  <label
+                                    key={suggestion.id}
+                                    style={{
+                                      display: "flex",
+                                      gap: "9px",
+                                      alignItems: "flex-start",
+                                      padding: "8px 10px",
+                                      borderRadius: "7px",
+                                      background: "rgba(0,0,0,0.035)",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedIds.includes(suggestion.id)}
+                                      onChange={(event) =>
+                                        toggleSpeechCutSuggestion(message.id, suggestion.id, event.currentTarget.checked)
+                                      }
+                                      style={{ marginTop: "3px" }}
+                                    />
+                                    <span style={{ minWidth: 0, flex: 1 }}>
+                                      <span style={{ display: "block", fontSize: "13px" }}>{suggestion.word}</span>
+                                      <small style={{ color: "#888" }}>
+                                        {reasonLabel(suggestion.reason)} · {suggestion.start.toFixed(1)}s–
+                                        {suggestion.end.toFixed(1)}s
+                                      </small>
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <p style={{ margin: "8px 0", color: "#666", fontSize: "13px" }}>
+                                没有检测到明确需要删除的口头语或停顿，可直接确认保留原声完成包装。
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              className="panel-primary-action"
+                              style={{ marginTop: "12px", width: "auto", padding: "8px 16px", fontSize: "14px" }}
+                              disabled={message.speechCutSubmitting}
+                              onClick={() =>
+                                confirmSpeechCut(message.id, message.speechCutSessionId!, selectedIds)
+                              }
+                            >
+                              {message.speechCutSubmitting ? "正在提交…" : "确认精剪并开始制作（免费）"}
+                            </button>
+                            {message.speechCutError && (
+                              <p role="alert" style={{ margin: "8px 0 0", color: "#a33", fontSize: "13px" }}>
+                                {message.speechCutError}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             );

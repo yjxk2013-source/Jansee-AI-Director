@@ -140,11 +140,6 @@ function ScriptLine({ text, active }: { text: string; active: boolean }) {
   return <span>“{shown}”{typing && <span className="typewriter-cursor" aria-hidden="true" />}</span>;
 }
 
-export type FilmstripProps = {
-  message: FilmstripMessage;
-  fallbackScene: FilmstripMessage["creationScene"];
-};
-
 export function Filmstrip({
   message,
   fallbackScene,
@@ -181,8 +176,8 @@ export function Filmstrip({
   const scene = message.creationScene ?? fallbackScene;
   const sceneName = scene === "online-ecommerce" ? "带货视频"
     : scene === "physical-store" ? "门店获客"
-    : scene === "personal-creation" ? "个人创作"
-    : "一句话剪辑";
+      : scene === "personal-creation" ? "个人创作"
+        : "一句话剪辑";
 
   const frameSource: Array<Record<string, unknown>> = attachments.length > 0
     ? attachments as Array<Record<string, unknown>>
@@ -284,8 +279,8 @@ export function Filmstrip({
               <span className="developing-text">
                 {status === "queued" ? "排队调度中…"
                   : status === "inspecting" ? "素材底片校验中…"
-                  : status === "planning" ? "导演分镜执笔中…"
-                  : `暗房多轨显影中 (${Math.round(progress || 20)}%)`}
+                    : status === "planning" ? "导演分镜执笔中…"
+                      : `暗房多轨显影中 (${Math.round(progress || 20)}%)`}
               </span>
             </div>
 

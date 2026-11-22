@@ -11594,7 +11594,9 @@ body,
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .developing-text {
@@ -11823,6 +11825,7 @@ body,
     width: min(88vw, 340px);
     border-radius: 12px;
   }
+
   .job-delivery-archive-hint {
     max-width: min(88vw, 340px);
     font-size: 11px;
