@@ -47,42 +47,7 @@ function ClientApp() {
   const [activePlayingVideoId, setActivePlayingVideoId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [creationScene, setCreationScene] = useState<"online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut">("online-ecommerce");
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
-
-  const activePlaceholder = useMemo(() => {
-    const listMap: Record<typeof creationScene, string[]> = {
-      "online-ecommerce": [
-        "如'突出纯棉亲肤、透气吸汗，适合夏季穿搭'",
-        "如'强调轻薄便携、续航持久，适合出差通勤'",
-        "如'主打控油哑光、12小时持妆，适合混油肤质'",
-        "如'突出大吸力低噪音、一键自清洁，适合养宠家庭'",
-        "如'强调无糖低卡、鲜果冷萃，适合健身代餐'",
-      ],
-      "physical-store": [
-        "如'店面门头+店内环境，配温馨音乐引导到店'",
-        "如'招牌招牌菜特写，突出烟火气与食材新鲜'",
-        "如'展示专业理发手法与精致发型，引导预约'",
-        "如'健身房器械与私教带练，强调专业与氛围'",
-        "如'精品咖啡制作过程，突出惬意空间与格调'",
-      ],
-      "personal-creation": [
-        "如'记录旅途美好瞬间，舒缓治愈感'",
-        "如'生活日常vlog，温暖有电影质感'",
-        "如'快节奏卡点，展现活力与热情'",
-        "如'记录萌宠日常互动，温馨轻快'",
-        "如'个人成长随笔，旁白深情有力量'",
-      ],
-      "quick-cut": [
-        "如'截取3-12秒与18-32秒并合并'",
-        "如'只保留3-15秒，其余删掉'",
-        "如'切出前10秒和最后20秒并合成一段'",
-        "如'把开头5秒和结尾10秒剪掉'",
-        "如'保留中间15到45秒精彩部分'",
-      ],
-    };
-    const list = listMap[creationScene] ?? listMap["online-ecommerce"];
-    return list[placeholderIndex % list.length] ?? list[0]!;
-  }, [creationScene, placeholderIndex]);
+  const activePlaceholder = "输入创作需求或想法...";
 
   const [guestTip, setGuestTip] = useTimedNotice();
   const [fileError, setFileError] = useTimedNotice();
@@ -228,14 +193,6 @@ function ClientApp() {
     textareaRef,
     stopVoiceInput,
   });
-
-  // 占位词定时轮换（每 6 秒轮换下一条）
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setPlaceholderIndex((prev) => prev + 1);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
 
   // 真实访客上报
   useEffect(() => {
