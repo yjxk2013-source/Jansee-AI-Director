@@ -8,10 +8,14 @@ export interface UseVoiceInputOptions {
 export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) {
   const [isListening, setIsListening] = useState(false);
   const [listeningRemainingSeconds, setListeningRemainingSeconds] = useState(60);
+  const [isCancelling, setIsCancelling] = useState(false);
+
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const voiceTimerRef = useRef<number | null>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const isCancelledRef = useRef<boolean>(false);
 
   // 释放硬件麦克风资源
   const releaseHardware = useCallback(() => {
@@ -79,9 +83,12 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
     }
   }, [onAppendDraft, onError]);
 
-  const stopVoiceInput = useCallback(() => {
+  const stopVoiceInput = useCallback((cancel = false) => {
+    isCancelledRef.current = cancel;
     clearTimer();
+    const duration = Date.now() - recordingStartTimeRef.current;
     const recorder = mediaRecorderRef.current;
+
     if (recorder && recorder.state !== "inactive") {
       try {
         recorder.stop();
@@ -91,18 +98,38 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
     } else {
       releaseHardware();
     }
+
     setIsListening(false);
+    setIsCancelling(false);
     setListeningRemainingSeconds(60);
-  }, [clearTimer, releaseHardware]);
+
+    // 非手动取消但说话过短时，提示用户
+    if (!cancel && duration > 0 && duration < 500) {
+      onError("说话时间太短");
+    }
+  }, [clearTimer, onError, releaseHardware]);
 
   const beginVoiceSession = useCallback(() => {
     setIsListening(true);
+    setIsCancelling(false);
     setListeningRemainingSeconds(60);
     clearTimer();
+    recordingStartTimeRef.current = Date.now();
+    isCancelledRef.current = false;
+
+    // 微信同款：轻微触感震动反馈（如果设备支持）
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      try {
+        navigator.vibrate(15);
+      } catch {
+        // no-op
+      }
+    }
+
     voiceTimerRef.current = window.setInterval(() => {
       setListeningRemainingSeconds((prev) => {
         if (prev <= 1) {
-          stopVoiceInput();
+          stopVoiceInput(false);
           return 60;
         }
         return prev - 1;
@@ -110,7 +137,7 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
     }, 1000);
   }, [clearTimer, stopVoiceInput]);
 
-  const startMediaRecording = useCallback(async () => {
+  const startVoiceInput = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       onError("当前浏览器不支持录音功能，请直接使用输入法键盘的语音麦克风。");
       return;
@@ -154,21 +181,29 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
         });
         audioChunksRef.current = [];
         releaseHardware();
+
+        // 如果用户上滑取消，或者按键时间太短（<500ms），直接废弃丢弃
+        const duration = Date.now() - recordingStartTimeRef.current;
+        if (isCancelledRef.current || duration < 500) {
+          return;
+        }
+
         if (recordedBlob.size > 1000) {
           void sendAudioToWhisper(recordedBlob);
         }
       };
 
       recorder.onerror = () => {
-        stopVoiceInput();
+        stopVoiceInput(true);
         onError("录音过程发生异常，请重试。");
       };
 
-      recorder.start(500); // 500ms 分片切片
+      recorder.start(300); // 300ms 分片切片
       beginVoiceSession();
     } catch (err) {
       releaseHardware();
       setIsListening(false);
+      setIsCancelling(false);
       const errorName = (err as Error)?.name || "";
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
         onError("麦克风权限未开启，请在浏览器或手机系统设置里允许使用麦克风后重试。");
@@ -182,16 +217,19 @@ export function useVoiceInput({ onAppendDraft, onError }: UseVoiceInputOptions) 
 
   const toggleVoiceInput = useCallback(() => {
     if (isListening || mediaRecorderRef.current) {
-      stopVoiceInput();
+      stopVoiceInput(false);
       return;
     }
-    void startMediaRecording();
-  }, [isListening, startMediaRecording, stopVoiceInput]);
+    void startVoiceInput();
+  }, [isListening, startVoiceInput, stopVoiceInput]);
 
   return {
     isListening,
+    isCancelling,
+    setIsCancelling,
     listeningRemainingSeconds,
-    toggleVoiceInput,
+    startVoiceInput,
     stopVoiceInput,
+    toggleVoiceInput,
   };
 }

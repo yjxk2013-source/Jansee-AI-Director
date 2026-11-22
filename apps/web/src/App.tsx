@@ -148,7 +148,15 @@ function ClientApp() {
   const isGuestViewer = !authUser || authUser.isGuest === true;
 
   // 1. 语音听写 Hook
-  const { isListening, listeningRemainingSeconds, toggleVoiceInput, stopVoiceInput } = useVoiceInput({
+  const {
+    isListening,
+    isCancelling,
+    setIsCancelling,
+    listeningRemainingSeconds,
+    startVoiceInput,
+    stopVoiceInput,
+    toggleVoiceInput,
+  } = useVoiceInput({
     onAppendDraft: useCallback((text: string) => {
       setDraft((current) => `${current}${current.trim() ? " " : ""}${text}`);
     }, []),
@@ -668,7 +676,11 @@ function ClientApp() {
         activePlaceholder={activePlaceholder}
         handleKeyDown={handleKeyDown}
         isListening={isListening}
+        isCancelling={isCancelling}
+        setIsCancelling={setIsCancelling}
         listeningRemainingSeconds={listeningRemainingSeconds}
+        startVoiceInput={startVoiceInput}
+        stopVoiceInput={stopVoiceInput}
         toggleVoiceInput={toggleVoiceInput}
         isDirectorThinking={isDirectorThinking}
         isAnyFileUploading={isAnyFileUploading}

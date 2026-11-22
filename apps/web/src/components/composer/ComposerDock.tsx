@@ -40,7 +40,11 @@ interface ComposerDockProps {
   activePlaceholder: string;
   handleKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   isListening: boolean;
+  isCancelling: boolean;
+  setIsCancelling: Dispatch<SetStateAction<boolean>>;
   listeningRemainingSeconds: number;
+  startVoiceInput: () => Promise<void>;
+  stopVoiceInput: (cancel?: boolean) => void;
   toggleVoiceInput: () => void;
   isDirectorThinking: boolean;
   isAnyFileUploading: boolean;
@@ -75,13 +79,62 @@ export function ComposerDock({
   activePlaceholder,
   handleKeyDown,
   isListening,
+  isCancelling,
+  setIsCancelling,
   listeningRemainingSeconds,
+  startVoiceInput,
+  stopVoiceInput,
   toggleVoiceInput,
   isDirectorThinking,
   isAnyFileUploading,
 }: ComposerDockProps) {
   const draggedFileIndexRef = useRef<number | null>(null);
   const dragCommittedRef = useRef(false);
+  const touchStartYRef = useRef<number | null>(null);
+  const isHoldingVoiceRef = useRef<boolean>(false);
+
+  // 微信同款按住说话：触摸开始
+  const handleVoiceTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
+    const touch = event.touches[0];
+    if (touch) {
+      touchStartYRef.current = touch.clientY;
+      isHoldingVoiceRef.current = true;
+      setIsCancelling(false);
+      void startVoiceInput();
+    }
+  };
+
+  // 微信同款手指上滑：检测上滑超过 45px 提示取消
+  const handleVoiceTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    if (!isHoldingVoiceRef.current || touchStartYRef.current === null) return;
+    const touch = event.touches[0];
+    if (touch) {
+      const currentY = touch.clientY;
+      const diffY = touchStartYRef.current - currentY;
+      if (diffY > 45) {
+        setIsCancelling(true);
+      } else {
+        setIsCancelling(false);
+      }
+    }
+  };
+
+  // 微信同款松手：根据是否处于取消区决定发送还是取消
+  const handleVoiceTouchEnd = () => {
+    if (isHoldingVoiceRef.current) {
+      isHoldingVoiceRef.current = false;
+      touchStartYRef.current = null;
+      stopVoiceInput(isCancelling);
+    }
+  };
+
+  const handleVoiceTouchCancel = () => {
+    if (isHoldingVoiceRef.current) {
+      isHoldingVoiceRef.current = false;
+      touchStartYRef.current = null;
+      stopVoiceInput(true);
+    }
+  };
 
   const clearAttachmentDragVisuals = () => {
     document.querySelectorAll(".pending-attachment.is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
@@ -97,6 +150,34 @@ export function ComposerDock({
         guideGuestToRegister={guideGuestToRegister}
         onSceneChange={onSceneChange}
       />
+      {isListening && (
+        <aside
+          className={`voice-record-floating-bubble ${isCancelling ? "is-cancelling" : ""}`}
+          role="status"
+          aria-live="assertive"
+        >
+          <div className="voice-record-floating-inner">
+            {isCancelling ? (
+              <>
+                <div className="voice-cancel-icon" aria-hidden="true">✕</div>
+                <span className="voice-record-title">松开手指，取消发送</span>
+              </>
+            ) : (
+              <>
+                <div className="voice-wave-bars" aria-hidden="true">
+                  <span className="voice-bar voice-bar-1" />
+                  <span className="voice-bar voice-bar-2" />
+                  <span className="voice-bar voice-bar-3" />
+                  <span className="voice-bar voice-bar-4" />
+                  <span className="voice-bar voice-bar-5" />
+                </div>
+                <span className="voice-record-title">正在倾听... 松开即识别</span>
+                <span className="voice-record-tip">手指上滑，取消发送</span>
+              </>
+            )}
+          </div>
+        </aside>
+      )}
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void submitMessage(e); }}>
         <input
           ref={imageInputRef}
@@ -331,14 +412,44 @@ export function ComposerDock({
           <div className="composer-actions">
             <button
               type="button"
-              className={`voice-button ${isListening ? "is-listening" : ""}`}
+              className={`voice-button ${isListening ? "is-listening" : ""} ${isCancelling ? "is-cancelling" : ""}`}
+              onTouchStart={handleVoiceTouchStart}
+              onTouchMove={handleVoiceTouchMove}
+              onTouchEnd={handleVoiceTouchEnd}
+              onTouchCancel={handleVoiceTouchCancel}
+              onMouseDown={(e) => {
+                if (e.button === 0) {
+                  isHoldingVoiceRef.current = true;
+                  void startVoiceInput();
+                }
+              }}
+              onMouseUp={() => {
+                if (isHoldingVoiceRef.current) {
+                  isHoldingVoiceRef.current = false;
+                  stopVoiceInput(false);
+                }
+              }}
+              onMouseLeave={() => {
+                if (isHoldingVoiceRef.current) {
+                  isHoldingVoiceRef.current = false;
+                  stopVoiceInput(false);
+                }
+              }}
               onClick={toggleVoiceInput}
               aria-label={
                 isListening
-                  ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）`
-                  : "语音输入"
+                  ? isCancelling
+                    ? "松开手指取消发送"
+                    : `松开结束录音（剩余 ${listeningRemainingSeconds} 秒）`
+                  : "按住说话，松手识别"
               }
-              title={isListening ? `停止语音输入（剩余 ${listeningRemainingSeconds} 秒）` : "语音输入"}
+              title={
+                isListening
+                  ? isCancelling
+                    ? "松开手指取消发送"
+                    : `松开结束录音（剩余 ${listeningRemainingSeconds} 秒）`
+                  : "按住说话，松手识别"
+              }
             >
               {isListening ? (
                 <span className="voice-countdown-number">{listeningRemainingSeconds}</span>

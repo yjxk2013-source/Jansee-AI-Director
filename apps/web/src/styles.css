@@ -472,25 +472,33 @@ textarea:focus-visible {
 .composer-dock {
   position: sticky;
   bottom: 0;
-  z-index: 2;
+  z-index: 20;
   width: min(100% - 48px, 820px);
   margin: 0 auto;
-  padding: 17px 0 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 17%);
+  padding: 10px 0 16px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.composer-dock > * {
+  pointer-events: auto;
 }
 
 .composer {
-  padding: 14px 15px 11px;
-  border: 1px solid #e5e4ed;
-  border-radius: 23px;
-  background: #fff;
-  box-shadow: 0 7px 30px #39345d12, 0 1px 2px #39345d08;
-  transition: border-color .18s ease, box-shadow .18s ease;
+  padding: 7px 10px;
+  border: 1px solid rgba(229, 228, 237, 0.85);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 8px 30px rgba(57, 52, 93, 0.08), 0 1px 3px rgba(57, 52, 93, 0.04);
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
 }
 
 .composer:focus-within {
-  border-color: #c9c5ef;
-  box-shadow: 0 8px 32px #5e56c41a;
+  border-color: rgba(201, 197, 239, 0.95);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 32px rgba(94, 86, 196, 0.14);
 }
 
 .composer textarea {
@@ -1136,11 +1144,18 @@ textarea:focus-visible {
 }
 
 .creation-scene-options {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 20px;
+  padding: 5px 18px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .creation-scene-options button {
@@ -1227,24 +1242,24 @@ textarea:focus-visible {
 
 .composer-main {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
 }
 
 .composer-main .attach-button,
 .composer-main .voice-button,
 .composer-main .send-button {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
   border-radius: 50%;
   cursor: pointer;
-  transition: background .16s ease, color .16s ease, transform .16s ease;
+  transition: background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
 
 .composer-main .attach-button {
@@ -1255,12 +1270,12 @@ textarea:focus-visible {
 .composer-main .attach-button:hover,
 .composer-main .voice-button:hover {
   color: #30343a;
-  background: #f1f3f4;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .composer-main .attach-button svg {
-  width: 23px;
-  height: 23px;
+  width: 22px;
+  height: 22px;
   stroke-width: 1.8;
 }
 
@@ -1269,11 +1284,12 @@ textarea:focus-visible {
   width: 0;
   min-width: 0;
   min-height: 40px;
-  max-height: 160px;
-  padding: 9px 8px 8px;
-  font-size: 15px;
-  line-height: 1.55;
+  max-height: 120px;
+  padding: 8px 10px;
+  font-size: 16px;
+  line-height: 24px;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .composer-main textarea::placeholder {
@@ -1284,13 +1300,16 @@ textarea:focus-visible {
 .composer-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex: 0 0 auto;
 }
 
 .composer-main .voice-button {
   color: #5f6368;
   background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 .composer-main .voice-button svg {
@@ -1305,7 +1324,103 @@ textarea:focus-visible {
 
 .composer-main .voice-button.is-listening {
   color: #625bc8;
-  background: #f0efff;
+  background: rgba(98, 91, 200, 0.15);
+  box-shadow: 0 0 0 3px rgba(98, 91, 200, 0.2);
+  transform: scale(1.05);
+}
+
+.composer-main .voice-button.is-cancelling {
+  color: #dc2626 !important;
+  background: rgba(220, 38, 38, 0.15) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25) !important;
+}
+
+/* 微信同款录音悬浮气泡 */
+.voice-record-floating-bubble {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: voice-bubble-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.voice-record-floating-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 22px;
+  border-radius: 18px;
+  background: rgba(32, 33, 36, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+  color: #ffffff;
+  min-width: 170px;
+  text-align: center;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.voice-record-floating-bubble.is-cancelling .voice-record-floating-inner {
+  background: rgba(220, 38, 38, 0.92);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.voice-record-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.voice-record-tip {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.voice-cancel-icon {
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+/* 微信声波动态跳动条 */
+.voice-wave-bars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  margin-bottom: 2px;
+}
+
+.voice-bar {
+  width: 3px;
+  background: #ffffff;
+  border-radius: 2px;
+  animation: voice-bar-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.voice-bar-1 { height: 8px; animation-delay: 0.1s; }
+.voice-bar-2 { height: 16px; animation-delay: 0.3s; }
+.voice-bar-3 { height: 20px; animation-delay: 0s; }
+.voice-bar-4 { height: 14px; animation-delay: 0.4s; }
+.voice-bar-5 { height: 9px; animation-delay: 0.2s; }
+
+@keyframes voice-bar-pulse {
+  0% { transform: scaleY(0.4); opacity: 0.6; }
+  100% { transform: scaleY(1.2); opacity: 1; }
+}
+
+@keyframes voice-bubble-pop {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.92); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .composer-main .voice-countdown-number {
@@ -3291,7 +3406,7 @@ textarea:focus-visible {
     flex: 0 0 auto;
     width: min(100% - 20px, 820px);
     padding: 8px 0 calc(9px + env(safe-area-inset-bottom));
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 12%);
+    background: transparent;
   }
 
   .composer {
@@ -3757,7 +3872,7 @@ body,
 .composer-dock {
   width: min(100% - 48px, 860px);
   padding: 15px 0 22px;
-  background: linear-gradient(180deg, rgba(250, 250, 253, 0), #fafafd 24%);
+  background: transparent;
 }
 
 .composer {
@@ -3935,7 +4050,7 @@ body,
   .composer-dock {
     width: min(100% - 22px, 860px);
     padding: 8px 0 calc(11px + env(safe-area-inset-bottom));
-    background: linear-gradient(180deg, rgba(250, 250, 253, 0), #fafafd 20%);
+    background: transparent;
   }
 
   .composer {
@@ -4587,14 +4702,16 @@ select:focus-visible {
 }
 
 .composer-dock {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 24%);
+  background: transparent;
 }
 
 .composer {
-  border-color: #dfe2e5;
-  border-radius: 24px;
-  background: #fff;
-  box-shadow: 0 3px 18px rgba(20, 22, 26, .055);
+  border-color: rgba(223, 226, 229, 0.85);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 4px 20px rgba(20, 22, 26, 0.06);
 }
 
 .composer:focus-within {
