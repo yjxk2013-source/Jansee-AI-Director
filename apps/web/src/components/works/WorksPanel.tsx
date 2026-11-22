@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AuthUser, SavedConversation, WorkItem } from "../../types/client.js";
 import { NOTICE_DURATION_MS, useTimedNotice } from "../../utils/clientPlatform.js";
+import { getLocalCache, getWorksCacheKey, setLocalCache } from "../../utils/offlineCache.js";
+import { getOrCacheMediaUrl, preloadMediaUrls, useCachedMediaUrl } from "../../utils/mediaCache.js";
 import { PublishStudio, type PublishKit } from "./PublishStudio.js";
 
 function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): PublishKit | null {
@@ -46,6 +48,205 @@ function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[
   return { ...(base ?? {}), ...(publishTitle ? { title: publishTitle } : {}) };
 }
 
+interface WorkDeliveryCardItemProps {
+  work: WorkItem;
+  isHighlighted: boolean;
+  titleLabel: string;
+  filename: string;
+  publishKit: PublishKit | null;
+  activePlayWorkId: string | null;
+  setActivePlayWorkId: (id: string | null) => void;
+  videoRefs: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
+  cardContainerRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  coverDataUrls: Record<string, string>;
+  setCoverDataUrls: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onRequestDownload?: (workId: string, filename: string) => void;
+  setCopyFeedback: (msg: string) => void;
+  copiedKey: string | null;
+  copyText: (key: string, text: string, label: string) => void;
+  setPreviewingCoverUrl: (url: string | null) => void;
+  downloadCover: (work: WorkItem) => void;
+}
+
+function WorkDeliveryCardItem({
+  work,
+  isHighlighted,
+  titleLabel,
+  filename,
+  publishKit,
+  activePlayWorkId,
+  setActivePlayWorkId,
+  videoRefs,
+  cardContainerRefs,
+  coverDataUrls,
+  setCoverDataUrls,
+  onRequestDownload,
+  setCopyFeedback,
+  copiedKey,
+  copyText,
+  setPreviewingCoverUrl,
+  downloadCover,
+}: WorkDeliveryCardItemProps) {
+  const cachedCover = useCachedMediaUrl(work.coverUrl);
+  const effectiveCover = cachedCover || work.coverUrl || coverDataUrls[work.id];
+
+  return (
+    <article
+      id={`work-card-${work.id}`}
+      className={`work-delivery-card${isHighlighted ? " is-highlighted" : ""}`}
+    >
+      <div className="work-card-header">
+        <div className="work-card-header-left">
+          <span className="work-card-title">{titleLabel}</span>
+          <span className="work-card-badge">1080P</span>
+          <span className="work-card-size">{(work.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
+        </div>
+        <div className="work-card-header-right">
+          <span className="work-card-time">{new Date(work.createdAt).toLocaleDateString()}</span>
+        </div>
+      </div>
+
+      <div
+        className="work-card-player"
+        ref={(el) => { cardContainerRefs.current[work.id] = el; }}
+        style={{ position: "relative" }}
+      >
+        <video
+          ref={(el) => { videoRefs.current[work.id] = el; }}
+          src={`/api/v1/works/${work.id}/stream`}
+          controls={activePlayWorkId === work.id}
+          playsInline
+          preload="metadata"
+          poster={effectiveCover || undefined}
+          aria-label={titleLabel}
+          onLoadedData={() => {
+            if (!work.coverUrl && !coverDataUrls[work.id]) {
+              const video = videoRefs.current[work.id];
+              if (video && video.videoWidth > 0) {
+                try {
+                  const canvas = document.createElement("canvas");
+                  canvas.width = Math.min(video.videoWidth, 640);
+                  canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+                  const ctx = canvas.getContext("2d");
+                  if (ctx) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const generatedUrl = canvas.toDataURL("image/jpeg", 0.85);
+                    setCoverDataUrls((prev) => ({ ...prev, [work.id]: generatedUrl }));
+                  }
+                } catch (_) { }
+              }
+            }
+          }}
+          onEnded={() => setActivePlayWorkId(null)}
+          onPause={() => {
+            if (activePlayWorkId === work.id) setActivePlayWorkId(null);
+          }}
+        />
+        <div
+          className="work-card-cover-container"
+          onClick={() => {
+            setActivePlayWorkId(work.id);
+            const video = videoRefs.current[work.id];
+            if (video) void video.play().catch(() => { });
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`播放 ${titleLabel}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            opacity: activePlayWorkId === work.id ? 0 : 1,
+            pointerEvents: activePlayWorkId === work.id ? "none" : "auto",
+            transition: "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setActivePlayWorkId(work.id);
+              const video = videoRefs.current[work.id];
+              if (video) void video.play().catch(() => { });
+            }
+          }}
+        >
+          {effectiveCover ? (
+            <img
+              src={effectiveCover}
+              alt={titleLabel}
+              loading="lazy"
+              className="work-card-cover-img"
+              onError={(e) => {
+                if (coverDataUrls[work.id] && e.currentTarget.src !== coverDataUrls[work.id]) {
+                  e.currentTarget.src = coverDataUrls[work.id]!;
+                  return;
+                }
+                const video = videoRefs.current[work.id];
+                if (video && video.videoWidth > 0) {
+                  try {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = Math.min(video.videoWidth, 640);
+                    canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+                    const ctx = canvas.getContext("2d");
+                    if (ctx) {
+                      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                      setCoverDataUrls((prev) => ({ ...prev, [work.id]: canvas.toDataURL("image/jpeg", 0.85) }));
+                    }
+                  } catch (_) { }
+                }
+              }}
+            />
+          ) : (
+            <div className="work-card-cover-fallback">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+            </div>
+          )}
+          <div className="work-card-play-overlay">
+            <div className="work-card-play-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="work-card-actions">
+        <button
+          type="button"
+          className="work-btn-download"
+          onClick={() => {
+            setCopyFeedback("正在启动原片下载…");
+            setTimeout(() => setCopyFeedback(""), 2500);
+            if (onRequestDownload) onRequestDownload(work.id, filename);
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          下载原片 MP4
+        </button>
+      </div>
+
+      {publishKit && (publishKit.title || publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (
+        <PublishStudio
+          work={work}
+          publishKit={publishKit}
+          copiedKey={copiedKey}
+          copyText={copyText}
+          coverDataUrl={effectiveCover}
+          onPreviewCover={(url) => setPreviewingCoverUrl(url)}
+          onDownloadCover={downloadCover}
+        />
+      )}
+    </article>
+  );
+}
+
 export function WorksPanel({
   user,
   onNew,
@@ -60,8 +261,15 @@ export function WorksPanel({
   onClearHighlight?: () => void;
   onRequestDownload?: (workId: string, filename: string) => void;
 }) {
-  const [works, setWorks] = useState<WorkItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [works, setWorks] = useState<WorkItem[]>(() => {
+    if (!user) return [];
+    return getLocalCache<WorkItem[]>(getWorksCacheKey(user.id)) ?? [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!user) return false;
+    const cached = getLocalCache<WorkItem[]>(getWorksCacheKey(user.id));
+    return !cached || cached.length === 0;
+  });
   const [error, setError] = useTimedNotice();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string>("");
@@ -105,17 +313,13 @@ export function WorksPanel({
       setCopyFeedback("封面图片已开始下载");
       setTimeout(() => setCopyFeedback(""), NOTICE_DURATION_MS);
       try {
-        const res = await fetch(work.coverUrl, { credentials: "include" });
-        if (!res.ok) throw new Error();
-        const blob = await res.blob();
-        const objUrl = URL.createObjectURL(blob);
+        const cachedUrl = await getOrCacheMediaUrl(work.coverUrl);
         const a = document.createElement("a");
-        a.href = objUrl;
+        a.href = cachedUrl;
         a.download = `jansee-cover-${workId}.jpg`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(objUrl), 30_000);
       } catch {
         const a = document.createElement("a");
         a.href = work.coverUrl;
@@ -161,15 +365,36 @@ export function WorksPanel({
 
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
+    const cacheKey = getWorksCacheKey(user.id);
+    const cached = getLocalCache<WorkItem[]>(cacheKey);
+    if (!cached || cached.length === 0) {
+      setLoading(true);
+    }
+    let active = true;
     fetch("/api/v1/works", { credentials: "include" })
       .then((res) => res.json() as Promise<{ works?: WorkItem[]; error?: { message?: string } }>)
       .then((data) => {
-        if (data.works) setWorks(data.works);
-        else if (data.error?.message) setError(data.error.message);
+        if (!active) return;
+        if (data.works) {
+          setWorks(data.works);
+          setLocalCache(cacheKey, data.works);
+          preloadMediaUrls(data.works.map((w) => w.coverUrl));
+        } else if (data.error?.message && (!cached || cached.length === 0)) {
+          setError(data.error.message);
+        }
       })
-      .catch(() => setError("无法获取成片列表"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!active) return;
+        if (!cached || cached.length === 0) {
+          setError("无法获取成片列表");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [user, setError]);
 
   useEffect(() => {
@@ -231,160 +456,26 @@ export function WorksPanel({
             const publishKit = resolvePublishForWork(work, conversations);
 
             return (
-              <article
+              <WorkDeliveryCardItem
                 key={work.id}
-                id={`work-card-${work.id}`}
-                className={`work-delivery-card${isHighlighted ? " is-highlighted" : ""}`}
-              >
-                <div className="work-card-header">
-                  <div className="work-card-header-left">
-                    <span className="work-card-title">{titleLabel}</span>
-                    <span className="work-card-badge">1080P</span>
-                    <span className="work-card-size">{(work.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
-                  </div>
-                  <div className="work-card-header-right">
-                    <span className="work-card-time">{new Date(work.createdAt).toLocaleDateString()}</span>
-                  </div>
-                </div>
-
-                <div
-                  className="work-card-player"
-                  ref={(el) => { cardContainerRefs.current[work.id] = el; }}
-                  style={{ position: "relative" }}
-                >
-                  <video
-                    ref={(el) => { videoRefs.current[work.id] = el; }}
-                    src={`/api/v1/works/${work.id}/stream`}
-                    controls={activePlayWorkId === work.id}
-                    playsInline
-                    preload="metadata"
-                    poster={work.coverUrl || coverDataUrls[work.id] || undefined}
-                    aria-label={titleLabel}
-                    onLoadedData={() => {
-                      if (!work.coverUrl && !coverDataUrls[work.id]) {
-                        const video = videoRefs.current[work.id];
-                        if (video && video.videoWidth > 0) {
-                          try {
-                            const canvas = document.createElement("canvas");
-                            canvas.width = Math.min(video.videoWidth, 640);
-                            canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
-                            const ctx = canvas.getContext("2d");
-                            if (ctx) {
-                              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                              const generatedUrl = canvas.toDataURL("image/jpeg", 0.85);
-                              setCoverDataUrls((prev) => ({ ...prev, [work.id]: generatedUrl }));
-                            }
-                          } catch (_) { }
-                        }
-                      }
-                    }}
-                    onEnded={() => setActivePlayWorkId(null)}
-                    onPause={() => {
-                      if (activePlayWorkId === work.id) setActivePlayWorkId(null);
-                    }}
-                  />
-                  <div
-                    className="work-card-cover-container"
-                    onClick={() => {
-                      setActivePlayWorkId(work.id);
-                      const video = videoRefs.current[work.id];
-                      if (video) void video.play().catch(() => { });
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`播放 ${titleLabel}`}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      opacity: activePlayWorkId === work.id ? 0 : 1,
-                      pointerEvents: activePlayWorkId === work.id ? "none" : "auto",
-                      transition: "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setActivePlayWorkId(work.id);
-                        const video = videoRefs.current[work.id];
-                        if (video) void video.play().catch(() => { });
-                      }
-                    }}
-                  >
-                    {work.coverUrl || coverDataUrls[work.id] ? (
-                      <img
-                        src={work.coverUrl || coverDataUrls[work.id]}
-                        alt={titleLabel}
-                        loading="lazy"
-                        className="work-card-cover-img"
-                        onError={(e) => {
-                          if (coverDataUrls[work.id] && e.currentTarget.src !== coverDataUrls[work.id]) {
-                            e.currentTarget.src = coverDataUrls[work.id]!;
-                            return;
-                          }
-                          const video = videoRefs.current[work.id];
-                          if (video && video.videoWidth > 0) {
-                            try {
-                              const canvas = document.createElement("canvas");
-                              canvas.width = Math.min(video.videoWidth, 640);
-                              canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
-                              const ctx = canvas.getContext("2d");
-                              if (ctx) {
-                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                                setCoverDataUrls((prev) => ({ ...prev, [work.id]: canvas.toDataURL("image/jpeg", 0.85) }));
-                              }
-                            } catch (_) { }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="work-card-cover-fallback">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <rect x="3" y="3" width="18" height="18" rx="2" />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <path d="m21 15-5-5L5 21" />
-                        </svg>
-                      </div>
-                    )}
-                    <div className="work-card-play-overlay">
-                      <div className="work-card-play-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="work-card-actions">
-                  <button
-                    type="button"
-                    className="work-btn-download"
-                    onClick={() => {
-                      setCopyFeedback("正在启动原片下载…");
-                      setTimeout(() => setCopyFeedback(""), 2500);
-                      if (onRequestDownload) onRequestDownload(work.id, filename);
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                    </svg>
-                    下载原片 MP4
-                  </button>
-                </div>
-
-                {publishKit && (publishKit.title || publishKit.cover_title || publishKit.caption || publishKit.pinned_comment) && (
-                  <PublishStudio
-                    work={work}
-                    publishKit={publishKit}
-                    copiedKey={copiedKey}
-                    copyText={copyText}
-                    coverDataUrl={coverDataUrls[work.id]}
-                    onPreviewCover={(url) => setPreviewingCoverUrl(url)}
-                    onDownloadCover={downloadCover}
-                  />
-                )}
-              </article>
+                work={work}
+                isHighlighted={isHighlighted}
+                titleLabel={titleLabel}
+                filename={filename}
+                publishKit={publishKit}
+                activePlayWorkId={activePlayWorkId}
+                setActivePlayWorkId={setActivePlayWorkId}
+                videoRefs={videoRefs}
+                cardContainerRefs={cardContainerRefs}
+                coverDataUrls={coverDataUrls}
+                setCoverDataUrls={setCoverDataUrls}
+                onRequestDownload={onRequestDownload}
+                setCopyFeedback={setCopyFeedback}
+                copiedKey={copiedKey}
+                copyText={copyText}
+                setPreviewingCoverUrl={setPreviewingCoverUrl}
+                downloadCover={downloadCover}
+              />
             );
           })}
         </div>

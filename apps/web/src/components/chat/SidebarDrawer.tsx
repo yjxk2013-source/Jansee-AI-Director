@@ -1,5 +1,22 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { AuthUser, WorkItem } from "../../types/client";
+import { useCachedMediaUrl } from "../../utils/mediaCache.js";
+
+function DrawerWorkThumb({ work }: { work: WorkItem }) {
+  const cached = useCachedMediaUrl(work.coverUrl);
+  const cover = cached || work.coverUrl;
+  if (cover) {
+    return (
+      <img
+        src={cover}
+        alt="作品封面"
+        loading="lazy"
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+      />
+    );
+  }
+  return <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="none" />;
+}
 
 interface SidebarDrawerProps {
   isOpen: boolean;
@@ -197,16 +214,7 @@ export function SidebarDrawer({
                       }}
                     >
                       <span className="drawer-recent-work-thumb">
-                        {work.coverUrl ? (
-                          <img
-                            src={work.coverUrl}
-                            alt="作品封面"
-                            loading="lazy"
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
-                        ) : (
-                          <video src={"/api/v1/works/" + work.id + "/stream"} muted playsInline preload="none" />
-                        )}
+                        <DrawerWorkThumb work={work} />
                         <span className="drawer-recent-work-play" aria-hidden="true">
                           ▶
                         </span>

@@ -145,75 +145,93 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     return reply.header("cache-control", "no-store").send({ work: output });
   });
 
-  // 纯净宣发封面（无烧录台词、无 AI 角标）。与视频预览一致，登录用户可读自己的封面。
-  app.get("/api/v1/works/:id/cover", async (request, reply) => {
-    const user = await authenticatedUser(request, options.authStore);
-    if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
-    const { id } = request.params as { id: string };
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
-      return reply.code(400).send({ error: { code: "INVALID_OUTPUT_ID" } });
-    }
-    let coverKey = "";
-    if (options.outputStore.findOutputCoverById) {
-      const cover = await options.outputStore.findOutputCoverById(user.id, id);
-      if (cover?.coverStorageKey) coverKey = cover.coverStorageKey;
-    }
-    const output = await options.outputStore.findOutputById(user.id, id);
-    if (!coverKey && output?.coverStorageKey) {
-      coverKey = output.coverStorageKey;
-    }
-
-    // 动态抽帧保底：针对历史作品或未生成封面的视频成片，现场通过 composePureCover 叠加开场设计，生成无字幕、无AI标纯净封面
-    if (!coverKey && output && output.mimeType === "video/mp4") {
-      try {
-        const cacheDir = join(tmpdir(), "jansee-work-covers");
-        await mkdir(cacheDir, { recursive: true });
-        const cachedCoverPath = join(cacheDir, `${id}.jpg`);
-        if (!existsSync(cachedCoverPath)) {
-          const videoFilePath = await options.storage.getFilePath(output.storageKey);
-          const plan = (output.directorPlan ?? {}) as Record<string, unknown>;
-          const introTitle = String(output.publish?.cover_title || output.title || plan.title || "JANSEE FILM").trim();
-          const introEn = String(plan.site || "JANSEE FILM").trim();
-          const introNote = String(plan.concept || "一席留白 · 静待亲临").trim();
-          await composePureCover({
-            bgSource: videoFilePath,
-            title: introTitle,
-            brandEn: introEn,
-            site: introEn,
-            note: introNote,
-            idx: "NO. 01 / CINEMATIC COVER",
-            width: output.width || 1080,
-            height: output.height || 1920,
-            outPath: cachedCoverPath,
-            captureSec: 1.0,
-          });
-        }
-        if (existsSync(cachedCoverPath)) {
-          const fileStat = await stat(cachedCoverPath);
-          reply.header("cache-control", "private, max-age=604800, immutable");
-          reply.header("content-type", "image/jpeg");
-          reply.header("content-length", fileStat.size);
-          return reply.send(createReadStream(cachedCoverPath));
-        }
-      } catch (err) {
-        console.warn(`[outputs] 成片动态加开场纯净封面兜底失败 work=${id}:`, err instanceof Error ? err.message : String(err));
+    // 纯净宣发封面（无烧录台词、无 AI 角标）。与视频预览一致，登录用户可读自己的封面。
+  app.route({
+    method: ["GET", "HEAD"],
+    url: "/api/v1/works/:id/cover",
+    handler: async (request, reply) => {
+      const user = await authenticatedUser(request, options.authStore);
+      if (!user) return reply.code(401).send({ error: { code: "AUTH_REQUIRED" } });
+      const { id } = request.params as { id: string };
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+        return reply.code(400).send({ error: { code: "INVALID_OUTPUT_ID" } });
       }
-    }
+      let coverKey = "";
+      if (options.outputStore.findOutputCoverById) {
+        const cover = await options.outputStore.findOutputCoverById(user.id, id);
+        if (cover?.coverStorageKey) coverKey = cover.coverStorageKey;
+      }
+      const output = await options.outputStore.findOutputById(user.id, id);
+      if (!coverKey && output?.coverStorageKey) {
+        coverKey = output.coverStorageKey;
+      }
 
-    if (!coverKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+      // 动态抽帧保底：针对历史作品或未生成封面的视频成片，现场通过 composePureCover 叠加开场设计，生成无字幕、无AI标纯净封面
+      if (!coverKey && output && output.mimeType === "video/mp4") {
+        try {
+          const cacheDir = join(tmpdir(), "jansee-work-covers");
+          await mkdir(cacheDir, { recursive: true });
+          const cachedCoverPath = join(cacheDir, `${id}.jpg`);
+          if (!existsSync(cachedCoverPath)) {
+            const videoFilePath = await options.storage.getFilePath(output.storageKey);
+            const plan = (output.directorPlan ?? {}) as Record<string, unknown>;
+            const introTitle = String(output.publish?.cover_title || output.title || plan.title || "JANSEE FILM").trim();
+            const introEn = String(plan.site || "JANSEE FILM").trim();
+            const introNote = String(plan.concept || "一席留白 · 静待亲临").trim();
+            await composePureCover({
+              bgSource: videoFilePath,
+              title: introTitle,
+              brandEn: introEn,
+              site: introEn,
+              note: introNote,
+              idx: "NO. 01 / CINEMATIC COVER",
+              width: output.width || 1080,
+              height: output.height || 1920,
+              outPath: cachedCoverPath,
+              captureSec: 1.0,
+            });
+          }
+          if (existsSync(cachedCoverPath)) {
+            const fileStat = await stat(cachedCoverPath);
+            const etag = `W/"${fileStat.size.toString(16)}-${Math.floor(fileStat.mtimeMs).toString(16)}"`;
+            const ifNoneMatch = request.headers["if-none-match"];
+            if (ifNoneMatch && (ifNoneMatch === etag || ifNoneMatch.includes(etag))) {
+              return reply.code(304).header("etag", etag).header("cache-control", "private, max-age=2592000, stale-while-revalidate=86400").send();
+            }
+            reply.header("etag", etag);
+            reply.header("cache-control", "private, max-age=2592000, stale-while-revalidate=86400");
+            reply.header("content-type", "image/jpeg");
+            reply.header("content-length", fileStat.size);
+            if (request.method === "HEAD") return reply.send();
+            return reply.send(createReadStream(cachedCoverPath));
+          }
+        } catch (err) {
+          console.warn(`[outputs] 成片动态加开场纯净封面兜底失败 work=${id}:`, err instanceof Error ? err.message : String(err));
+        }
+      }
 
-    // 封面图片以同源数据流直接返回，避免 302 重定向到外部 COS 域名触发浏览器 Content-Security-Policy 拦截导致黑屏
-    try {
-      const filePath = await options.storage.getFilePath(coverKey);
-      const fileStat = await stat(filePath);
-      reply.header("cache-control", "private, max-age=604800, immutable");
-      reply.header("content-type", "image/jpeg");
-      reply.header("content-length", fileStat.size);
-      return reply.send(createReadStream(filePath));
-    } catch (err) {
-      console.warn(`[outputs] 读取封面文件失败 coverKey=${coverKey}:`, err instanceof Error ? err.message : String(err));
-      return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
-    }
+      if (!coverKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+
+      // 封面图片以同源数据流直接返回，避免 302 重定向到外部 COS 域名触发浏览器 Content-Security-Policy 拦截导致黑屏
+      try {
+        const filePath = await options.storage.getFilePath(coverKey);
+        const fileStat = await stat(filePath);
+        const etag = `W/"${fileStat.size.toString(16)}-${Math.floor(fileStat.mtimeMs).toString(16)}"`;
+        const ifNoneMatch = request.headers["if-none-match"];
+        if (ifNoneMatch && (ifNoneMatch === etag || ifNoneMatch.includes(etag))) {
+          return reply.code(304).header("etag", etag).header("cache-control", "private, max-age=2592000, stale-while-revalidate=86400").send();
+        }
+        reply.header("etag", etag);
+        reply.header("cache-control", "private, max-age=2592000, stale-while-revalidate=86400");
+        reply.header("content-type", "image/jpeg");
+        reply.header("content-length", fileStat.size);
+        if (request.method === "HEAD") return reply.send();
+        return reply.send(createReadStream(filePath));
+      } catch (err) {
+        console.warn(`[outputs] 读取封面文件失败 coverKey=${coverKey}:`, err instanceof Error ? err.message : String(err));
+        return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
+      }
+    },
   });
 
   const streamOrDownload = async (

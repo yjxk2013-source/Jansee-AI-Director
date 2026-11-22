@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { WorkItem } from "../../types/client.js";
+import { useCachedMediaUrl } from "../../utils/mediaCache.js";
 
 export interface PublishKit {
   title?: string;
@@ -29,8 +30,9 @@ export function PublishStudio({
   onDownloadCover,
 }: PublishStudioProps) {
   const [primaryFailed, setPrimaryFailed] = useState(false);
-  // 封面第一优先级始终为服务端合成的高清纯净封面 work.coverUrl，绝不被本地 canvas 粗糙黑帧覆盖
-  const coverUrl = !primaryFailed && work.coverUrl ? work.coverUrl : coverDataUrl;
+  const cachedCover = useCachedMediaUrl(work.coverUrl);
+  // 封面第一优先级始终为服务端合成的高清纯净封面与离线持久化缓存，绝不被本地 canvas 粗糙黑帧覆盖
+  const coverUrl = !primaryFailed && (cachedCover || work.coverUrl) ? (cachedCover || work.coverUrl) : coverDataUrl;
 
   return (
     <div className="work-publish-studio">

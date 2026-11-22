@@ -20,6 +20,14 @@ import {
   saveConversationToServer,
   savePendingConversation,
 } from "./utils/conversationStorage.js";
+import {
+  CACHE_KEYS,
+  getLocalCache,
+  getWorksCacheKey,
+  removeLocalCache,
+  setLocalCache,
+} from "./utils/offlineCache.js";
+import { preloadMediaUrls } from "./utils/mediaCache.js";
 import { StandaloneAdminApp, isAdminHostRequested } from "./components/admin/StandaloneAdminApp.js";
 import { ChatHeader } from "./components/chat/ChatHeader.js";
 import { ComposerDock } from "./components/composer/ComposerDock.js";
@@ -64,12 +72,35 @@ function ClientApp() {
     return null;
   });
   const [highlightWorkId, setHighlightWorkId] = useState<string | null>(null);
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("mock=1")) {
+      return {
+        id: "local-preview-user",
+        email: "preview@jansee.local",
+        phone: "13800000000",
+        displayName: "本地测试用户",
+        isGuest: false,
+        createdAt: new Date().toISOString(),
+      };
+    }
+    return getLocalCache<AuthUser>(CACHE_KEYS.AUTH_USER);
+  });
   const [pendingDownloadWork, setPendingDownloadWork] = useState<{ id: string; filename: string } | null>(null);
-  const [authResolved, setAuthResolved] = useState(false);
-  const [walletCredits, setWalletCredits] = useState<number | null>(null);
-  const [membership, setMembership] = useState<{ tierId: string; expiresAt: string; active: boolean } | null>(null);
-  const [recentWorks, setRecentWorks] = useState<WorkItem[]>([]);
+  const [authResolved, setAuthResolved] = useState(() => {
+    return getLocalCache<AuthUser>(CACHE_KEYS.AUTH_USER) !== null;
+  });
+  const [walletCredits, setWalletCredits] = useState<number | null>(() => {
+    const snap = getLocalCache<{ credits: number; membership: { tierId: string; expiresAt: string; active: boolean } | null }>(CACHE_KEYS.WALLET_SNAPSHOT);
+    return typeof snap?.credits === "number" ? snap.credits : null;
+  });
+  const [membership, setMembership] = useState<{ tierId: string; expiresAt: string; active: boolean } | null>(() => {
+    const snap = getLocalCache<{ credits: number; membership: { tierId: string; expiresAt: string; active: boolean } | null }>(CACHE_KEYS.WALLET_SNAPSHOT);
+    return snap?.membership ?? null;
+  });
+  const [recentWorks, setRecentWorks] = useState<WorkItem[]>(() => {
+    const cachedUser = getLocalCache<AuthUser>(CACHE_KEYS.AUTH_USER);
+    return getLocalCache<WorkItem[]>(getWorksCacheKey(cachedUser?.id)) ?? [];
+  });
   const [recentWorksLoading, setRecentWorksLoading] = useState(false);
   const [recentWorksExpanded, setRecentWorksExpanded] = useState(false);
   const [conversationsOwnerId, setConversationsOwnerId] = useState<string | null>(null);
@@ -102,12 +133,23 @@ function ClientApp() {
       const res = await fetch("/api/v1/billing/wallet", { credentials: "include" });
       if (!res.ok) return;
       const payload = await res.json() as { wallet?: { availableCredits: number }; membership?: { tierId: string; expiresAt: string; active: boolean } };
-      if (typeof payload.wallet?.availableCredits === "number") setWalletCredits(payload.wallet.availableCredits);
-      if (payload.membership) setMembership(payload.membership);
+      let newCredits = walletCredits;
+      let newMembership = membership;
+      if (typeof payload.wallet?.availableCredits === "number") {
+        newCredits = payload.wallet.availableCredits;
+        setWalletCredits(newCredits);
+      }
+      if (payload.membership !== undefined) {
+        newMembership = payload.membership;
+        setMembership(newMembership);
+      }
+      if (typeof newCredits === "number") {
+        setLocalCache(CACHE_KEYS.WALLET_SNAPSHOT, { credits: newCredits, membership: newMembership });
+      }
     } catch {
       // ignore network errors
     }
-  }, []);
+  }, [walletCredits, membership]);
 
   const isGuestViewer = !authUser || authUser.isGuest === true;
 
@@ -244,17 +286,17 @@ function ClientApp() {
         if (!active) return;
         if (payload?.user) {
           setAuthUser(payload.user);
+          setLocalCache(CACHE_KEYS.AUTH_USER, payload.user);
           if (!payload.user.isGuest) void refreshWallet();
         } else {
           setAuthUser(null);
           setWalletCredits(null);
+          removeLocalCache(CACHE_KEYS.AUTH_USER);
+          removeLocalCache(CACHE_KEYS.WALLET_SNAPSHOT);
         }
       })
       .catch(() => {
-        if (active) {
-          setAuthUser(null);
-          setWalletCredits(null);
-        }
+        // 网络请求故障时不立即抹除离线缓存，维持离线可用性
       })
       .finally(() => {
         if (active) setAuthResolved(true);
@@ -308,6 +350,9 @@ function ClientApp() {
             const worksData = await worksRes.json() as { works?: WorkItem[] };
             const readyWorks = (worksData.works ?? []).filter((w) => !w.expiresAt || Date.parse(w.expiresAt) > Date.now());
             if (readyWorks.length > 0) {
+              setLocalCache(getWorksCacheKey(currentUserId), readyWorks);
+              setRecentWorks(readyWorks);
+              preloadMediaUrls(readyWorks.map((w) => w.coverUrl));
               const workMap = new Map<string, WorkItem>();
               readyWorks.forEach((w) => {
                 workMap.set(w.id, w);
@@ -439,7 +484,7 @@ function ClientApp() {
   useEffect(() => {
     if (!isSidebarOpen || !authUser) return;
     let active = true;
-    setRecentWorksLoading(true);
+    if (recentWorks.length === 0) setRecentWorksLoading(true);
     fetch("/api/v1/works", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((payload: { works?: WorkItem[] } | null) => {
@@ -448,9 +493,11 @@ function ClientApp() {
           .filter((work) => !work.expiresAt || Date.parse(work.expiresAt) > Date.now())
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         setRecentWorks(validWorks);
+        setLocalCache(getWorksCacheKey(authUser.id), validWorks);
+        preloadMediaUrls(validWorks.map((w) => w.coverUrl));
       })
       .catch(() => {
-        if (active) setRecentWorks([]);
+        // 网络异常不清除已有的本地展示
       })
       .finally(() => {
         if (active) setRecentWorksLoading(false);

@@ -42,7 +42,7 @@ export interface UseDirectorWorkflowOptions {
   guideGuestToRegister: (sceneName: string) => void;
   setFileError: (msg: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
-  stopVoiceInput: () => void;
+  stopVoiceInput?: () => void;
 }
 
 export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
@@ -96,7 +96,7 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
       setFileError("请告诉导演你希望这支视频呈现什么内容或效果。");
       return;
     }
-    stopVoiceInput();
+    stopVoiceInput?.();
     const firstFile = files[0];
     if (!firstFile) return;
     const kind = mediaKind(firstFile);

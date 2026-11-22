@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { JobDeliveryVideoPlayerProps } from "../../types/client";
+import { useCachedMediaUrl } from "../../utils/mediaCache.js";
 
 export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: JobDeliveryVideoPlayerProps) {
   const isPlaying = activeId === workId;
@@ -67,6 +68,8 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
 
   const coverUrl = `/api/v1/works/${workId}/cover`;
   const streamUrl = `/api/v1/works/${workId}/stream`;
+  const cachedCover = useCachedMediaUrl(coverUrl);
+  const effectiveCover = cachedCover || coverUrl;
 
   const handleTriggerPlay = () => {
     onPlay(workId);
@@ -94,7 +97,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
         ref={videoRef}
         className="job-delivery-video"
         src={streamUrl}
-        poster={coverFailed && !capturedCover ? undefined : (coverFailed && capturedCover ? capturedCover : coverUrl)}
+        poster={coverFailed && !capturedCover ? undefined : (coverFailed && capturedCover ? capturedCover : effectiveCover)}
         controls={isPlaying && isActuallyPlaying}
         playsInline
         preload="metadata"
@@ -130,7 +133,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
           </div>
         ) : (
           <img
-            src={coverFailed && capturedCover ? capturedCover : coverUrl}
+            src={coverFailed && capturedCover ? capturedCover : effectiveCover}
             alt="成片封面"
             loading="lazy"
             decoding="async"
