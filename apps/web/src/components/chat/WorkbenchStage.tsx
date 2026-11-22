@@ -62,20 +62,42 @@ export function WorkbenchStage({
             return (
               <div className="workbench-card message-row" key={message.id}>
                 <div className="message-content" style={{ width: "100%", maxWidth: "none" }}>
-                  {/* 片场分镜手稿 / 冲洗走带流：创作中带 isWorkbench 或 jobId 即时呈现 */}
-                  {(message.isWorkbench || message.jobId) && message.jobStatus !== "failed" && (
-                    <Filmstrip message={message} fallbackScene={creationScene} />
-                  )}
+                  {/* 成片后：成片靠左，素材靠右上下滚动；成片前：保持全宽工作台不变 */}
+                  {message.jobWorkId ? (
+                    <div className="workbench-delivered-stage">
+                      <div className="workbench-delivered-video-col">
+                        <JobDeliveryCard
+                          message={message}
+                          fallbackScene={creationScene}
+                          activePlayingVideoId={activePlayingVideoId}
+                          setActivePlayingVideoId={setActivePlayingVideoId}
+                          onRestoreDraft={onRestoreDraft}
+                          onRequestDownload={onRequestDownload}
+                          onShowNotice={onShowNotice}
+                        />
+                      </div>
+                      <div className="workbench-delivered-filmstrip-col">
+                        <Filmstrip message={message} fallbackScene={creationScene} />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 片场分镜手稿 / 冲洗走带流：创作中带 isWorkbench 或 jobId 即时呈现 */}
+                      {(message.isWorkbench || message.jobId) && message.jobStatus !== "failed" && (
+                        <Filmstrip message={message} fallbackScene={creationScene} />
+                      )}
 
-                  <JobDeliveryCard
-                    message={message}
-                    fallbackScene={creationScene}
-                    activePlayingVideoId={activePlayingVideoId}
-                    setActivePlayingVideoId={setActivePlayingVideoId}
-                    onRestoreDraft={onRestoreDraft}
-                    onRequestDownload={onRequestDownload}
-                    onShowNotice={onShowNotice}
-                  />
+                      <JobDeliveryCard
+                        message={message}
+                        fallbackScene={creationScene}
+                        activePlayingVideoId={activePlayingVideoId}
+                        setActivePlayingVideoId={setActivePlayingVideoId}
+                        onRestoreDraft={onRestoreDraft}
+                        onRequestDownload={onRequestDownload}
+                        onShowNotice={onShowNotice}
+                      />
+                    </>
+                  )}
 
                   {message.plan && message.speechCutSessionId && (
                     <div className="director-plan">

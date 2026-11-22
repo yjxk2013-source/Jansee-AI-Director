@@ -11659,6 +11659,160 @@ body,
   margin-top: 10px;
 }
 
+/* 成片后双栏协同布局：成片靠左主屏独占，素材靠右纵向滚动浏览 */
+.workbench-delivered-stage {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+  margin-top: 14px;
+  width: 100%;
+  animation: fadeInDelivered 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInDelivered {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workbench-delivered-video-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.workbench-delivered-video-col .job-delivery {
+  margin-top: 0;
+}
+
+.workbench-delivered-video-col .job-delivery-player-box {
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 9 / 16;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.job-delivery-archive-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(20, 21, 23, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.5;
+  user-select: none;
+}
+
+/* 右侧素材栏：限制高度并支持上下滑动 */
+.workbench-delivered-filmstrip-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workbench-delivered-filmstrip-col .director-filmstrip-panel {
+  margin-top: 0;
+  height: 100%;
+  max-height: 640px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-track-wrapper {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 6px;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-track-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: auto;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-track-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-track-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-track {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-frame {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  grid-template-rows: auto auto;
+  gap: 8px 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-frame-perforations-top,
+.workbench-delivered-filmstrip-col .filmstrip-frame-perforations-bottom {
+  display: none;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-thumbnail-box {
+  grid-row: 1 / 3;
+  width: 120px;
+  aspect-ratio: 9 / 16;
+  max-height: 160px;
+  border-radius: 6px;
+}
+
+.workbench-delivered-filmstrip-col .filmstrip-script-notes {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 窄屏/移动端自适应 */
+@media (max-width: 768px) {
+  .workbench-delivered-stage {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .workbench-delivered-video-col .job-delivery-player-box {
+    max-width: 280px;
+    margin: 0 auto;
+  }
+  .workbench-delivered-filmstrip-col .director-filmstrip-panel {
+    max-height: 380px;
+  }
+}
+
 .job-delivery-player-box {
   width: min(100%, 280px);
   aspect-ratio: 9 / 16;

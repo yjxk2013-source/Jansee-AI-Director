@@ -112,7 +112,7 @@ export function JobDeliveryCard({
       )}
 
       {message.jobWorkId ? (
-        <div className="job-delivery">
+        <div className="job-delivery job-delivery-preview-only">
           <JobDeliveryVideoPlayer
             workId={message.jobWorkId}
             activeId={activePlayingVideoId ?? null}
@@ -120,101 +120,9 @@ export function JobDeliveryCard({
             onPause={() => setActivePlayingVideoId?.((curr) => (curr === message.jobWorkId ? null : curr))}
           />
 
-          {localFeedback && (
-            <p className="works-copy-toast" role="status" style={{ margin: "8px 0" }}>
-              {localFeedback}
-            </p>
-          )}
-
-          {/* 一站式极速操作工具栏：下载原片与下载封面 */}
-          <div className="job-delivery-actions">
-            <button
-              type="button"
-              className="job-delivery-action-btn"
-              onClick={() => {
-                const workId = message.jobWorkId!;
-                const filename = `jansee-${workId.slice(0, 8)}.mp4`;
-                if (onRequestDownload) {
-                  onRequestDownload(workId, filename);
-                } else {
-                  triggerNotice("正在启动成片下载…");
-                  const a = document.createElement("a");
-                  a.href = `/api/v1/works/${workId}/download`;
-                  a.download = filename;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                }
-              }}
-              title="下载 1080P 高清成片原片"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-              </svg>
-              <span>下载原片 MP4</span>
-            </button>
-
-            <button
-              type="button"
-              className="job-delivery-action-btn"
-              onClick={() => handleDownloadCover(message.jobWorkId!)}
-              title="下载纯净宣发封面（无烧录字幕）"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-              </svg>
-              <span>下载封面</span>
-            </button>
+          <div className="job-delivery-archive-hint" role="note">
+            <span>成片预览就绪 · 高清原片下载与宣发文案请至「我的作品」</span>
           </div>
-
-          {(() => {
-            const publish = (message.jobDirectorPlan?.publish ?? {}) as Record<string, unknown>;
-            const caption = typeof publish.caption === "string" && publish.caption.trim() ? publish.caption.trim() : "";
-            const coverTitle = typeof publish.cover_title === "string" && publish.cover_title.trim() ? publish.cover_title.trim() : "";
-            const pinnedComment = typeof publish.pinned_comment === "string" && publish.pinned_comment.trim() ? publish.pinned_comment.trim() : "";
-            const postTime = typeof publish.post_time === "string" && publish.post_time.trim() ? publish.post_time.trim() : "";
-            if (!caption && !coverTitle) return null;
-            return (
-              <div className="job-publish">
-                {coverTitle && (
-                  <div className="job-publish-fields">
-                    <p>
-                      <span>发布标题：</span>
-                      <strong>{coverTitle}</strong>
-                    </p>
-                  </div>
-                )}
-                {caption && (
-                  <div className="job-publish-caption">
-                    <span>{caption}</span>
-                    <button
-                      type="button"
-                      className="job-publish-copy"
-                      onClick={() => void copyToClipboard(caption, "宣发文案")}
-                    >
-                      复制文案
-                    </button>
-                  </div>
-                )}
-                {(pinnedComment || postTime) && (
-                  <div className="job-publish-fields">
-                    {pinnedComment && (
-                      <p>
-                        <span>置顶评论：</span>
-                        {pinnedComment}
-                      </p>
-                    )}
-                    {postTime && (
-                      <p>
-                        <span>建议发布：</span>
-                        {postTime}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
         </div>
       ) : (
         message.jobId && message.jobStatus !== "failed" && message.jobStatus !== "cancelled" ? (
