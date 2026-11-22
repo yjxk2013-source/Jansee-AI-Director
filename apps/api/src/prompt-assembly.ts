@@ -201,8 +201,9 @@ export function buildDirectorSystemPrompt(input: DirectorPlanResolvedInput): str
     variant_type: isPersonal ? "personal-creation" : "由导演根据当前事实与受众自主判断，不使用固定变体池",
     packaging: { intro: true, subtitles: true, bgm: true },
     publish: {
+      title: "社交媒体发布标题（必填，10~28字，抖音/快手/小红书/视频号的爆款发布标题，直击受众痛点与好奇心，严禁为空，严禁写成4字设计卡短标题）",
+      cover_title: "平台爆款引流标题（必填，10~25字，用于抖音/小红书封面大字海报，醒目有力，严禁为空）",
       caption: "发布正文文案（≤150字，不复述旁白台词，文末带 3-5 个垂直长尾话题标签，如 #打工人救星 #私藏宝藏好物）",
-      cover_title: "平台爆款引流标题（必填，10~25字，用于抖音/小红书封面与发布，直击痛点，如「打工人宵夜救星！2块钱一包的光友酸辣粉丝」，严禁为空）",
       pinned_comment: "高转化置顶互动评论（≤50字，抛出互动问题或客观指引，拉升评论区停留互动）",
       post_time: "黄金发布时段建议（一句话，如「晚间 19:30-21:30 黄金流量档」）",
     },

@@ -4,38 +4,46 @@ import { NOTICE_DURATION_MS, useTimedNotice } from "../../utils/clientPlatform.j
 import { PublishStudio, type PublishKit } from "./PublishStudio.js";
 
 function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): PublishKit | null {
-  let title = "";
-  const workPlan = work.directorPlan as Record<string, unknown> | undefined;
-  if (typeof workPlan?.title === "string" && workPlan.title.trim()) title = workPlan.title.trim();
-  if (!title && typeof work.title === "string" && work.title.trim()) title = work.title.trim();
-
   let base: NonNullable<WorkItem["publish"]> | null = null;
-  if (work.publish && (work.publish.caption || work.publish.cover_title || work.publish.pinned_comment)) {
+  if (work.publish && (work.publish.title || work.publish.caption || work.publish.cover_title || work.publish.pinned_comment)) {
     base = work.publish;
   } else {
     for (const conversation of conversations) {
       const match = conversation.messages.find((m) => m.jobWorkId === work.id || m.jobId === work.jobId);
       const plan = match?.jobDirectorPlan as Record<string, unknown> | undefined;
       const pub = plan?.publish as NonNullable<WorkItem["publish"]> | undefined;
-      if (pub && (pub.caption || pub.cover_title || pub.pinned_comment)) {
+      if (pub && (pub.title || pub.caption || pub.cover_title || pub.pinned_comment)) {
         base = pub;
         break;
       }
     }
   }
 
-  if (!title) {
-    for (const conversation of conversations) {
-      const match = conversation.messages.find((m) => m.jobWorkId === work.id || m.jobId === work.jobId);
-      const plan = match?.jobDirectorPlan as Record<string, unknown> | undefined;
-      if (typeof plan?.title === "string" && plan.title.trim()) {
-        title = plan.title.trim();
-        break;
+  // 短视频宣发套件发布标题：优先选用 LLM 导演生成的爆款社媒发布标题（publish.title > publish.cover_title），
+  // 杜绝误把设计卡4~6字视觉短标题作为社交媒体发布标题
+  let publishTitle = "";
+  if (typeof base?.title === "string" && base.title.trim()) {
+    publishTitle = base.title.trim();
+  } else if (typeof base?.cover_title === "string" && base.cover_title.trim()) {
+    publishTitle = base.cover_title.trim();
+  } else {
+    const workPlan = work.directorPlan as Record<string, unknown> | undefined;
+    if (typeof workPlan?.title === "string" && workPlan.title.trim()) publishTitle = workPlan.title.trim();
+    if (!publishTitle && typeof work.title === "string" && work.title.trim()) publishTitle = work.title.trim();
+    if (!publishTitle) {
+      for (const conversation of conversations) {
+        const match = conversation.messages.find((m) => m.jobWorkId === work.id || m.jobId === work.jobId);
+        const plan = match?.jobDirectorPlan as Record<string, unknown> | undefined;
+        if (typeof plan?.title === "string" && plan.title.trim()) {
+          publishTitle = plan.title.trim();
+          break;
+        }
       }
     }
   }
-  if (!base && !title) return null;
-  return { ...(base ?? {}), ...(title ? { title } : {}) };
+
+  if (!base && !publishTitle) return null;
+  return { ...(base ?? {}), ...(publishTitle ? { title: publishTitle } : {}) };
 }
 
 export function WorksPanel({
@@ -305,11 +313,15 @@ export function WorksPanel({
                   >
                     {work.coverUrl || coverDataUrls[work.id] ? (
                       <img
-                        src={coverDataUrls[work.id] || work.coverUrl!}
+                        src={work.coverUrl || coverDataUrls[work.id]}
                         alt={titleLabel}
                         loading="lazy"
                         className="work-card-cover-img"
-                        onError={() => {
+                        onError={(e) => {
+                          if (coverDataUrls[work.id] && e.currentTarget.src !== coverDataUrls[work.id]) {
+                            e.currentTarget.src = coverDataUrls[work.id]!;
+                            return;
+                          }
                           const video = videoRefs.current[work.id];
                           if (video && video.videoWidth > 0) {
                             try {

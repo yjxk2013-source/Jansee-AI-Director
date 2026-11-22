@@ -158,7 +158,8 @@ export function calculateDarkroomDeveloping(
 
   const boundedReal = Math.min(95, Math.max(0, realProgress));
   const effectiveProgress = Math.min(95, Math.max(timeProgress, boundedReal));
-  const opacity = Math.max(0.06, Math.min(0.96, effectiveProgress / 100));
+  // 底片显影透明度：起始保持 0.70 确保底片清晰可见，随制作进度平滑过渡至 0.98，彻底消除前几秒 0.06 造成的黑屏体验
+  const opacity = Math.max(0.70, Math.min(0.98, 0.70 + (effectiveProgress / 100) * 0.28));
 
   let label = `暗房多轨显影中 (${Math.round(effectiveProgress)}%)`;
   if (status === "queued") {

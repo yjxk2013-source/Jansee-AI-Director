@@ -12,6 +12,7 @@ import {
   makeId,
   mediaKind,
 } from "../utils/clientPlatform.js";
+import { extractVideoFrame } from "./useComposerMedia.js";
 import {
   makeConversationTitle,
   saveActiveConversationId,
@@ -224,6 +225,19 @@ export function useDirectorWorkflow(options: UseDirectorWorkflowOptions) {
             return await pending;
           }));
         };
+
+        // 提交前并发确保视频素材本地首帧已提取，彻底杜绝监视屏因等待网络抽帧而闪烁黑屏
+        await Promise.all(submittingFiles.map(async (file) => {
+          if (mediaKind(file) === "video") {
+            const key = fileKey(file);
+            if (!videoFramesRef?.current?.has(key)) {
+              try {
+                const frame = await extractVideoFrame(file);
+                if (frame) videoFramesRef?.current?.set(key, frame);
+              } catch (_) { }
+            }
+          }
+        }));
 
         let assetIds: string[];
         try {

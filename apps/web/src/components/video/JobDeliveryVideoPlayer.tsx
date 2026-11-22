@@ -94,7 +94,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
         ref={videoRef}
         className="job-delivery-video"
         src={streamUrl}
-        poster={coverFailed && !capturedCover ? undefined : (capturedCover || coverUrl)}
+        poster={coverFailed && !capturedCover ? undefined : (coverFailed && capturedCover ? capturedCover : coverUrl)}
         controls={isPlaying && isActuallyPlaying}
         playsInline
         preload="metadata"
@@ -130,7 +130,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
           </div>
         ) : (
           <img
-            src={capturedCover || coverUrl}
+            src={coverFailed && capturedCover ? capturedCover : coverUrl}
             alt="成片封面"
             loading="lazy"
             decoding="async"

@@ -96,6 +96,7 @@ export const DirectorPlanSchema = z.object({
   speech_speed: z.number().min(0.85).max(1.25),
   bgm_emotion: z.string().trim().min(1).max(50).default("warm"),
   publish: z.object({
+    title: z.string().max(100).optional(),
     caption: z.string().max(1000).optional(),
     cover_title: z.string().max(100).optional(),
     pinned_comment: z.string().max(300).optional(),
@@ -414,36 +415,43 @@ function ensureValidCoverTitle(parsed: Record<string, unknown>, prompt: string):
   // 尊重大模型创作：只要 LLM 输出了非空内容，完全按 LLM 填写为准；只有真正为空时才触发兜底提取
   if (rawCoverTitle.length > 0) {
     publish.cover_title = rawCoverTitle.slice(0, 50);
-    return;
-  }
+  } else {
+    const caption = typeof publish.caption === "string" ? publish.caption.trim() : "";
+    const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+    const note = typeof parsed.note === "string" ? parsed.note.trim() : "";
+    const narration = typeof parsed.narration === "string" ? parsed.narration.trim() : "";
 
-  const caption = typeof publish.caption === "string" ? publish.caption.trim() : "";
-  const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
-  const note = typeof parsed.note === "string" ? parsed.note.trim() : "";
-  const narration = typeof parsed.narration === "string" ? parsed.narration.trim() : "";
-
-  let candidate = "";
-  if (caption) {
-    const firstSentence = caption.split(/[#\n。！!？?]/)[0]?.trim() || "";
-    if (firstSentence.length >= 8 && firstSentence.length <= 28) {
-      candidate = firstSentence;
+    let candidate = "";
+    if (caption) {
+      const firstSentence = caption.split(/[#\n。！!？?]/)[0]?.trim() || "";
+      if (firstSentence.length >= 8 && firstSentence.length <= 28) {
+        candidate = firstSentence;
+      }
     }
-  }
-  if (!candidate && narration) {
-    const firstSentence = narration.split(/[。！!？?]/)[0]?.trim() || "";
-    if (firstSentence.length >= 8 && firstSentence.length <= 28) {
-      candidate = firstSentence;
+    if (!candidate && narration) {
+      const firstSentence = narration.split(/[。！!？?]/)[0]?.trim() || "";
+      if (firstSentence.length >= 8 && firstSentence.length <= 28) {
+        candidate = firstSentence;
+      }
     }
-  }
-  if (!candidate && title) {
-    candidate = note ? `${title} · ${note}` : `${title} 商业成片`;
-  }
-  if (!candidate) {
-    const cleanPrompt = prompt.replace(/\[.*?\]/g, "").replace(/出\d+条视频/g, "").trim();
-    candidate = cleanPrompt.slice(0, 25);
+    if (!candidate && title) {
+      candidate = note ? `${title} · ${note}` : `${title} 商业成片`;
+    }
+    if (!candidate) {
+      const cleanPrompt = prompt.replace(/\[.*?\]/g, "").replace(/出\d+条视频/g, "").trim();
+      candidate = cleanPrompt.slice(0, 25);
+    }
+
+    publish.cover_title = candidate.slice(0, 30);
   }
 
-  publish.cover_title = candidate.slice(0, 30);
+  // 确保宣发发布标题（publish.title）有效：用于抖音/小红书等社媒平台发片标题，杜绝误用 4~6 字设计卡短标题
+  const rawPublishTitle = typeof publish.title === "string" ? publish.title.trim() : "";
+  if (rawPublishTitle.length > 0) {
+    publish.title = rawPublishTitle.slice(0, 60);
+  } else {
+    publish.title = String(publish.cover_title || parsed.title || prompt).slice(0, 50);
+  }
 }
 
 /**

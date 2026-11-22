@@ -202,15 +202,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
 
     if (!coverKey) return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
 
-    // 若存储返回远端高速直链（如腾讯云 COS / CDN），直接 302 重定向，享受边缘极速加载
-    const signedUrl = await options.storage.createSignedUrl(coverKey, {
-      ttlSeconds: 3600,
-    });
-    if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
-      reply.header("cache-control", "private, no-cache");
-      return reply.redirect(signedUrl, 302);
-    }
-
+    // 封面图片以同源数据流直接返回，避免 302 重定向到外部 COS 域名触发浏览器 Content-Security-Policy 拦截导致黑屏
     try {
       const filePath = await options.storage.getFilePath(coverKey);
       const fileStat = await stat(filePath);
@@ -218,7 +210,8 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       reply.header("content-type", "image/jpeg");
       reply.header("content-length", fileStat.size);
       return reply.send(createReadStream(filePath));
-    } catch {
+    } catch (err) {
+      console.warn(`[outputs] 读取封面文件失败 coverKey=${coverKey}:`, err instanceof Error ? err.message : String(err));
       return reply.code(404).send({ error: { code: "COVER_NOT_FOUND" } });
     }
   });

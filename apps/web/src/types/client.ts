@@ -28,6 +28,7 @@ export type WorkItem = {
   expiresAt: string | null;
   title?: string | null;
   publish?: {
+    title?: string;
     caption?: string;
     cover_title?: string;
     pinned_comment?: string;

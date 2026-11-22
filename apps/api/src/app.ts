@@ -87,7 +87,20 @@ export function buildApp(config: AppConfig): FastifyInstance {
       return tee;
     });
   }
-  app.register(helmet, { global: true, crossOriginEmbedderPolicy: false, referrerPolicy: { policy: "strict-origin-when-cross-origin" }, ...(!config.production ? { contentSecurityPolicy: false } : {}) });
+  app.register(helmet, {
+    global: true,
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    ...(!config.production ? { contentSecurityPolicy: false } : {
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          "img-src": ["'self'", "data:", "blob:", "https://*.myqcloud.com", "https://*.jansee.cn"],
+          "media-src": ["'self'", "data:", "blob:", "https://*.myqcloud.com", "https://*.jansee.cn"],
+        },
+      },
+    }),
+  });
   app.register(cors, { credentials: true, origin(origin, callback) { callback(null, !origin || config.allowedOrigins.includes(origin)); } });
   app.register(rateLimit, { global: true, max: 120, timeWindow: "1 minute", ban: 0 });
   app.register(multipart, { limits: { files: 9, fileSize: 200 * 1024 * 1024, fields: 10, parts: 20 } });
