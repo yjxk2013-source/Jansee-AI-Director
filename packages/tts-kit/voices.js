@@ -190,10 +190,10 @@ export function getAvailableCantoneseVoice() {
  * language: zh | en | yue；只返回明确健康、明确支持该语言的唯一数字 VoiceType。
  * 普通话默认最多 8 个；英语/粤语候选不足时返回全部，不跨语言凑数。
  */
-export function getAvailableTencentVoiceCandidates({ language = 'zh', gender = null, limit = 8, preferredTemperament = null } = {}) {
+export function getAvailableTencentVoiceCandidates({ language = 'zh', gender = null, limit = null, preferredTemperament = null } = {}) {
   const lang = String(language || 'zh').toLowerCase();
   if (!['zh', 'en', 'yue'].includes(lang)) return [];
-  const cap = Math.max(1, Math.min(8, Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : 8));
+  const cap = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.floor(Number(limit)) : Infinity;
   const allowed = TENCENT_VOICE_CANDIDATES.filter((item) => {
     const languageMatch = lang === 'yue'
       ? item.language === 'yue'
@@ -216,9 +216,8 @@ export function getAvailableTencentVoiceCandidates({ language = 'zh', gender = n
     ...unique,
   ];
   const deduped = [...new Map(ranked.map((item) => [item.voiceType, item])).values()];
-  if (gender) return deduped.slice(0, cap);
-  if (lang !== 'zh') return deduped.slice(0, cap);
-  // 普通话未指定性别时尽量保持男女候选均衡，再用其余健康音色补足上限。
+  if (gender || lang !== 'zh' || !Number.isFinite(cap)) return deduped.slice(0, cap);
+  // 普通话未指定性别且有限制数量时尽量保持男女候选均衡，再用其余健康音色补足上限。
   const male = deduped.filter((item) => item.gender === 'male');
   const female = deduped.filter((item) => item.gender === 'female');
   const balanced = [];

@@ -522,7 +522,7 @@ export function createOpenAICompatiblePlanner(config: {
           signal: controller.signal,
           body: JSON.stringify({
             model,
-            temperature: 0.4,
+            temperature: 0.8,
             stream: true,
             stream_options: { include_usage: true },
             // 批量赛马：一次调用要吐 N 个完整方案，按版数放大输出预算（单版按配置不变；仍受 8192 硬上限钳制）。
@@ -605,11 +605,11 @@ export function createOpenAICompatiblePlanner(config: {
         const rawPlans = expectedPlans > 1
           ? parseDirectorPlansFromContent(content)
           : [parseDirectorJsonContent(content)];
-        // 音色健康候选集一次计算，逐版共用。
+        // 音色健康候选集一次计算，逐版共用（支持全量健康音色池）。
         const voiceIntent = detectUserVoiceIntent(input.prompt) || {};
         const voiceLanguage = voiceIntent.isCantonese ? "yue" : voiceIntent.isEnglish ? "en" : "zh";
         const preferredTemperament = voiceIntent.explicitTemperament || (route.creationScene === "physical-store" ? "f-soft" : route.creationScene === "online-ecommerce" ? "f-bright" : "f-warm");
-        const allowedVoiceCandidates = getAvailableTencentVoiceCandidates({ language: voiceLanguage, gender: voiceIntent.explicitGender || null, limit: 8, preferredTemperament });
+        const allowedVoiceCandidates = getAvailableTencentVoiceCandidates({ language: voiceLanguage, gender: voiceIntent.explicitGender || null, preferredTemperament });
         if (!allowedVoiceCandidates.length) throw new Error(`TTS_VOICE_UNAVAILABLE: 当前没有通过健康探测且符合${voiceLanguage === "yue" ? "粤语" : voiceLanguage === "en" ? "英语" : "普通话"}语言/性别要求的腾讯音色`);
         // 逐版校验：normalize + strict schema + 音色健康替换，任何一版不合格整包重试（保住"N 版都要能出片"的承诺）。
         const validatedPlans = rawPlans.map((rawPlan) => {

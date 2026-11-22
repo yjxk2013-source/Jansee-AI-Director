@@ -117,13 +117,9 @@ function buildVoiceInstructions(prompt: string, creationScene: CreationScene): s
   const userIntent = detectUserVoiceIntent(prompt) || {};
   const language = userIntent.isCantonese ? "yue" : userIntent.isEnglish ? "en" : "zh";
   const preferredTemperament = userIntent.explicitTemperament || (creationScene === "physical-store" ? "f-soft" : creationScene === "online-ecommerce" ? "f-bright" : "f-warm");
-  const candidates = getAvailableTencentVoiceCandidates({ language, gender: userIntent.explicitGender || null, limit: 8, preferredTemperament });
-  // 随机调整候选展示顺序，打破模型对固定首位音色的偏好；最终选择仍由 LLM 完成。
+  const candidates = getAvailableTencentVoiceCandidates({ language, gender: userIntent.explicitGender || null, preferredTemperament });
+  // 保持候选集展示，让大模型看到完整音色池；最终选择由 LLM 决定。
   const shuffled = [...candidates];
-  for (let i = shuffled.length - 1; i > 0; i -= 1) {
-    const j = randomInt(i + 1);
-    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-  }
   const lines: string[] = [];
 
   if (userIntent.explicitGender) {
@@ -142,17 +138,21 @@ function buildVoiceInstructions(prompt: string, creationScene: CreationScene): s
     lines.push(`[音色倾向]：用户表达了「${userIntent.explicitTemperament}」倾向；优先参考候选顺序，但仍由你结合场景、人设和内容决定最终音色。`);
   }
 
-  lines.push("[真实腾讯 TTS 动态候选集]：以下数字均为腾讯官方 VoiceType，且在本次提示词组装时健康状态明确为 healthy。只能从本次候选集选择一个 voice_id，必须原样输出数字 ID；禁止输出别名、旧 ID 或自行编造 ID。");
+  lines.push("[真实腾讯 TTS 完整音色池清单]：以下均为腾讯官方真实 VoiceType，且健康状态明确为 healthy。必须严格从下方清单中挑选最契合本次文案人设与情绪的 voice_id，必须原样输出数字 ID（严禁别名、旧 ID 或自造 ID）：");
   if (!candidates.length) {
     lines.push("[无可用音色]：当前没有同时满足语言、性别与健康条件的腾讯音色。不得伪造 voice_id 或使用其他语言音色；必须返回无法满足配音条件。");
   } else {
-    for (const gender of (randomInt(2) === 0 ? ["male", "female"] : ["female", "male"])) {
+    for (const gender of ["female", "male"]) {
       const group = shuffled.filter((item: { gender: string }) => item.gender === gender);
-      if (group.length) lines.push(`${gender === "male" ? "男声" : "女声"}候选：${group.map((item: { voiceType: number; label: string }) => `${item.voiceType}（${item.label}）`).join(" / ")}`);
+      if (group.length) {
+        lines.push(`【${gender === "male" ? "男声音色库" : "女声音色库"}（共 ${group.length} 款）】：`);
+        for (const item of group as Array<{ voiceType: number; label: string }>) {
+          lines.push(`  - ID: ${item.voiceType} | 名称风格: ${item.label}`);
+        }
+      }
     }
-    lines.push(`本次候选数量：${candidates.length}；候选上限：8。候选不足时只提供全部合格音色，不得跨语言或跨性别凑数。`);
   }
-  lines.push("[导演音色决策]：必须结合当前场景、人设、旁白情绪与内容表达，从本次候选中明确选择 voice_id；不得使用固定默认音色，不得总是选择候选列表第一项。不同任务应根据内容主动变化，不能为了省事反复复用同一个音色。voice_id 必须是上方列出的数字 ID。");
+  lines.push("[导演音色决策]：必须结合当前场景、人设、旁白情绪与内容表达，从上方清单中挑选最契合的 voice_id；不得使用固定默认音色，不同任务根据内容主动变化。voice_id 必须是上方列出的数字 ID。");
   lines.push("[语速控制]：必须输出 speech_speed，范围 0.85–1.25；1.00 为正常语速，低于 1.00 放慢，高于 1.00 加快。根据旁白情绪、信息密度和视频节奏选择，不得省略或超范围。");
   return lines;
 }
