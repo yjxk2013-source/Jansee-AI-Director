@@ -60,7 +60,7 @@ interface WorkDeliveryCardItemProps {
   cardContainerRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   coverDataUrls: Record<string, string>;
   setCoverDataUrls: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  onRequestDownload?: (workId: string, filename: string) => void;
+  onRequestDownload?: ((workId: string, filename: string) => void) | undefined;
   setCopyFeedback: (msg: string) => void;
   copiedKey: string | null;
   copyText: (key: string, text: string, label: string) => void;
