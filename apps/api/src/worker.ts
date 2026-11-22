@@ -499,7 +499,7 @@ export async function processJob(
           if (firstAsset) {
             try {
               bgSource = await storage.getFilePath(firstAsset.storageKey);
-            } catch (_) {}
+            } catch (_) { }
           }
           if (!bgSource) {
             bgSource = await storage.getFilePath(output.storageKey);
