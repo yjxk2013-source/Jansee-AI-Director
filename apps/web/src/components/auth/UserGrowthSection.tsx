@@ -8,56 +8,112 @@ interface UserGrowthSectionProps {
   onWalletRefresh: () => Promise<void>;
 }
 
+type GrowthOverview = {
+  inviteCode: string;
+  invitedCount: number;
+  rewardedCount: number;
+  checkedInToday: boolean;
+  checkinRewardCredits: number;
+  referralRewardCredits: number;
+  partner: {
+    active: boolean;
+    province?: string | null;
+    city?: string | null;
+    target: number;
+    progress: number;
+    pendingYuan: number;
+    settledYuan: number;
+    inTransitYuan: number;
+    withdrawnYuan: number;
+    withdrawableYuan: number;
+    totalYuan: number;
+    levelOneRate: number;
+    levelTwoRate: number;
+  };
+};
+
+type InviteeRecord = { level: number; displayName: string; contact: string; joinedAt: string; hasPaid: boolean };
+type CommissionRecord = { id: string; level: number; orderAmountYuan: number; rate: number; commissionYuan: number; status: string; createdAt: string; settledAt: string | null; source: string };
+type PayoutProfileData = { channel: string; accountLast4: string; verificationStatus: string; verificationNote?: string | null };
+type WithdrawalRecord = { id: string; amountYuan: number; feeYuan: number; netAmountYuan: number; status: string; note?: string | null; createdAt: string; processedAt?: string | null; arrivalType?: string };
+
+// 客户端内存轻缓存：60 秒内重复打开个人主页直接秒开，0 请求 0 闪烁
+const GROWTH_CACHE: {
+  userId?: string | undefined;
+  timestamp?: number | undefined;
+  overview?: GrowthOverview | undefined;
+  invitees?: InviteeRecord[] | undefined;
+  commissions?: CommissionRecord[] | undefined;
+  payoutProfile?: PayoutProfileData | null | undefined;
+  withdrawals?: WithdrawalRecord[] | undefined;
+} = {};
+
+const CACHE_TTL_MS = 60_000;
+
+function clearGrowthCache() {
+  GROWTH_CACHE.userId = undefined;
+  GROWTH_CACHE.timestamp = undefined;
+  GROWTH_CACHE.overview = undefined;
+  GROWTH_CACHE.invitees = undefined;
+  GROWTH_CACHE.commissions = undefined;
+  GROWTH_CACHE.payoutProfile = undefined;
+  GROWTH_CACHE.withdrawals = undefined;
+}
+
 export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionProps) {
   const [inviteQrDataUrl, setInviteQrDataUrl] = useState("");
-  const [growth, setGrowth] = useState<{
-    inviteCode: string;
-    invitedCount: number;
-    rewardedCount: number;
-    checkedInToday: boolean;
-    checkinRewardCredits: number;
-    referralRewardCredits: number;
-    partner: {
-      active: boolean;
-      province?: string | null;
-      city?: string | null;
-      target: number;
-      progress: number;
-      pendingYuan: number;
-      settledYuan: number;
-      inTransitYuan: number;
-      withdrawnYuan: number;
-      withdrawableYuan: number;
-      totalYuan: number;
-      levelOneRate: number;
-      levelTwoRate: number;
-    };
-  } | null>(null);
+  const [growth, setGrowth] = useState<GrowthOverview | null>(() => {
+    if (GROWTH_CACHE.userId === user.id && GROWTH_CACHE.overview && Date.now() - (GROWTH_CACHE.timestamp ?? 0) < CACHE_TTL_MS) {
+      return GROWTH_CACHE.overview;
+    }
+    return null;
+  });
   const [expandedGrowthSection, setExpandedGrowthSection] = useState<"checkin" | "invite" | "partner" | null>(null);
   const [growthBusy, setGrowthBusy] = useState(false);
-  const [payoutProfile, setPayoutProfile] = useState<{ channel: string; accountLast4: string; verificationStatus: string; verificationNote?: string | null } | null>(null);
+  const [payoutProfile, setPayoutProfile] = useState<PayoutProfileData | null>(() => {
+    if (GROWTH_CACHE.userId === user.id && Date.now() - (GROWTH_CACHE.timestamp ?? 0) < CACHE_TTL_MS) {
+      return GROWTH_CACHE.payoutProfile ?? null;
+    }
+    return null;
+  });
   const [payoutName, setPayoutName] = useState("");
   const [payoutAccount, setPayoutAccount] = useState("");
   const [payoutEditing, setPayoutEditing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawals, setWithdrawals] = useState<Array<{ id: string; amountYuan: number; feeYuan: number; netAmountYuan: number; status: string; note?: string | null; createdAt: string; processedAt?: string | null; arrivalType?: string }>>([]);
-  const [growthInvitees, setGrowthInvitees] = useState<Array<{ level: number; displayName: string; contact: string; joinedAt: string; hasPaid: boolean }>>([]);
-  const [growthCommissions, setGrowthCommissions] = useState<Array<{ id: string; level: number; orderAmountYuan: number; rate: number; commissionYuan: number; status: string; createdAt: string; settledAt: string | null; source: string }>>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>(() => {
+    if (GROWTH_CACHE.userId === user.id && GROWTH_CACHE.withdrawals && Date.now() - (GROWTH_CACHE.timestamp ?? 0) < CACHE_TTL_MS) {
+      return GROWTH_CACHE.withdrawals;
+    }
+    return [];
+  });
+  const [growthInvitees, setGrowthInvitees] = useState<InviteeRecord[]>(() => {
+    if (GROWTH_CACHE.userId === user.id && GROWTH_CACHE.invitees && Date.now() - (GROWTH_CACHE.timestamp ?? 0) < CACHE_TTL_MS) {
+      return GROWTH_CACHE.invitees;
+    }
+    return [];
+  });
+  const [growthCommissions, setGrowthCommissions] = useState<CommissionRecord[]>(() => {
+    if (GROWTH_CACHE.userId === user.id && GROWTH_CACHE.commissions && Date.now() - (GROWTH_CACHE.timestamp ?? 0) < CACHE_TTL_MS) {
+      return GROWTH_CACHE.commissions;
+    }
+    return [];
+  });
   const [growthNotice, setGrowthNotice] = useTimedNotice();
   const [partnerProvince, setPartnerProvince] = useState("");
   const [partnerCity, setPartnerCity] = useState("");
 
   const isMockPreview = import.meta.env.DEV && user?.id === "local-preview-user";
 
+  // 专属邀请二维码仅在展开邀请面板或准备分享时生成，避免弹窗瞬间占用 CPU
   useEffect(() => {
-    if (!growth?.inviteCode) {
-      setInviteQrDataUrl("");
+    if (!growth?.inviteCode || (expandedGrowthSection !== "invite" && !inviteQrDataUrl)) {
       return;
     }
+    if (inviteQrDataUrl) return;
+
     let active = true;
     const inviteUrl = `https://jansee.cn/?ref=${encodeURIComponent(growth.inviteCode)}`;
     
-    // 生成客户端离线 DataURL
     QRCode.toDataURL(inviteUrl, { width: 320, margin: 2, errorCorrectionLevel: "M" })
       .then((dataUrl: string) => {
         if (active && dataUrl) setInviteQrDataUrl(dataUrl);
@@ -68,36 +124,104 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
         }
       });
     return () => { active = false; };
-  }, [growth?.inviteCode]);
+  }, [growth?.inviteCode, expandedGrowthSection, inviteQrDataUrl]);
 
-  async function loadGrowth() {
+  // 1. 核心概览按需极速加载（首次开窗仅发这 1 个请求）
+  async function loadGrowthOverview(force = false) {
+    if (!force && GROWTH_CACHE.userId === user.id && GROWTH_CACHE.overview && Date.now() - (GROWTH_CACHE.timestamp ?? 0) < CACHE_TTL_MS) {
+      setGrowth(GROWTH_CACHE.overview);
+      setPartnerProvince(GROWTH_CACHE.overview.partner.province ?? "");
+      setPartnerCity(GROWTH_CACHE.overview.partner.city ?? "");
+      return;
+    }
+
     try {
-      // 1. 优先极速请求核心概览（签到、邀请码、基础统计），让主页秒开展现
       const overviewResponse = await fetch("/api/v1/growth/overview?timeZone=Asia%2FShanghai", { credentials: "include", cache: "no-store" });
       if (overviewResponse.ok) {
-        const overviewPayload = await overviewResponse.json() as { overview?: typeof growth };
+        const overviewPayload = await overviewResponse.json() as { overview?: GrowthOverview };
         if (overviewPayload.overview) {
           setGrowth(overviewPayload.overview);
           setPartnerProvince(overviewPayload.overview.partner.province ?? "");
           setPartnerCity(overviewPayload.overview.partner.city ?? "");
+          GROWTH_CACHE.userId = user.id;
+          GROWTH_CACHE.timestamp = Date.now();
+          GROWTH_CACHE.overview = overviewPayload.overview;
         }
       }
-
-      // 2. 异步增量拉取明细列表，避免阻塞个人主页核心信息渲染
-      void Promise.allSettled([
-        fetch("/api/v1/growth/invitees", { credentials: "include" }).then((r) => r.ok ? r.json() : null),
-        fetch("/api/v1/growth/commissions", { credentials: "include" }).then((r) => r.ok ? r.json() : null),
-        fetch("/api/v1/growth/payout-profile", { credentials: "include", cache: "no-store" }).then((r) => r.ok ? r.json() : null),
-        fetch("/api/v1/growth/withdrawals", { credentials: "include" }).then((r) => r.ok ? r.json() : null),
-      ]).then(([inviteesRes, commissionsRes, profileRes, withdrawalsRes]) => {
-        if (inviteesRes.status === "fulfilled" && inviteesRes.value?.invitees) setGrowthInvitees(inviteesRes.value.invitees);
-        if (commissionsRes.status === "fulfilled" && commissionsRes.value?.commissions) setGrowthCommissions(commissionsRes.value.commissions);
-        if (profileRes.status === "fulfilled" && profileRes.value?.profile) setPayoutProfile(profileRes.value.profile);
-        if (withdrawalsRes.status === "fulfilled" && withdrawalsRes.value?.withdrawals) setWithdrawals(withdrawalsRes.value.withdrawals);
-      });
     } catch {
       setGrowthNotice("暂时无法加载签到与推广信息，请检查网络后重试。");
     }
+  }
+
+  // 2. 展开“邀请推广”时按需懒加载邀请人名册
+  async function loadInviteesIfNeeded() {
+    if (isMockPreview || (GROWTH_CACHE.userId === user.id && GROWTH_CACHE.invitees)) return;
+    try {
+      const res = await fetch("/api/v1/growth/invitees", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json() as { invitees?: InviteeRecord[] };
+        if (data.invitees) {
+          setGrowthInvitees(data.invitees);
+          GROWTH_CACHE.invitees = data.invitees;
+        }
+      }
+    } catch {
+      // 容错处理，不中断界面
+    }
+  }
+
+  // 3. 展开“城市合伙人”时按需懒加载合伙人相关 3 个明细接口
+  async function loadPartnerDetailsIfNeeded() {
+    if (isMockPreview) return;
+    const needCommissions = !(GROWTH_CACHE.userId === user.id && GROWTH_CACHE.commissions);
+    const needProfile = !(GROWTH_CACHE.userId === user.id && GROWTH_CACHE.payoutProfile !== undefined);
+    const needWithdrawals = !(GROWTH_CACHE.userId === user.id && GROWTH_CACHE.withdrawals);
+
+    if (!needCommissions && !needProfile && !needWithdrawals) return;
+
+    try {
+      const tasks: Promise<any>[] = [];
+      if (needCommissions) tasks.push(fetch("/api/v1/growth/commissions", { credentials: "include" }).then((r) => r.ok ? r.json() : null));
+      else tasks.push(Promise.resolve(null));
+
+      if (needProfile) tasks.push(fetch("/api/v1/growth/payout-profile", { credentials: "include", cache: "no-store" }).then((r) => r.ok ? r.json() : null));
+      else tasks.push(Promise.resolve(null));
+
+      if (needWithdrawals) tasks.push(fetch("/api/v1/growth/withdrawals", { credentials: "include" }).then((r) => r.ok ? r.json() : null));
+      else tasks.push(Promise.resolve(null));
+
+      const [commissionsRes, profileRes, withdrawalsRes] = await Promise.allSettled(tasks);
+      if (commissionsRes && commissionsRes.status === "fulfilled" && commissionsRes.value && "commissions" in commissionsRes.value) {
+        const list = (commissionsRes.value as { commissions?: CommissionRecord[] }).commissions ?? [];
+        setGrowthCommissions(list);
+        GROWTH_CACHE.commissions = list;
+      }
+      if (profileRes && profileRes.status === "fulfilled" && profileRes.value && "profile" in profileRes.value) {
+        const prof = (profileRes.value as { profile?: PayoutProfileData }).profile ?? null;
+        setPayoutProfile(prof);
+        GROWTH_CACHE.payoutProfile = prof;
+      }
+      if (withdrawalsRes && withdrawalsRes.status === "fulfilled" && withdrawalsRes.value && "withdrawals" in withdrawalsRes.value) {
+        const withs = (withdrawalsRes.value as { withdrawals?: WithdrawalRecord[] }).withdrawals ?? [];
+        setWithdrawals(withs);
+        GROWTH_CACHE.withdrawals = withs;
+      }
+    } catch {
+      // 容错静默
+    }
+  }
+
+  // 监听折叠展开事件，执行懒加载
+  function toggleSection(section: "checkin" | "invite" | "partner") {
+    setExpandedGrowthSection((current) => {
+      const next = current === section ? null : section;
+      if (next === "invite") {
+        void loadInviteesIfNeeded();
+      } else if (next === "partner") {
+        void loadPartnerDetailsIfNeeded();
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -126,11 +250,14 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       setWithdrawals([]);
       setGrowthNotice("本地预览数据 · 不会发放真实积分");
     } else if (user) {
-      setPayoutProfile(null);
-      setWithdrawals([]);
-      setGrowthInvitees([]);
-      setGrowthCommissions([]);
-      void loadGrowth();
+      if (GROWTH_CACHE.userId !== user.id) {
+        clearGrowthCache();
+        setPayoutProfile(null);
+        setWithdrawals([]);
+        setGrowthInvitees([]);
+        setGrowthCommissions([]);
+      }
+      void loadGrowthOverview();
     }
   }, [user?.id]);
 
@@ -152,9 +279,15 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       });
       const payload = await response.json() as { already?: boolean; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message || "签到失败，请稍后重试");
-      setGrowth((current) => current ? { ...current, checkedInToday: true } : current);
+      setGrowth((current) => {
+        const next = current ? { ...current, checkedInToday: true } : current;
+        if (next && GROWTH_CACHE.userId === user.id) {
+          GROWTH_CACHE.overview = next;
+        }
+        return next;
+      });
       setGrowthNotice(payload.already ? "今天已经签到过了" : "签到成功，已获得 100 积分");
-      await loadGrowth();
+      await loadGrowthOverview(true);
       await onWalletRefresh();
     } catch (cause) {
       setGrowthNotice(cause instanceof Error ? cause.message : "签到失败");
@@ -183,7 +316,8 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       const payload = await response.json() as { error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message || "申请失败");
       setGrowthNotice("城市合伙人资格已开通");
-      await loadGrowth();
+      await loadGrowthOverview(true);
+      await loadPartnerDetailsIfNeeded();
     } catch (cause) {
       setGrowthNotice(cause instanceof Error ? cause.message : "申请失败");
     } finally {
@@ -205,9 +339,12 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
         method: "PUT", credentials: "include", headers: { "content-type": "application/json" },
         body: JSON.stringify({ accountName: payoutName, account: payoutAccount }),
       });
-      const payload = await response.json() as { profile?: typeof payoutProfile; error?: { message?: string } };
+      const payload = await response.json() as { profile?: PayoutProfileData; error?: { message?: string } };
       if (!response.ok || !payload.profile) throw new Error(payload.error?.message || "收款资料保存失败");
       setPayoutProfile(payload.profile);
+      if (GROWTH_CACHE.userId === user.id) {
+        GROWTH_CACHE.payoutProfile = payload.profile;
+      }
       setPayoutName(""); setPayoutAccount(""); setPayoutEditing(false);
       setGrowthNotice("收款资料已加密保存，等待管理员核验通过后即可申请提现。");
     } catch (cause) {
@@ -234,7 +371,12 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       if (!response.ok || !payload.withdrawal) throw new Error(payload.error?.message || "提现申请失败");
       setWithdrawAmount("");
       setGrowthNotice(`提现申请已提交，预计 T+1 工作日到账 ¥${payload.withdrawal.netAmountYuan.toFixed(2)}，请等待审核和人工转账。`);
-      await loadGrowth();
+      if (GROWTH_CACHE.userId === user.id) {
+        GROWTH_CACHE.withdrawals = undefined;
+        GROWTH_CACHE.overview = undefined;
+      }
+      await loadGrowthOverview(true);
+      await loadPartnerDetailsIfNeeded();
     } catch (cause) {
       setGrowthNotice(cause instanceof Error ? cause.message : "提现申请失败");
     } finally {
@@ -526,7 +668,7 @@ export function UserGrowthSection({ user, onWalletRefresh }: UserGrowthSectionPr
       ) : (
         <>
           <p className="header-panel-copy" role="status">{growthNotice || "正在加载签到与推广权益…"}</p>
-          <button className="growth-poster-download" type="button" onClick={() => void loadGrowth()}>重新加载</button>
+          <button className="growth-poster-download" type="button" onClick={() => void loadGrowthOverview(true)}>重新加载</button>
         </>
       )}
     </>
