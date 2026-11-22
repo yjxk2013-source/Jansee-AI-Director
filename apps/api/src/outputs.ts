@@ -5,6 +5,13 @@ import type { AuthStore } from "./auth.js";
 import { authenticatedUser } from "./assets.js";
 import type { ObjectStorage } from "./storage-local.js";
 
+export interface WorkAssetSummary {
+  assetId: string;
+  name?: string;
+  kind?: "image" | "video";
+  size?: number;
+}
+
 export interface OutputRecord {
   id: string;
   jobId: string;
@@ -27,6 +34,7 @@ export interface OutputRecord {
     post_time?: string;
   } | null;
   directorPlan?: Record<string, unknown> | null;
+  assets?: WorkAssetSummary[];
 }
 
 export interface NewOutput {
@@ -94,6 +102,7 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
         title: out.title ?? null,
         publish: out.publish ?? null,
         directorPlan: out.directorPlan ?? null,
+        assets: out.assets ?? [],
         coverUrl: out.coverStorageKey ? `/api/v1/works/${out.id}/cover` : null,
         mimeType: out.mimeType,
         sizeBytes: out.sizeBytes,

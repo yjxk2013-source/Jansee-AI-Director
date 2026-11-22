@@ -16,12 +16,14 @@ interface OutputRow {
   created_at: Date;
   expires_at: Date | null;
   director_plan?: Record<string, unknown> | null;
+  assets?: Array<{ assetId: string; name?: string; kind?: "image" | "video"; size?: number }> | null;
 }
 
 function mapOutput(row: OutputRow): OutputRecord {
   const plan = row.director_plan && typeof row.director_plan === "object" ? row.director_plan as Record<string, unknown> : null;
   const publish = plan?.publish && typeof plan.publish === "object" ? plan.publish as Record<string, string | undefined> : undefined;
   const title = typeof plan?.title === "string" ? plan.title.trim() : undefined;
+  const assets = Array.isArray(row.assets) ? row.assets : undefined;
   return {
     id: row.id,
     jobId: row.job_id,
@@ -39,6 +41,7 @@ function mapOutput(row: OutputRow): OutputRecord {
     ...(title ? { title } : {}),
     ...(publish ? { publish } : {}),
     ...(plan ? { directorPlan: plan } : {}),
+    ...(assets ? { assets } : {}),
   };
 }
 
@@ -89,7 +92,20 @@ export function createPgOutputStore(pool: Pool): OutputStore {
 
     async listUserOutputs(userId: string) {
       const result = await pool.query<OutputRow>(
-        `SELECT o.*, j.director_plan
+        `SELECT o.*, j.director_plan,
+           coalesce((
+             SELECT json_agg(
+               json_build_object(
+                 'assetId', a.id,
+                 'name', a.original_name,
+                 'kind', a.media_type,
+                 'size', a.size_bytes
+               ) ORDER BY ja.sequence_no ASC
+             )
+             FROM generation_job_assets ja
+             JOIN assets a ON a.id = ja.asset_id
+             WHERE ja.job_id = o.job_id
+           ), '[]'::json) AS assets
          FROM generated_outputs o
          LEFT JOIN generation_jobs j ON j.id = o.job_id
          WHERE o.user_id = $1 AND o.status = 'ready' AND o.deleted_at IS NULL AND (o.expires_at IS NULL OR o.expires_at > now())
@@ -101,7 +117,20 @@ export function createPgOutputStore(pool: Pool): OutputStore {
 
     async findOutputById(userId: string, outputId: string) {
       const result = await pool.query<OutputRow>(
-        `SELECT o.*, j.director_plan
+        `SELECT o.*, j.director_plan,
+           coalesce((
+             SELECT json_agg(
+               json_build_object(
+                 'assetId', a.id,
+                 'name', a.original_name,
+                 'kind', a.media_type,
+                 'size', a.size_bytes
+               ) ORDER BY ja.sequence_no ASC
+             )
+             FROM generation_job_assets ja
+             JOIN assets a ON a.id = ja.asset_id
+             WHERE ja.job_id = o.job_id
+           ), '[]'::json) AS assets
          FROM generated_outputs o
          LEFT JOIN generation_jobs j ON j.id = o.job_id
          WHERE o.user_id = $1 AND o.id = $2 AND o.status = 'ready' AND o.deleted_at IS NULL AND (o.expires_at IS NULL OR o.expires_at > now())
