@@ -92,6 +92,16 @@ export function resolveActiveConversationId(conversations: SavedConversation[]):
     : null;
 }
 
+/** 全局最新（最近更新）且有内容的对话 id，用于“打开应用即跳到最新对话”。 */
+export function resolveLatestConversationId(conversations: SavedConversation[]): string | null {
+  let latest: SavedConversation | null = null;
+  for (const conversation of conversations) {
+    if (conversation.messages.length === 0) continue;
+    if (!latest || conversation.updatedAt > latest.updatedAt) latest = conversation;
+  }
+  return latest ? latest.id : null;
+}
+
 export function loadSavedConversations(): SavedConversation[] {
   try {
     const raw = window.localStorage.getItem(CONVERSATION_STORAGE_KEY);

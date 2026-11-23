@@ -11,11 +11,11 @@ import {
 } from "./utils/clientPlatform.js";
 import {
   clearPendingConversationIfMatches,
-  loadActiveConversationId,
   loadPendingConversations,
   loadSavedConversations,
   persistSavedConversations,
   resolveActiveConversationId,
+  resolveLatestConversationId,
   saveActiveConversationId,
   saveConversationToServer,
   savePendingConversation,
@@ -50,7 +50,10 @@ export default function App() {
 
 function ClientApp() {
   const [conversations, setConversations] = useState<SavedConversation[]>(() => loadSavedConversations());
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => loadActiveConversationId());
+  // 打开应用时默认落在全局最新（最近更新）的对话，而非上次停留
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() =>
+    resolveLatestConversationId(loadSavedConversations())
+  );
   const [activePlayingVideoId, setActivePlayingVideoId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [creationScene, setCreationScene] = useState<"online-ecommerce" | "physical-store" | "personal-creation" | "quick-cut">("online-ecommerce");
@@ -108,6 +111,8 @@ function ClientApp() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatStageRef = useRef<HTMLElement>(null);
   const conversationSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // 每次打开应用只强制跳一次“全局最新对话”，避免运行期多端同步把用户拽走
+  const didAutoJumpRef = useRef(false);
 
   const saveAccountConversation = useCallback((conversation: SavedConversation) => {
     const operation = conversationSaveQueueRef.current.catch(() => undefined).then(async () => {
@@ -436,6 +441,12 @@ function ClientApp() {
         setConversations(merged);
         persistSavedConversations(merged);
         setActiveConversationId((currentActiveId) => {
+          // 每次打开应用：首次同步时强制跳到全局最新（最近更新）的对话
+          if (!didAutoJumpRef.current) {
+            didAutoJumpRef.current = true;
+            const latestId = resolveLatestConversationId(merged);
+            if (latestId) return latestId;
+          }
           if (currentActiveId && merged.some((c) => c.id === currentActiveId && c.messages.length > 0)) {
             return currentActiveId;
           }
@@ -581,76 +592,25 @@ function ClientApp() {
   const activeMessages = conversations.find((c) => c.id === activeConversationId)?.messages ?? [];
   const isEmpty = activeMessages.length === 0;
 
-  // 无论 APP、手机浏览器还是 PC：打开或切换对话/产生新消息时，瞬时稳定停留在最新、最下方，杜绝不停上滑
+  // APP、手机浏览器与 PC：打开或切换对话/产生新消息时，一次性精准停在最新一张成片卡片处。
+  // 仅瞬时吸底一次（含下一帧兜底），不再反复校准滚动，避免移动端持续上滑/抖动。
   useEffect(() => {
     const stage = chatStageRef.current;
     if (!stage || isEmpty) return;
 
-    let userInteracted = false;
-    let cancelled = false;
-
-    // 用户一旦触摸或主动滚动，立即移交控制权，坚决不再强行拉回底部或干扰浏览
-    const markInteracted = () => {
-      userInteracted = true;
-    };
-
-    stage.addEventListener("touchstart", markInteracted, { passive: true });
-    stage.addEventListener("touchmove", markInteracted, { passive: true });
-    stage.addEventListener("wheel", markInteracted, { passive: true });
-
-    // 瞬时精准吸底：无滑动动画，直接定位在最新成片或消息处
-    const scrollToBottomInstant = () => {
-      if (cancelled || userInteracted || !stage) return;
-      stage.scrollTop = stage.scrollHeight;
-    };
-
-    // 1. 立即瞬时触底（首屏加载无感，直接在最下方）
-    scrollToBottomInstant();
-
-    // 2. 下一帧确保渲染树首批节点就绪后再次校准
-    const rafId = requestAnimationFrame(() => {
-      scrollToBottomInstant();
-    });
-
-    // 3. 极速异步校验（应对移动端字体或卡片微缩图初次计算，120ms 时校准一次）
-    const t1 = setTimeout(scrollToBottomInstant, 120);
-
-    // 4. 监听内容区（只监听内部 .workbench-stream，严禁直接监听 stage 自身以防移动端视口工具栏伸缩死循环）
-    // 仅在用户未主动交互、且内容增大幅度显著（例如首屏封面或多素材图片加载撑大 > 20px）时吸底
-    let ro: ResizeObserver | null = null;
-    let lastHeight = stage.scrollHeight;
-
-    if (typeof ResizeObserver !== "undefined") {
-      const streamEl = stage.querySelector(".workbench-stream");
-      if (streamEl) {
-        ro = new ResizeObserver(() => {
-          if (cancelled || userInteracted || !stage) return;
-          const currentScrollHeight = stage.scrollHeight;
-          if (currentScrollHeight - lastHeight > 20) {
-            lastHeight = currentScrollHeight;
-            stage.scrollTop = stage.scrollHeight;
-          }
-        });
-        ro.observe(streamEl);
+    const pinToLatestCard = () => {
+      const cards = stage.querySelectorAll(".workbench-card");
+      const lastCard = cards.length > 0 ? (cards[cards.length - 1] as HTMLElement) : null;
+      if (lastCard && typeof lastCard.scrollIntoView === "function") {
+        lastCard.scrollIntoView({ block: "end", inline: "nearest" });
+      } else {
+        stage.scrollTop = stage.scrollHeight;
       }
-    }
-
-    // 600ms 保护期过后彻底释放一切自动吸底监听，完全交还给用户自然浏览
-    const settleTimer = setTimeout(() => {
-      cancelled = true;
-      ro?.disconnect();
-    }, 600);
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-      clearTimeout(t1);
-      clearTimeout(settleTimer);
-      stage.removeEventListener("touchstart", markInteracted);
-      stage.removeEventListener("touchmove", markInteracted);
-      stage.removeEventListener("wheel", markInteracted);
-      ro?.disconnect();
     };
+
+    pinToLatestCard();
+    const rafId = requestAnimationFrame(pinToLatestCard);
+    return () => cancelAnimationFrame(rafId);
   }, [activeConversationId, activeMessages.length, isEmpty]);
 
   return (

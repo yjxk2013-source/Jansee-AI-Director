@@ -53,3 +53,4 @@ describe("PublishKit title separation & anti-fallback", () => {
     assert.equal(sanitized.cover_title, "2块钱一包的酸辣粉丝！打工人深夜必囤");
   });
 });
+
