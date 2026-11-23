@@ -220,6 +220,15 @@ export interface ServerHealthData {
     processHeapUsedBytes: number;
   };
   disk: { totalBytes: number; freeBytes: number; usedBytes: number; usedPercent: number | null } | null;
+  cloudStorage?: {
+    todayCdnBytes: number;
+    todayDirectCosBytes: number;
+    todayCdnOriginBytes: number;
+    accountBalanceYuan: number | null;
+    estimatedCostTodayYuan: number;
+    isDirectCosLeak: boolean;
+    sampledAt: string;
+  };
   mediaStorage?: {
     driver: string;
     bucket: string | null;

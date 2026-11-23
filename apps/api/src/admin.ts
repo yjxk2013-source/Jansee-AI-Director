@@ -14,6 +14,7 @@ import {
   testFfmpegExecutable,
   queryMediaStorageStats,
 } from "./services/admin-metrics.js";
+import { fetchCloudStorageMetrics } from "./services/admin-cloud-storage.js";
 import {
   fetchAdminOverviewStats,
   fetchAdminUsersData,
@@ -172,6 +173,17 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     const mediaConfigured = options.health?.mediaConfigured ?? false;
     const paymentHealthy = options.health?.paymentReady ?? false;
 
+    const cloudStorageConfig = {
+      secretId: process.env.COS_SECRET_ID || "",
+      secretKey: process.env.COS_SECRET_KEY || "",
+      bucket: process.env.COS_BUCKET || "",
+      region: process.env.COS_REGION || "ap-guangzhou",
+      cdnDomain: process.env.COS_CDN_DOMAIN?.trim(),
+    };
+    const cloudStorage = (cloudStorageConfig.secretId && cloudStorageConfig.secretKey && cloudStorageConfig.bucket)
+      ? await fetchCloudStorageMetrics(cloudStorageConfig).catch(() => undefined)
+      : undefined;
+
     return reply.send({
       sampledAt: new Date().toISOString(),
       host: { platform: os.platform(), architecture: os.arch(), hostname: os.hostname(), cpuCores: os.availableParallelism(), uptimeSeconds: Math.floor(os.uptime()) },
@@ -183,6 +195,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
       },
       disk,
       mediaStorage: mediaStats,
+      cloudStorage,
       services: {
         api: { status: "healthy", detail: "管理 API 正在响应" },
         database: { status: !options.pool ? "not_configured" : databaseHealthy ? "healthy" : "unavailable", detail: !options.pool ? "尚未配置 V4 数据库连接" : databaseHealthy ? "数据库连接正常" : "数据库连接失败" },
@@ -194,6 +207,23 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
         payment: { status: paymentHealthy ? "healthy" : "unavailable", detail: paymentHealthy ? "支付服务已通过启动配置检查" : "支付服务尚未就绪" },
       },
     });
+  });
+
+  app.get("/api/v1/admin/cloud-storage", async (request, reply) => {
+    const operator = await verifyAdminAuth(request, reply);
+    if (!operator) return;
+    const cloudStorageConfig = {
+      secretId: process.env.COS_SECRET_ID || "",
+      secretKey: process.env.COS_SECRET_KEY || "",
+      bucket: process.env.COS_BUCKET || "",
+      region: process.env.COS_REGION || "ap-guangzhou",
+      cdnDomain: process.env.COS_CDN_DOMAIN?.trim(),
+    };
+    if (!cloudStorageConfig.secretId || !cloudStorageConfig.secretKey || !cloudStorageConfig.bucket) {
+      return reply.code(400).send({ error: { code: "COS_NOT_CONFIGURED", message: "COS 存储未配置" } });
+    }
+    const metrics = await fetchCloudStorageMetrics(cloudStorageConfig);
+    return reply.send(metrics);
   });
 
   app.get("/api/v1/admin/site-analytics", async (request, reply) => {

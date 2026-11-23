@@ -1,4 +1,5 @@
 import type { ServerHealthData } from "../../../types/admin";
+import { AdminCloudStorageCard } from "./AdminCloudStorageCard";
 
 interface AdminServerTabProps {
   serverHealth: ServerHealthData | null;
@@ -77,6 +78,8 @@ export function AdminServerTab({
                   </small>
                 </article>
               </section>
+
+              <AdminCloudStorageCard cloudStorage={serverHealth?.cloudStorage} />
 
               <section className="admin-server-panel">
                 <div className="admin-server-panel-head"><div><span className="admin-eyebrow">RESOURCE TREND / LIVE SESSION</span><h3>资源使用趋势</h3><p>每 15 秒采集一次；页面打开期间保留最近 24 个采样点。</p></div><span className="admin-server-auto">自动刷新 · 15 秒</span></div>
