@@ -129,7 +129,7 @@ export function revealFromTime(total: number, elapsedMs: number, reducedMotion: 
  */
 export function calculateDarkroomDeveloping(
   elapsedMs: number,
-  realProgress: number,
+  _realProgress: number,
   settled: boolean,
   status?: string,
 ): {
@@ -137,6 +137,7 @@ export function calculateDarkroomDeveloping(
   opacity: number;
   label: string;
 } {
+  // 1. 成片一旦就位（提前交付或滞后完成到达），瞬时拉满至 100%
   if (settled || status === "completed") {
     return {
       progress: 100,
@@ -145,20 +146,26 @@ export function calculateDarkroomDeveloping(
     };
   }
 
-  let timeProgress = 5;
-  if (elapsedMs <= 5000) {
-    timeProgress = 5 + (elapsedMs / 5000) * 20;
+  // 2. 纯 35 秒平滑演进曲线（完全屏蔽真实进度跳变，0~35秒从 0% 平滑过渡至 95%）
+  let timeProgress = 0;
+  if (elapsedMs <= 0) {
+    timeProgress = 0;
+  } else if (elapsedMs <= 5000) {
+    // 0 ~ 5 秒：0% -> 25% 轮廓显影
+    timeProgress = (elapsedMs / 5000) * 25;
   } else if (elapsedMs <= 28000) {
+    // 5 ~ 28 秒：25% -> 88% 色彩与细节显影
     timeProgress = 25 + ((elapsedMs - 5000) / 23000) * 63;
   } else if (elapsedMs <= 35000) {
+    // 28 ~ 35 秒：88% -> 95% 饱和定影收敛
     timeProgress = 88 + ((elapsedMs - 28000) / 7000) * 7;
   } else {
+    // 超过 35 秒：滞后时平稳保持在 95% 软着陆，等待成片到达
     timeProgress = 95;
   }
 
-  const boundedReal = Math.min(95, Math.max(0, realProgress));
-  const effectiveProgress = Math.min(95, Math.max(timeProgress, boundedReal));
-  // 底片显影物理透明度：严格与有效制作进度百分比联动（0 到 1.0），完美呈现暗房相纸从暗黑底片逐渐定影全亮的仪式感
+  const effectiveProgress = Math.min(95, Math.max(0, timeProgress));
+  // 透明度与进度严格 0~1.0 物理同步
   const opacity = Math.max(0, Math.min(1.0, effectiveProgress / 100));
 
   let label = `暗房多轨显影中 (${Math.round(effectiveProgress)}%)`;
