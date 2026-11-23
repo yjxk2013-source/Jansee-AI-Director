@@ -113,6 +113,8 @@ function ClientApp() {
   const conversationSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   // 每次打开应用只强制跳一次“全局最新对话”，避免运行期多端同步把用户拽走
   const didAutoJumpRef = useRef(false);
+  // 工作台是否保持“贴住最新一张成片卡片”。用户一旦自己往上翻看历史即置为 false，不再打扰。
+  const stickToLatestRef = useRef(true);
 
   const saveAccountConversation = useCallback((conversation: SavedConversation) => {
     const operation = conversationSaveQueueRef.current.catch(() => undefined).then(async () => {
@@ -592,26 +594,47 @@ function ClientApp() {
   const activeMessages = conversations.find((c) => c.id === activeConversationId)?.messages ?? [];
   const isEmpty = activeMessages.length === 0;
 
-  // APP、手机浏览器与 PC：打开或切换对话/产生新消息时，一次性精准停在最新一张成片卡片处。
-  // 仅瞬时吸底一次（含下一帧兜底），不再反复校准滚动，避免移动端持续上滑/抖动。
+  // APP、手机浏览器与 PC：打开或切换对话时，把工作台停到最新一张成片卡片处。
+  // 手机上布局与封面往往比 PC 晚一步就绪，所以不能“滚一次就撒手”：
+  // 只要用户仍停在底部，内容高度一变（卡片/封面/字体晚到）就继续贴住最新卡片；
+  // 一旦用户自己往上翻看历史，立即放手，绝不再把用户拽回底部。
   useEffect(() => {
     const stage = chatStageRef.current;
     if (!stage || isEmpty) return;
 
+    stickToLatestRef.current = true;
+
+    const isAtBottom = () => stage.scrollHeight - stage.scrollTop - stage.clientHeight <= 48;
     const pinToLatestCard = () => {
-      const cards = stage.querySelectorAll(".workbench-card");
-      const lastCard = cards.length > 0 ? (cards[cards.length - 1] as HTMLElement) : null;
-      if (lastCard && typeof lastCard.scrollIntoView === "function") {
-        lastCard.scrollIntoView({ block: "end", inline: "nearest" });
-      } else {
-        stage.scrollTop = stage.scrollHeight;
-      }
+      if (stickToLatestRef.current) stage.scrollTop = stage.scrollHeight;
     };
+    const handleScroll = () => {
+      stickToLatestRef.current = isAtBottom();
+    };
+
+    stage.addEventListener("scroll", handleScroll, { passive: true });
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      const stream = stage.querySelector(".workbench-stream");
+      observer = new ResizeObserver(() => requestAnimationFrame(pinToLatestCard));
+      observer.observe(stage);
+      if (stream) observer.observe(stream);
+    }
 
     pinToLatestCard();
     const rafId = requestAnimationFrame(pinToLatestCard);
-    return () => cancelAnimationFrame(rafId);
-  }, [activeConversationId, activeMessages.length, isEmpty]);
+    const settleTimer = window.setTimeout(pinToLatestCard, 120);
+    const lateTimer = window.setTimeout(pinToLatestCard, 400);
+
+    return () => {
+      stage.removeEventListener("scroll", handleScroll);
+      observer?.disconnect();
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(lateTimer);
+    };
+  }, [activeConversationId, isEmpty]);
 
   return (
     <main
