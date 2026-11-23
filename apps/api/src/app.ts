@@ -97,6 +97,9 @@ export function buildApp(config: AppConfig): FastifyInstance {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
           "img-src": ["'self'", "data:", "blob:", "https://*.myqcloud.com", "https://*.jansee.cn"],
           "media-src": ["'self'", "data:", "blob:", "https://*.myqcloud.com", "https://*.jansee.cn"],
+          // 允许前端把 CDN 直链成片拉取到本机 CacheStorage（设备端回看缓存），
+          // 与 media-src 同源放行规则保持一致。
+          "connect-src": ["'self'", "https://*.myqcloud.com", "https://*.jansee.cn"],
         },
       },
     }),

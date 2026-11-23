@@ -260,10 +260,24 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       catch { /* 统计失败不影响作品下载 */ }
     }
 
-    // 同一地址制作与下载专项优化：
-    // 用户制作成片后主要在本机/同网络/同部署地址下即时预览与下载，成片极少分散到外部其它地址。
-    // 优先尝试从本地磁盘热缓存（0ms 延时、0 次 302 跨域握手、0 CDN 回源等待）同源直接流式传输或下载；
-    // 仅当本地物理文件不存在时，才回退至远端 CDN / COS 直链进行 302 重定向兜底。
+    // 端到端创作·并发观看专项优化（卸载服务器出口瓶颈）：
+    // 成片播放与下载一律优先 302 重定向至腾讯云 CDN 边缘节点（cdn.jansee.cn），
+    // 把最重的视频分发流量从服务器 3Mbps 出口卸载给 CDN，彻底消除多人同时观看时的卡顿；
+    // 仅当远端对象存储不可用（本地存储驱动 / 离线开发环境）时，才回退本地磁盘同源直发的兜底路径。
+    try {
+      const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
+        ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
+        ttlSeconds: isDownload ? 600 : 3600,
+      });
+      if (typeof signedUrl === "string" && (signedUrl.startsWith("http://") || signedUrl.startsWith("https://"))) {
+        reply.header("cache-control", "private, no-cache");
+        return reply.redirect(signedUrl, 302);
+      }
+    } catch (err) {
+      console.warn(`[outputs] CDN 直链签名失败，回退本地磁盘直发 work=${id}:`, err instanceof Error ? err.message : String(err));
+    }
+
+    // 本地存储兜底：同源磁盘直发（含 HTTP 206 Range 分片，供本地开发 / 未配置 CDN 环境使用）。
     let filePath: string | null = null;
     let fileSize = 0;
     try {
@@ -278,14 +292,6 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
     }
 
     if (!filePath) {
-      const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
-        ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
-        ttlSeconds: isDownload ? 600 : 3600,
-      });
-      if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
-        reply.header("cache-control", "private, no-cache");
-        return reply.redirect(signedUrl, 302);
-      }
       return reply.code(404).send({ error: { code: "WORK_FILE_NOT_FOUND", message: "作品文件不可用" } });
     }
     const rangeHeader = request.headers.range;

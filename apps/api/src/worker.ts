@@ -493,11 +493,21 @@ export async function processJob(
       });
     }
 
-    // 针对端到端视频创作特性：成片完成后立即向腾讯云 CDN 触发边缘预热，用户点击播放即刻命中高速缓存
+    // 针对端到端视频创作特性：成片完成后立即向腾讯云 CDN 触发边缘预热，用户点击播放即刻命中高速缓存。
+    // 预热 URL 与实际播放 302 直链完全一致（含 Type A 防盗链签名），
+    // 确保 CDN 预热写回的缓存对象与用户真实请求完全同一份，杜绝"预热白推"。
     const cdnDomain = process.env.COS_CDN_DOMAIN?.trim();
     if (cdnDomain) {
-      const urlsToPrewarm = outputsToPersist.map((out) => `https://${cdnDomain}/${out.storageKey}`);
-      prewarmCdnUrls(urlsToPrewarm).catch(() => undefined);
+      try {
+        const urlsToPrewarm = (
+          await Promise.all(
+            outputsToPersist.map((out) => Promise.resolve(storage.createSignedUrl(out.storageKey, { ttlSeconds: 3600 }))),
+          )
+        ).filter((u): u is string => typeof u === "string" && u.startsWith("https://"));
+        if (urlsToPrewarm.length) prewarmCdnUrls(urlsToPrewarm).catch(() => undefined);
+      } catch (prewarmErr) {
+        console.warn(`[Worker | 任务:${job.id.slice(0, 8)}] CDN 预热签名生成失败:`, prewarmErr instanceof Error ? prewarmErr.message : String(prewarmErr));
+      }
     }
 
     if (activeJob.directorPlan) {

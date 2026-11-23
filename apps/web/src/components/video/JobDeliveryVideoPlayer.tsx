@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JobDeliveryVideoPlayerProps } from "../../types/client";
 import { useCachedMediaUrl } from "../../utils/mediaCache.js";
+import { useCachedVideoSrc } from "../../utils/videoCache.js";
 
 export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: JobDeliveryVideoPlayerProps) {
   const isPlaying = activeId === workId;
@@ -69,6 +70,9 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
   const cachedCover = useCachedMediaUrl(coverUrl);
   const effectiveCover = cachedCover || coverUrl;
 
+  // 成片设备端缓存：命中则本地秒开；用户看过一次后自动落盘，后续回看零流量、零卡顿。
+  const { videoSrc, persist } = useCachedVideoSrc(streamUrl, isPlaying && isActuallyPlaying);
+
   const handleTriggerPlay = () => {
     onPlay(workId);
     if (videoRef.current) {
@@ -76,14 +80,23 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
     }
   };
 
+  // 用户"确实看过"（播完或已播放 ≥5 秒）才把成片落盘到本机，避免误缓存无人观看的成片。
+  const persistIfWatched = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.ended || video.currentTime >= 5) void persist();
+  };
+
   const handleVideoEnded = () => {
     setIsActuallyPlaying(false);
     onPause();
+    persistIfWatched();
   };
 
   const handleVideoPause = () => {
     setIsActuallyPlaying(false);
     onPause();
+    persistIfWatched();
   };
 
   return (
@@ -92,11 +105,11 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
       <video
         ref={videoRef}
         className="job-delivery-video"
-        src={streamUrl}
+        src={videoSrc}
         poster={coverFailed && !capturedCover ? undefined : (coverFailed && capturedCover ? capturedCover : effectiveCover)}
         controls={isPlaying && isActuallyPlaying}
         playsInline
-        preload="auto"
+        preload={isPlaying ? "auto" : "none"}
         onLoadedData={handleVideoLoadedData}
         onPause={handleVideoPause}
         onEnded={handleVideoEnded}

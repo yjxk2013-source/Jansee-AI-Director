@@ -1,10 +1,11 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间**：2026-11-23 22:10 (UTC+8) - 全网正式上线 v4.1.11「手机端打开/登录后稳稳贴住最新成片卡片，不再滑回最上方最旧」（Zero-Downtime Hot Reload，仅重建 `deploy-web` 镜像）。
-> 1. **问题根因**：v4.1.10 的「一次性 `scrollIntoView`」在手机上会落空——手机布局/封面比首帧晚就绪，那一滚算在未定型的高度上，回落到顶部（最旧内容），之后无人再把画面拉回最新卡片；PC 正常、仅手机复现，清缓存无效（问题在逻辑，不在缓存）。
-> 2. **修复（`apps/web/src/App.tsx`）**：改为「贴住最新卡片」——直接 `stage.scrollTop = stage.scrollHeight` 落到最新卡片，配合 `ResizeObserver`（同时观察 `.chat-stage` 与 `.workbench-stream`）+ rAF / 120ms / 400ms 兜底；只要用户仍停在底部，内容高度一变就继续贴住；通过 `scroll` 事件按「距底 ≤48px」判定并维护 `stickToLatestRef`，用户一旦上翻看历史立即松手，绝不再把用户拽回底部。
-> 3. **发布与上线**：版本 4.1.10 -> 4.1.11（根、`@jansee/web`、`@jansee/api` 三处 package.json）；分支 `fix/mobile-pin-to-latest-card` 提交 `b443e92`，打标签 `v4.1.11`，已推送 gitee-v4 / gitee-show / github-v4 / github-show 四个镜像仓库；生产仅重建 `deploy-web` 镜像并 `up -d --no-deps web`，线上 bundle `assets/index-BU1EI7xE.js`（md5 `deab20111b49d58acff09cd7ddaf51e4`）与本地一致，`jansee.cn` 200 OK，web/api/postgres 三容器健康，构建缓存已 `prune`（磁盘 13G/40G）。
-> 4. **前序版本**：2026-11-23 21:20 v4.1.10（打开强制落最新对话 + 一次性吸底，其移动端落空已被 v4.1.11 修正）；2026-11-23 20:30（短视频宣发套件发布标题与设计卡标题彻底独立隔离）；2026-11-23 17:00（同一地址同源 206 分片秒开直读与本地热缓存留存）；2026-11-23 16:45（暗房显影物理透明度 0 到 100 恢复）。
+> **更新时间**：2026-11-24 (UTC+8) - 全网正式上线 v4.1.12「成片播放/下载统一切 302 至 CDN 直链，彻底卸载服务器单机 3Mbps 出口瓶颈；设备端成片缓存实现回看零流量；前端按需预取杜绝一屏多卡偷跑」（重建 `deploy-api` + `deploy-web` 两个镜像）。
+> 1. **问题根因**：成片播放走 `apps/api/src/outputs.ts` 的「本地磁盘同源直发」（`createReadStream` + 206 分片）——因上传 COS 后在服务器保留本地热副本，CDN 几乎永不启用，全部观看流量压在服务器单机 3Mbps 出口（≈375KB/s）；单条 1080p 竖版成片即撑满，多人并发或反复观看必然卡顿。
+> 2. **后端修复（核心）**：`outputs.ts` 的 `streamOrDownload` 改为**优先 302 重定向至腾讯云 CDN 鉴权直链**（`https://cdn.jansee.cn`），本地磁盘直发降级为「未配置 CDN」时的兜底；`worker.ts` 成片预热 URL 改为**带 Type A 防鉴权签名**，与实际播放直链完全一致，杜绝"预热白推"；`app.ts` CSP 放行 `connect-src` 到 `*.jansee.cn` / `*.myqcloud.com`（供设备端缓存取件）。
+> 3. **前端优化**：新增 `apps/web/src/utils/videoCache.ts`——成片落设备端 CacheStorage（10 条上限 / 30 天过期 / 仅"看过 ≥5s 或播完"才落盘），回看直接走本机 ObjectURL，**0 流量 0 卡顿**；`JobDeliveryVideoPlayer.tsx` / `WorksPanel.tsx` 的 `preload` 由全量 `auto`/`metadata` 改为**仅激活卡片加载**，关掉一屏多卡抢带宽的偷跑。
+> 4. **上线配套（腾讯云必配）**：CDN 需开「忽略参数缓存」（否则签名每次变化导致缓存全落空、等于每次回源）；建议 CDN 放行 CORS `https://jansee.cn`（否则设备端"零流量回看"取不到文件，但播放流畅度不受影响）。
+> 5. **前序版本**：2026-11-23 22:10 v4.1.11（手机端打开贴住最新成片卡片，不再滑回最旧）；2026-11-23 21:20 v4.1.10；2026-11-23 17:00（同一地址同源 206 分片秒开直读与本地热缓存留存）；2026-11-23 16:45（暗房显影物理透明度 0 到 100 恢复）。
 
 ---
 

@@ -3,6 +3,7 @@ import type { AuthUser, SavedConversation, WorkItem } from "../../types/client.j
 import { NOTICE_DURATION_MS, useTimedNotice } from "../../utils/clientPlatform.js";
 import { getLocalCache, getWorksCacheKey, setLocalCache } from "../../utils/offlineCache.js";
 import { getOrCacheMediaUrl, preloadMediaUrls, useCachedMediaUrl } from "../../utils/mediaCache.js";
+import { useCachedVideoSrc } from "../../utils/videoCache.js";
 import { PublishStudio, type PublishKit } from "./PublishStudio.js";
 
 function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[]): PublishKit | null {
@@ -106,6 +107,17 @@ function WorkDeliveryCardItem({
   const effectiveCover = cachedCover || work.coverUrl || coverDataUrls[work.id];
   const [isActuallyPlaying, setIsActuallyPlaying] = useState(false);
 
+  // 成片设备端缓存：命中则本地秒开；用户看过一次后自动落盘，后续回看零流量、零卡顿。
+  const streamUrl = `/api/v1/works/${work.id}/stream`;
+  const { videoSrc, persist } = useCachedVideoSrc(streamUrl, activePlayWorkId === work.id && isActuallyPlaying);
+
+  // 用户"确实看过"（播完或已播放 ≥5 秒）才把成片落盘到本机，避免误缓存无人观看的成片。
+  const persistIfWatched = () => {
+    const video = videoRefs.current[work.id];
+    if (!video) return;
+    if (video.ended || video.currentTime >= 5) void persist();
+  };
+
   useEffect(() => {
     if (activePlayWorkId !== work.id) {
       setIsActuallyPlaying(false);
@@ -135,10 +147,10 @@ function WorkDeliveryCardItem({
       >
         <video
           ref={(el) => { videoRefs.current[work.id] = el; }}
-          src={`/api/v1/works/${work.id}/stream`}
+          src={videoSrc}
           controls={activePlayWorkId === work.id && isActuallyPlaying}
           playsInline
-          preload="metadata"
+          preload={activePlayWorkId === work.id ? "auto" : "none"}
           poster={effectiveCover || undefined}
           aria-label={titleLabel}
           onPlaying={() => setIsActuallyPlaying(true)}
@@ -163,10 +175,12 @@ function WorkDeliveryCardItem({
           onEnded={() => {
             setIsActuallyPlaying(false);
             setActivePlayWorkId(null);
+            persistIfWatched();
           }}
           onPause={() => {
             setIsActuallyPlaying(false);
             if (activePlayWorkId === work.id) setActivePlayWorkId(null);
+            persistIfWatched();
           }}
         />
         <div
