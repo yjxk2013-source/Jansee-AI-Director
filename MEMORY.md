@@ -1,16 +1,13 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间**：2026-11-23 20:30 (UTC+8) - 全网正式上线「短视频宣发套件发布标题与设计卡标题彻底独立隔离」（Zero-Downtime Hot Reload）。
-> 1. **发布标题与设计卡标题彻底区隔（`packages/publish-kit/index.js`）**：
->    - 废除陈旧的 `image-film` 场景强制抹空 `cover_title` 限制，全创作场景 100% 保留封面大字引流标题；
->    - 正式纳入 `publish.title`（10~28 字社媒发布标题），对大模型偶发偷懒将发布标题写成 4 字设计卡视觉短标题的情况执行自动扩展升级，结合文案与口播台词生成网感爆款标题；
-> 2. **Worker 交付层补齐（`apps/api/src/worker.ts`）**：
->    - 修复原交付物漏存 `publish.title` 的缺陷，确保社媒发片标题、封面引流标题原子化持久入库；
-> 3. **导演后处理与前端防重兜底（`apps/api/src/director.ts` & `WorksPanel.tsx`）**：
->    - `ensureValidCoverTitle` 与前端 `resolvePublishForWork` 增加防重与防退化逻辑，杜绝社媒发片标题回退为设计卡视觉短语；
-> 4. **数据库历史数据修复与云端热重载验证**：
->    - 线上 `ebc33af1-3a52-40e6-b0ea-704cad7deaee` 等成片已热修补齐 `publish.title`，两端静态与容器热更新上线验证完毕，全链路 200 OK。
-> 5. **前序平滑部署版本**：2026-11-23 17:00（同一地址同源 206 分片秒开直读与本地热缓存留存）；2026-11-23 16:45（暗房显影物理透明度 0 到 100 恢复）。
+> **更新时间**：2026-11-23 21:20 (UTC+8) - 全网正式上线 v4.1.10「打开应用强制落在全局最新对话 + 一次性精准停在最新成片卡片」（Zero-Downtime Hot Reload，仅重建 `deploy-web` 镜像）。
+> 1. **打开应用即落最新对话（`apps/web/src/utils/conversationStorage.ts` & `App.tsx`）**：
+>    - 新增 `resolveLatestConversationId()` 取全局最近更新且有内容的对话；`activeConversationId` 初始值改为落在该最新对话，且首次同步用 `didAutoJumpRef` 只强制跳一次，避免运行期 4 秒心跳多端同步把用户拽走。
+> 2. **一次性精准吸底（`apps/web/src/App.tsx`）**：
+>    - 彻底删除原多阶段 `setTimeout` 校准 + `ResizeObserver` 高度跟随 + `touchmove/wheel` 交互检测的滚动 effect（约 80 行），改为打开/切换对话/新增消息时仅瞬时 `scrollIntoView` 到最新一张 `.workbench-card`（含下一帧 `requestAnimationFrame` 兜底），根治移动端反复上滑到顶的抖动。
+> 3. **死代码清理**：删除零引用打字机组件 `apps/web/src/components/common/TypewriterText.tsx`。
+> 4. **发布与上线**：版本 4.1.9 -> 4.1.10（根、`@jansee/web`、`@jansee/api` 三处 package.json）；分支 `fix/mobile-pin-to-latest-card` 提交 `e504bdd`，打标签 `v4.1.10`，已推送 gitee-v4 / gitee-show / github-v4 / github-show 四个镜像仓库；生产仅重建 `deploy-web` 镜像并 `up -d --no-deps web`，线上 bundle `assets/index-B8DJ9bXG.js`（md5 `f267f5bee987c8a99fba1ccbd662646e`）与本地一致，`jansee.cn` 200 OK，web/api/postgres 三容器健康。
+> 5. **前序平滑部署版本**：2026-11-23 20:30（短视频宣发套件发布标题与设计卡标题彻底独立隔离）；2026-11-23 17:00（同一地址同源 206 分片秒开直读与本地热缓存留存）；2026-11-23 16:45（暗房显影物理透明度 0 到 100 恢复）。
 
 ---
 
@@ -71,10 +68,9 @@
   - `components/billing/RechargePanel.tsx`：算力充值、会员方案、加油包直购（240 行）。
   - `components/billing/BillingHistoryPanel.tsx`：订单历史与积分流水对账（220 行）。
   - `components/chat/SidebarDrawer.tsx`：左侧导航抽屉与最近作品快捷查看条（167 行）。
-- **死代码与废弃孤儿文件 100% 清除（Zero Dead Code）**：
-  - 彻底从磁盘删除已废弃的旧版走带手稿代码：`Filmstrip.tsx` (254 行) 与 `filmstrip-logic.ts` (113 行)。
-  - 彻底删除已废弃的打字机组件：`TypewriterText.tsx` (34 行) 与对应测试 `filmstrip-logic.test.ts` (113 行)。
-  - 全工程不存在任何未被引用的死代码或重复函数。
+- **死代码与废弃孤儿文件清理（Zero Dead Code）**：
+  - 已彻底从磁盘删除零引用的打字机组件：`apps/web/src/components/common/TypewriterText.tsx`。
+  - `apps/web/src/Filmstrip.tsx` 与 `apps/web/src/filmstrip-logic.ts` 仍为**在用存活代码**（`components/chat/WorkbenchStage.tsx` 导入 `Filmstrip` 渲染分镜走带缩略图），并非死代码，严禁误删。
 - **管理控制台解耦与全量代码冻结（`apps/web/src/AdminConsole.tsx` 及相关）**：
   - 从原先 1,480 行削减至 **790 行**轻量调度容器（减少 46.6%）。
   - 7 大 Tab 及核心指标条全面拆分为独立子模块（位于 `apps/web/src/components/admin/tabs/`，单文件 100~300 行）。
