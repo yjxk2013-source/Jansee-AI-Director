@@ -28,19 +28,34 @@ function resolvePublishForWork(work: WorkItem, conversations: SavedConversation[
     publishTitle = base.title.trim();
   } else if (typeof base?.cover_title === "string" && base.cover_title.trim()) {
     publishTitle = base.cover_title.trim();
-  } else {
-    const workPlan = work.directorPlan as Record<string, unknown> | undefined;
-    if (typeof workPlan?.title === "string" && workPlan.title.trim()) publishTitle = workPlan.title.trim();
-    if (!publishTitle && typeof work.title === "string" && work.title.trim()) publishTitle = work.title.trim();
-    if (!publishTitle) {
-      for (const conversation of conversations) {
-        const match = conversation.messages.find((m) => m.jobWorkId === work.id || m.jobId === work.jobId);
-        const plan = match?.jobDirectorPlan as Record<string, unknown> | undefined;
-        if (typeof plan?.title === "string" && plan.title.trim()) {
-          publishTitle = plan.title.trim();
-          break;
-        }
+  }
+
+  // 获取成片设计卡视觉短标题
+  let visualTitle = "";
+  const workPlan = work.directorPlan as Record<string, unknown> | undefined;
+  if (typeof workPlan?.title === "string" && workPlan.title.trim()) visualTitle = workPlan.title.trim();
+  if (!visualTitle && typeof work.title === "string" && work.title.trim()) visualTitle = work.title.trim();
+  if (!visualTitle) {
+    for (const conversation of conversations) {
+      const match = conversation.messages.find((m) => m.jobWorkId === work.id || m.jobId === work.jobId);
+      const plan = match?.jobDirectorPlan as Record<string, unknown> | undefined;
+      if (typeof plan?.title === "string" && plan.title.trim()) {
+        visualTitle = plan.title.trim();
+        break;
       }
+    }
+  }
+
+  // 若社媒发布标题缺失或误退化为设计卡 4~6 字短标题，优先从宣发文案(caption)第一句提炼，杜绝社媒发片标题与视觉短标题混同
+  if (!publishTitle || (visualTitle && publishTitle === visualTitle && publishTitle.length < 8)) {
+    if (typeof base?.caption === "string" && base.caption.trim()) {
+      const firstSentence = base.caption.trim().split(/[#\n。！!？?]/)[0]?.trim() || "";
+      if (firstSentence.length >= 8 && firstSentence.length <= 32) {
+        publishTitle = firstSentence;
+      }
+    }
+    if (!publishTitle && visualTitle) {
+      publishTitle = `${visualTitle} · 商业视频精选`;
     }
   }
 

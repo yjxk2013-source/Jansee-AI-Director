@@ -508,9 +508,15 @@ export async function processJob(
         scene,
         title: String(plan.title ?? "").trim().slice(0, 24),
         subtitle: String(plan.subtitle ?? "").trim().slice(0, 16),
-        coverTitleRequired: job.mode !== "image-film",
+        coverTitleRequired: true,
       });
-      const publishDeliverables = { caption: publish.caption, cover_title: publish.cover_title, pinned_comment: publish.pinned_comment, post_time: publish.post_time };
+      const publishDeliverables = {
+        title: publish.title,
+        caption: publish.caption,
+        cover_title: publish.cover_title,
+        pinned_comment: publish.pinned_comment,
+        post_time: publish.post_time,
+      };
       const previousTelemetry = (plan._telemetry as Record<string, unknown> | undefined) ?? {};
       await jobStore.updateDirectorPlan?.(job.userId, job.id, {
         ...plan,

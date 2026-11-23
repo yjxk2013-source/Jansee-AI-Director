@@ -69,7 +69,7 @@ export function AdminCloudStorageCard({ cloudStorage }: AdminCloudStorageCardPro
             </small>
           </span>
           <strong>{formatBytes(todayCdnBytes)}</strong>
-          
+
           {cdnPackage && (
             <div style={{ marginTop: "8px", marginBottom: "4px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--admin-muted, #8e8e93)", marginBottom: "4px" }}>

@@ -83,6 +83,18 @@ function fallbackCoverTitle(title, scene) {
   return (t ? `${t}！高性价比好物亲测推荐，闭眼冲不踩雷` : '超值好物亲测推荐，闭眼冲不踩雷').slice(0, 32);
 }
 
+function fallbackPublishTitle({ scene, title, coverTitle, caption }) {
+  if (coverTitle && coverTitle.length >= 8) return coverTitle.slice(0, 50);
+  if (caption) {
+    const firstSentence = caption.split(/[#\n。！!？?]/)[0]?.trim() || '';
+    if (firstSentence.length >= 8 && firstSentence.length <= 32) return firstSentence;
+  }
+  const t = title || '';
+  if (scene === 'local') return (t ? `${t}！本地人私藏好去处，值得专程来一趟` : '同城宝藏好店推荐，吃喝玩乐避坑指南').slice(0, 32);
+  if (scene === 'personal') return (t ? `${t} · 记录生活里的微光与美好瞬间` : '定格日常微光 · 治愈生活的每一个小确幸').slice(0, 32);
+  return (t ? `${t}！良心好物真实测评，实用省心闭眼入` : '高性价比宝藏好物测评，亲测好用不踩雷').slice(0, 32);
+}
+
 /**
  * 发布方案兜底清洗。
  * @param {object|null} raw LLM 输出的 publish 字段（缺失传 null，走全兜底）
@@ -91,18 +103,20 @@ function fallbackCoverTitle(title, scene) {
  * @param {string} ctx.title 成片主标题（兜底拼装原料）
  * @param {string} ctx.subtitle 成片副标题（兜底拼装原料）
  * @param {boolean} [ctx.coverTitleRequired=true] 视频标题必填
- * @returns {{ caption: string, cover_title: string, pinned_comment: string, post_time: string, _banned_hits: string[] }}
+ * @returns {{ title: string, caption: string, cover_title: string, pinned_comment: string, post_time: string, _banned_hits: string[] }}
  */
 export function sanitizePublish(raw, { scene = '', title = '', subtitle = '', coverTitleRequired = true } = {}) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const pick = (v) => (typeof v === 'string' ? v.trim() : '');
 
+  let rawTitle = pick(src.title);
   let caption = pick(src.caption);
   let coverTitle = pick(src.cover_title);
   let pinned = pick(src.pinned_comment);
   const postTime = pick(src.post_time);
 
   // 对外广告文案过红线词表；post_time 是内部提示，不清洗
+  const c0 = filterBannedWords(rawTitle);
   const c1 = filterBannedWords(caption);
   const c2 = filterBannedWords(coverTitle);
   const c3 = filterBannedWords(pinned);
@@ -122,23 +136,29 @@ export function sanitizePublish(raw, { scene = '', title = '', subtitle = '', co
     return s;
   };
 
+  rawTitle = scrubText(c0.text);
   caption = scrubText(c1.text);
   coverTitle = scrubText(c2.text);
   pinned = scrubText(c3.text);
 
   if (!caption) caption = fallbackCaption({ scene, title, subtitle });
-  if (coverTitleRequired) {
-    if (!coverTitle) coverTitle = fallbackCoverTitle(title, scene);
-  } else {
-    coverTitle = '';
+  if (!coverTitle && coverTitleRequired) {
+    coverTitle = fallbackCoverTitle(title, scene);
+  }
+
+  // 社交媒体发布标题：杜绝留空，杜绝与4字设计卡视觉短标题混同
+  let publishTitle = rawTitle;
+  if (!publishTitle || (title && publishTitle === title)) {
+    publishTitle = fallbackPublishTitle({ scene, title, coverTitle, caption });
   }
 
   return {
+    title: publishTitle.slice(0, 60),
     caption: caption.slice(0, 300),
     cover_title: coverTitle.slice(0, 36),
     pinned_comment: pinned.slice(0, 60),
     post_time: postTime.slice(0, 40),
     // 命中的红线词（调试排查用，客户端不展示）
-    _banned_hits: [...c1.hits, ...c2.hits, ...c3.hits],
+    _banned_hits: [...c0.hits, ...c1.hits, ...c2.hits, ...c3.hits],
   };
 }

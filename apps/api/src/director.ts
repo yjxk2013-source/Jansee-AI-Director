@@ -412,15 +412,15 @@ function ensureValidCoverTitle(parsed: Record<string, unknown>, prompt: string):
   parsed.publish = publish;
 
   const rawCoverTitle = typeof publish.cover_title === "string" ? publish.cover_title.trim() : "";
-  // 尊重大模型创作：只要 LLM 输出了非空内容，完全按 LLM 填写为准；只有真正为空时才触发兜底提取
-  if (rawCoverTitle.length > 0) {
+  const planTitle = typeof parsed.title === "string" ? parsed.title.trim() : "";
+  const caption = typeof publish.caption === "string" ? publish.caption.trim() : "";
+  const note = typeof parsed.note === "string" ? parsed.note.trim() : "";
+  const narration = typeof parsed.narration === "string" ? parsed.narration.trim() : "";
+
+  // 尊重大模型创作：只要 LLM 输出了非空且非单纯设计卡短词的内容，按 LLM 填写为准；为空或与短标题重复时触发提炼
+  if (rawCoverTitle.length >= 8 && (!planTitle || rawCoverTitle !== planTitle)) {
     publish.cover_title = rawCoverTitle.slice(0, 50);
   } else {
-    const caption = typeof publish.caption === "string" ? publish.caption.trim() : "";
-    const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
-    const note = typeof parsed.note === "string" ? parsed.note.trim() : "";
-    const narration = typeof parsed.narration === "string" ? parsed.narration.trim() : "";
-
     let candidate = "";
     if (caption) {
       const firstSentence = caption.split(/[#\n。！!？?]/)[0]?.trim() || "";
@@ -434,8 +434,8 @@ function ensureValidCoverTitle(parsed: Record<string, unknown>, prompt: string):
         candidate = firstSentence;
       }
     }
-    if (!candidate && title) {
-      candidate = note ? `${title} · ${note}` : `${title} 商业成片`;
+    if (!candidate && planTitle) {
+      candidate = note ? `${planTitle} · ${note}` : `${planTitle} 商业精选推荐`;
     }
     if (!candidate) {
       const cleanPrompt = prompt.replace(/\[.*?\]/g, "").replace(/出\d+条视频/g, "").trim();
@@ -445,13 +445,27 @@ function ensureValidCoverTitle(parsed: Record<string, unknown>, prompt: string):
     publish.cover_title = candidate.slice(0, 30);
   }
 
-  // 确保宣发发布标题（publish.title）有效：用于抖音/小红书等社媒平台发片标题，杜绝误用 4~6 字设计卡短标题
-  const rawPublishTitle = typeof publish.title === "string" ? publish.title.trim() : "";
-  if (rawPublishTitle.length > 0) {
-    publish.title = rawPublishTitle.slice(0, 60);
-  } else {
-    publish.title = String(publish.cover_title || parsed.title || prompt).slice(0, 50);
+  // 确保宣发发布标题（publish.title）有效且与设计卡 4~6 字短标题严格区隔
+  let rawPublishTitle = typeof publish.title === "string" ? publish.title.trim() : "";
+  if (!rawPublishTitle || (planTitle && rawPublishTitle === planTitle) || rawPublishTitle.length < 8) {
+    if (typeof publish.cover_title === "string" && publish.cover_title.length >= 8 && publish.cover_title !== planTitle) {
+      rawPublishTitle = publish.cover_title;
+    } else if (caption) {
+      const firstSentence = caption.split(/[#\n。！!？?]/)[0]?.trim() || "";
+      if (firstSentence.length >= 8 && firstSentence.length <= 32) {
+        rawPublishTitle = firstSentence;
+      }
+    } else if (narration) {
+      const firstSentence = narration.split(/[。！!？?]/)[0]?.trim() || "";
+      if (firstSentence.length >= 8 && firstSentence.length <= 32) {
+        rawPublishTitle = firstSentence;
+      }
+    }
+    if (!rawPublishTitle || (planTitle && rawPublishTitle === planTitle) || rawPublishTitle.length < 8) {
+      rawPublishTitle = note && planTitle ? `${planTitle} · ${note}` : `${planTitle || "精选创作"} · 记录生活里的美好瞬间`;
+    }
   }
+  publish.title = rawPublishTitle.slice(0, 60);
 }
 
 /**
