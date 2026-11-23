@@ -581,53 +581,75 @@ function ClientApp() {
   const activeMessages = conversations.find((c) => c.id === activeConversationId)?.messages ?? [];
   const isEmpty = activeMessages.length === 0;
 
-  // 手机端与PC通用：每次打开或切换对话/产生新消息时，确保视图稳稳停留在最新的位置（最底部）
+  // 无论 APP、手机浏览器还是 PC：打开或切换对话/产生新消息时，瞬时稳定停留在最新、最下方，杜绝不停上滑
   useEffect(() => {
     const stage = chatStageRef.current;
     if (!stage || isEmpty) return;
 
+    let userInteracted = false;
+    let cancelled = false;
+
+    // 用户一旦触摸或主动滚动，立即移交控制权，坚决不再强行拉回底部或干扰浏览
+    const markInteracted = () => {
+      userInteracted = true;
+    };
+
+    stage.addEventListener("touchstart", markInteracted, { passive: true });
+    stage.addEventListener("touchmove", markInteracted, { passive: true });
+    stage.addEventListener("wheel", markInteracted, { passive: true });
+
+    // 瞬时精准吸底：无滑动动画，直接定位在最新成片或消息处
     const scrollToBottomInstant = () => {
-      if (!stage) return;
+      if (cancelled || userInteracted || !stage) return;
       stage.scrollTop = stage.scrollHeight;
     };
 
-    // 1. 立即瞬时触底
+    // 1. 立即瞬时触底（首屏加载无感，直接在最下方）
     scrollToBottomInstant();
 
-    // 2. 下一渲染帧触底
-    const rafId = requestAnimationFrame(scrollToBottomInstant);
+    // 2. 下一帧确保渲染树首批节点就绪后再次校准
+    const rafId = requestAnimationFrame(() => {
+      scrollToBottomInstant();
+    });
 
-    // 3. 异步定时触底（等待卡片、字体与海报尺寸计算完成）
+    // 3. 极速异步校验（应对移动端字体或卡片微缩图初次计算，120ms 时校准一次）
     const t1 = setTimeout(scrollToBottomInstant, 120);
-    const t2 = setTimeout(scrollToBottomInstant, 380);
-    const t3 = setTimeout(scrollToBottomInstant, 800);
 
-    // 4. 利用 ResizeObserver 在首屏加载的 2.5 秒内，内容高度每撑大一次就自动稳在最新位置
+    // 4. 监听内容区（只监听内部 .workbench-stream，严禁直接监听 stage 自身以防移动端视口工具栏伸缩死循环）
+    // 仅在用户未主动交互、且内容增大幅度显著（例如首屏封面或多素材图片加载撑大 > 20px）时吸底
     let ro: ResizeObserver | null = null;
+    let lastHeight = stage.scrollHeight;
+
     if (typeof ResizeObserver !== "undefined") {
-      let isInitialPeriod = true;
-      const initialTimer = setTimeout(() => { isInitialPeriod = false; }, 2500);
-      ro = new ResizeObserver(() => {
-        if (isInitialPeriod && stage) {
-          stage.scrollTop = stage.scrollHeight;
-        }
-      });
-      ro.observe(stage);
-      return () => {
-        cancelAnimationFrame(rafId);
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-        clearTimeout(initialTimer);
-        ro?.disconnect();
-      };
+      const streamEl = stage.querySelector(".workbench-stream");
+      if (streamEl) {
+        ro = new ResizeObserver(() => {
+          if (cancelled || userInteracted || !stage) return;
+          const currentScrollHeight = stage.scrollHeight;
+          if (currentScrollHeight - lastHeight > 20) {
+            lastHeight = currentScrollHeight;
+            stage.scrollTop = stage.scrollHeight;
+          }
+        });
+        ro.observe(streamEl);
+      }
     }
 
+    // 600ms 保护期过后彻底释放一切自动吸底监听，完全交还给用户自然浏览
+    const settleTimer = setTimeout(() => {
+      cancelled = true;
+      ro?.disconnect();
+    }, 600);
+
     return () => {
+      cancelled = true;
       cancelAnimationFrame(rafId);
       clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
+      clearTimeout(settleTimer);
+      stage.removeEventListener("touchstart", markInteracted);
+      stage.removeEventListener("touchmove", markInteracted);
+      stage.removeEventListener("wheel", markInteracted);
+      ro?.disconnect();
     };
   }, [activeConversationId, activeMessages.length, isEmpty]);
 
