@@ -182,26 +182,39 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
         ...(Object.keys(query).length > 0 ? { Query: query } : {}),
       });
 
-      // 腾讯云 CDN 在开启【私有回源鉴权】后，CDN 节点会自动使用主账号服务凭证与 COS 源站完成鉴权交互；
-      // 同时为保障商业媒体资产防盗刷与用户隐私安全，只有在同时配置了 CDN 域名与 CDN 鉴权密钥时，才生成带 Type A 防盗链 Token 的加速链接；
-      // 若缺少 CDN 鉴权密钥，严格执行安全 Fail-closed 策略：坚决不返回无签名的裸 CDN 链接，自动回退到原生 COS 签名 URL (rawUrl)。
-      if (config.cdnDomain && config.cdnAuthKey) {
-        try {
-          const cleanKey = key.startsWith("/") ? key.slice(1) : key;
-          const uri = `/${cleanKey}`;
-          const issueTimestamp = Math.floor(Date.now() / 1000);
-          const rand = "0";
-          const uid = "0";
-          const hash = createHash("md5")
-            .update(`${uri}-${issueTimestamp}-${rand}-${uid}-${config.cdnAuthKey}`)
-            .digest("hex");
+      // 腾讯云 CDN 优先分流：
+      // 只要配置了 cdnDomain，下载与播放一律通过 CDN 边缘节点（如 cdn.jansee.cn）分发，
+      // 彻底杜绝回退到 COS 源站产生昂贵的外网下行流量（0.50 元/GB）；
+      // 若同时配置了 cdnAuthKey，则按照腾讯云 Type A 规范追加 URL 鉴权防盗链 token；
+      // 若未配置 cdnAuthKey，则直接输出 CDN 加速链接（依赖 CDN 私有 Bucket 回源授权与系统接口鉴权）。
+      if (config.cdnDomain) {
+        const cleanKey = key.startsWith("/") ? key.slice(1) : key;
+        const uri = `/${cleanKey}`;
+        const queryParams = new URLSearchParams();
 
-          // 腾讯云 Type A 鉴权规范要求鉴权 URL 遵循严格格式，避免附加其他 query 参数导致部分边缘节点校验不匹配
-          return `https://${config.cdnDomain}${uri}?sign=${issueTimestamp}-${rand}-${uid}-${hash}`;
-        } catch {
-          return rawUrl;
+        if (config.cdnAuthKey) {
+          try {
+            const issueTimestamp = Math.floor(Date.now() / 1000);
+            const rand = "0";
+            const uid = "0";
+            const hash = createHash("md5")
+              .update(`${uri}-${issueTimestamp}-${rand}-${uid}-${config.cdnAuthKey}`)
+              .digest("hex");
+
+            queryParams.set("sign", `${issueTimestamp}-${rand}-${uid}-${hash}`);
+          } catch {
+            // 鉴权 token 计算异常时降级
+          }
         }
+
+        if (options?.downloadFilename) {
+          queryParams.set("response-content-disposition", `attachment; filename="${encodeURIComponent(options.downloadFilename)}"`);
+        }
+
+        const queryString = queryParams.toString();
+        return `https://${config.cdnDomain}${uri}${queryString ? `?${queryString}` : ""}`;
       }
+
       return rawUrl;
     },
   };

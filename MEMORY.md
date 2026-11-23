@@ -1,12 +1,10 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间**：2026-11-23 05:15 (UTC+8) - 全网正式平滑部署上线发布 v4.1.9。
-> 1. **上线方式评估与执行**：本次改动属于客户端持久化缓存（Media CacheStorage & SWR 离线秒开）以及服务端 ETag / 304 协商缓存优化，无数据库结构变更、无破坏性视觉调整。采用**生产级容器热更新（Zero-Downtime Hot Reload）**，无感知增量构建镜像并无缝替换 `deploy-web` 与 `deploy-api` 容器，PostgreSQL 数据层持续在线，实现零停机热发布；
-> 2. **痛点根治**：彻底解决“APP 打开要很久，视频封面、宣发封面刷新慢，退出后重进又要重新刷新”的体验痛点；
-> 3. **首屏 0ms 秒开（SWR 离线持久化）**：`authUser`、`walletCredits`、`recentWorks`、`works` 列表由零状态瀑布流串行请求改造为 SWR 架构，打开 APP 即刻从本地离线缓存恢复渲染，后台静默校准拉取，消除白屏与等待闪烁；
-> 4. **全链路媒体封面离线持久缓存池（`mediaCache.ts`）**：引入原生 `CacheStorage`（支持现代移动端 WebView / PWA 大容量持久化）+ 内存 ObjectURL 映射池，视频封面与短视频宣发套件封面初次拉取后自动持久化，再次打开组件或重入 APP 0ms 同步出图，并由队列在空闲时段静默批量预热；
-> 5. **服务端 ETag 与 304 Not Modified 协商缓存**：后端 `/api/v1/works/:id/cover` 接口增加基于文件 mtime/size 的强 ETag 校验，客户端条件请求直接毫秒级返回 304，配合 `max-age=2592000, stale-while-revalidate=86400` 消除重复带宽消耗；
-> 6. **全网健康检测**：`203.195.243.42` 云端已完成上线验证，`deploy-web` / `deploy-api` / `deploy-postgres` 容器全量 healthy，外网 HTTPS 访问 200 OK，生产服务稳健运行。
+> **更新时间**：2026-11-23 15:30 (UTC+8) - 全网紧急上线 CDN 源站流量泄露修复补丁（Zero-Downtime Hot Reload）。
+> 1. **根因定位与修复**：此前 `storage-cos-object.ts` 中设定了过于严苛的限制，未配置 `COS_CDN_AUTH_KEY` 时自动回退到了原生 COS 源站直连（`rawUrl`），导致成片播放与原片下载全量走 COS 源站，产生了 0.50 元/GB 的外网下行计费；
+> 2. **CDN 优先分流保障**：优化 `createSignedUrl` 逻辑，在配置了 `cdnDomain`（如 `cdn.jansee.cn`）的前提下 100% 优先走 CDN 边缘节点分流，杜绝任何意外向 COS 源站泄露流量，如配置鉴权密钥则按 Type A 规范生成防盗链 token，未配置则走已开通私有回源鉴权的 CDN 节点直连；
+> 3. **云端验证与全链路实测**：云端容器 `deploy-api-1` 已无缝重构重启并健康运行，实测作品流媒体与原片下载直链已 100% 导向 `https://cdn.jansee.cn/...`，腾讯云 CDN 节点实测返回 HTTP/2 200 OK (Cache Hit)，彻底切断源站外网下行高额资费口子；
+> 4. **前序平滑部署版本**：2026-11-23 05:15 v4.1.9（客户端持久化缓存 Media CacheStorage & SWR 离线秒开）。
 
 ---
 

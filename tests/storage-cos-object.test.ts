@@ -132,7 +132,7 @@ test("Tencent COS object storage generates CDN signed URLs with Type A anti-leec
   assert.ok(Number(timestampStr) <= now && Number(timestampStr) >= now - 5);
   assert.equal(md5hash?.length, 32);
 
-  // 验证无 cdnAuthKey 时严格执行 Fail-closed 策略，安全回退到带签名的 COS rawUrl，绝不裸奔
+  // 验证无 cdnAuthKey 时，优先走 CDN 域名加速，绝不回退到 COS 源站消耗外网下行计费
   const storageWithoutKey = createTencentCosObjectStorage({
     secretId: "test-id",
     secretKey: "test-secret",
@@ -144,5 +144,5 @@ test("Tencent COS object storage generates CDN signed URLs with Type A anti-leec
   });
 
   const urlWithoutKey = storageWithoutKey.createSignedUrl("outputs/test-video.mp4");
-  assert.equal(urlWithoutKey, "https://jansee-test.cos.ap-guangzhou.myqcloud.com/outputs/test-video.mp4?sign=cos-raw-sign");
+  assert.equal(urlWithoutKey, "https://cdn.jansee.cn/outputs/test-video.mp4");
 });
