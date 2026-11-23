@@ -260,21 +260,34 @@ export function registerOutputRoutes(app: FastifyInstance, options: OutputRoutes
       catch { /* 统计失败不影响作品下载 */ }
     }
 
-    // 若当前存储驱动返回远端鉴权加速 URL（如腾讯云 COS / CDN），
-    // 直接 302 重定向至直链，绕开服务器 3Mbps 带宽瓶颈，实现极速加载与满速下载。
-    const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
-      ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
-      ttlSeconds: isDownload ? 600 : 3600,
-    });
-    if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
-      reply.header("cache-control", "private, no-cache");
-      return reply.redirect(signedUrl, 302);
+    // 同一地址制作与下载专项优化：
+    // 用户制作成片后主要在本机/同网络/同部署地址下即时预览与下载，成片极少分散到外部其它地址。
+    // 优先尝试从本地磁盘热缓存（0ms 延时、0 次 302 跨域握手、0 CDN 回源等待）同源直接流式传输或下载；
+    // 仅当本地物理文件不存在时，才回退至远端 CDN / COS 直链进行 302 重定向兜底。
+    let filePath: string | null = null;
+    let fileSize = 0;
+    try {
+      const candidatePath = await options.storage.getFilePath(output.storageKey);
+      const st = await stat(candidatePath);
+      if (st.isFile() && st.size > 0) {
+        filePath = candidatePath;
+        fileSize = st.size;
+      }
+    } catch {
+      filePath = null;
     }
 
-    const filePath = await options.storage.getFilePath(output.storageKey);
-    const fileStat = await stat(filePath);
-
-    const fileSize = fileStat.size;
+    if (!filePath) {
+      const signedUrl = await options.storage.createSignedUrl(output.storageKey, {
+        ...(isDownload ? { downloadFilename: `jansee_${output.id.slice(0, 8)}.mp4` } : {}),
+        ttlSeconds: isDownload ? 600 : 3600,
+      });
+      if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
+        reply.header("cache-control", "private, no-cache");
+        return reply.redirect(signedUrl, 302);
+      }
+      return reply.code(404).send({ error: { code: "WORK_FILE_NOT_FOUND", message: "作品文件不可用" } });
+    }
     const rangeHeader = request.headers.range;
 
     // 支持移动端和现代浏览器标准的 HTTP 206 字节分片请求 (Range)

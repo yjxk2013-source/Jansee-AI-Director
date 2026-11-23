@@ -53,9 +53,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
     const video = videoRef.current;
     if (!video) return;
     if (isPlaying) {
-      void video.play().then(() => {
-        setIsActuallyPlaying(true);
-      }).catch(() => {
+      void video.play().catch(() => {
         // 自动播放可能受浏览器安全策略限制，捕获异常不崩溃
       });
     } else {
@@ -74,9 +72,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
   const handleTriggerPlay = () => {
     onPlay(workId);
     if (videoRef.current) {
-      void videoRef.current.play().then(() => {
-        setIsActuallyPlaying(true);
-      }).catch(() => { });
+      void videoRef.current.play().catch(() => { });
     }
   };
 
@@ -92,7 +88,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
 
   return (
     <div ref={containerRef} className="job-delivery-player-box">
-      {/* 预加载元数据，保持在 DOM 中，实现秒开无黑屏缓冲 */}
+      {/* 预加载音视频流，保持在 DOM 中，实现秒开无黑屏缓冲 */}
       <video
         ref={videoRef}
         className="job-delivery-video"
@@ -100,7 +96,7 @@ export function JobDeliveryVideoPlayer({ workId, activeId, onPlay, onPause }: Jo
         poster={coverFailed && !capturedCover ? undefined : (coverFailed && capturedCover ? capturedCover : effectiveCover)}
         controls={isPlaying && isActuallyPlaying}
         playsInline
-        preload="metadata"
+        preload="auto"
         onLoadedData={handleVideoLoadedData}
         onPause={handleVideoPause}
         onEnded={handleVideoEnded}

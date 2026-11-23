@@ -89,6 +89,13 @@ function WorkDeliveryCardItem({
 }: WorkDeliveryCardItemProps) {
   const cachedCover = useCachedMediaUrl(work.coverUrl);
   const effectiveCover = cachedCover || work.coverUrl || coverDataUrls[work.id];
+  const [isActuallyPlaying, setIsActuallyPlaying] = useState(false);
+
+  useEffect(() => {
+    if (activePlayWorkId !== work.id) {
+      setIsActuallyPlaying(false);
+    }
+  }, [activePlayWorkId, work.id]);
 
   return (
     <article
@@ -114,11 +121,12 @@ function WorkDeliveryCardItem({
         <video
           ref={(el) => { videoRefs.current[work.id] = el; }}
           src={`/api/v1/works/${work.id}/stream`}
-          controls={activePlayWorkId === work.id}
+          controls={activePlayWorkId === work.id && isActuallyPlaying}
           playsInline
           preload="metadata"
           poster={effectiveCover || undefined}
           aria-label={titleLabel}
+          onPlaying={() => setIsActuallyPlaying(true)}
           onLoadedData={() => {
             if (!work.coverUrl && !coverDataUrls[work.id]) {
               const video = videoRefs.current[work.id];
@@ -137,8 +145,12 @@ function WorkDeliveryCardItem({
               }
             }
           }}
-          onEnded={() => setActivePlayWorkId(null)}
+          onEnded={() => {
+            setIsActuallyPlaying(false);
+            setActivePlayWorkId(null);
+          }}
           onPause={() => {
+            setIsActuallyPlaying(false);
             if (activePlayWorkId === work.id) setActivePlayWorkId(null);
           }}
         />
@@ -157,8 +169,8 @@ function WorkDeliveryCardItem({
             inset: 0,
             width: "100%",
             height: "100%",
-            opacity: activePlayWorkId === work.id ? 0 : 1,
-            pointerEvents: activePlayWorkId === work.id ? "none" : "auto",
+            opacity: activePlayWorkId === work.id && isActuallyPlaying ? 0 : 1,
+            pointerEvents: activePlayWorkId === work.id && isActuallyPlaying ? "none" : "auto",
             transition: "opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
           onKeyDown={(e) => {

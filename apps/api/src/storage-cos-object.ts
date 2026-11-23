@@ -99,7 +99,18 @@ export function createTencentCosObjectStorage(config: TencentCosObjectStorageCon
       if (sizeBytes !== source.size || sizeBytes > config.maxObjectBytes) {
         throw new Error("COS object size verification failed");
       }
-      await removeCache(key);
+      // 同一地址即时预览/下载专项优化：
+      // 上传 COS 成功后，将本地已生成的源文件保留到本地缓存池 cachePath(key)，
+      // 避免刚制作完成的成片因本地无缓存而被迫走公网 302 CDN 绕弯或重新向 COS 发起回源下载。
+      const target = cachePath(key);
+      try {
+        if (resolve(sourcePath) !== resolve(target)) {
+          const { copyFile } = await import("node:fs/promises");
+          await copyFile(sourcePath, target);
+        }
+      } catch {
+        await removeCache(key);
+      }
       return { sizeBytes };
     },
 

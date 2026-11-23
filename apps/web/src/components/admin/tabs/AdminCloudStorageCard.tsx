@@ -55,7 +55,7 @@ export function AdminCloudStorageCard({ cloudStorage }: AdminCloudStorageCardPro
             border: isCurrentlyLeaking ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(34, 197, 94, 0.3)",
           }}
         >
-          {isCurrentlyLeaking ? "⚠️ 当前存在源站外网下行" : "当前链路健康 · 0 泄漏"}
+          {isCurrentlyLeaking ? "[告警] 当前存在源站外网下行" : "当前链路健康 · 0 泄漏"}
         </span>
       </div>
 
@@ -101,7 +101,7 @@ export function AdminCloudStorageCard({ cloudStorage }: AdminCloudStorageCardPro
           <span style={{ display: "flex", justifyContent: "space-between" }}>
             COS 源站外网下行
             <small style={{ color: isCurrentlyLeaking ? "#f87171" : "#4ade80" }}>
-              {isCurrentlyLeaking ? "⚠️ 实时泄漏" : "当前已阻断 (0 泄漏)"}
+              {isCurrentlyLeaking ? "[告警] 实时泄漏" : "当前已阻断 (0 泄漏)"}
             </small>
           </span>
           <strong style={{ color: isCurrentlyLeaking ? "#f87171" : "inherit" }}>
