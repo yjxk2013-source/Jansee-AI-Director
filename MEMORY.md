@@ -1,13 +1,10 @@
 # JANSEE V4 核心业务与最新系统现状（单一真实记忆源）
 
-> **更新时间**：2026-11-23 21:20 (UTC+8) - 全网正式上线 v4.1.10「打开应用强制落在全局最新对话 + 一次性精准停在最新成片卡片」（Zero-Downtime Hot Reload，仅重建 `deploy-web` 镜像）。
-> 1. **打开应用即落最新对话（`apps/web/src/utils/conversationStorage.ts` & `App.tsx`）**：
->    - 新增 `resolveLatestConversationId()` 取全局最近更新且有内容的对话；`activeConversationId` 初始值改为落在该最新对话，且首次同步用 `didAutoJumpRef` 只强制跳一次，避免运行期 4 秒心跳多端同步把用户拽走。
-> 2. **一次性精准吸底（`apps/web/src/App.tsx`）**：
->    - 彻底删除原多阶段 `setTimeout` 校准 + `ResizeObserver` 高度跟随 + `touchmove/wheel` 交互检测的滚动 effect（约 80 行），改为打开/切换对话/新增消息时仅瞬时 `scrollIntoView` 到最新一张 `.workbench-card`（含下一帧 `requestAnimationFrame` 兜底），根治移动端反复上滑到顶的抖动。
-> 3. **死代码清理**：删除零引用打字机组件 `apps/web/src/components/common/TypewriterText.tsx`。
-> 4. **发布与上线**：版本 4.1.9 -> 4.1.10（根、`@jansee/web`、`@jansee/api` 三处 package.json）；分支 `fix/mobile-pin-to-latest-card` 提交 `e504bdd`，打标签 `v4.1.10`，已推送 gitee-v4 / gitee-show / github-v4 / github-show 四个镜像仓库；生产仅重建 `deploy-web` 镜像并 `up -d --no-deps web`，线上 bundle `assets/index-B8DJ9bXG.js`（md5 `f267f5bee987c8a99fba1ccbd662646e`）与本地一致，`jansee.cn` 200 OK，web/api/postgres 三容器健康。
-> 5. **前序平滑部署版本**：2026-11-23 20:30（短视频宣发套件发布标题与设计卡标题彻底独立隔离）；2026-11-23 17:00（同一地址同源 206 分片秒开直读与本地热缓存留存）；2026-11-23 16:45（暗房显影物理透明度 0 到 100 恢复）。
+> **更新时间**：2026-11-23 22:10 (UTC+8) - 全网正式上线 v4.1.11「手机端打开/登录后稳稳贴住最新成片卡片，不再滑回最上方最旧」（Zero-Downtime Hot Reload，仅重建 `deploy-web` 镜像）。
+> 1. **问题根因**：v4.1.10 的「一次性 `scrollIntoView`」在手机上会落空——手机布局/封面比首帧晚就绪，那一滚算在未定型的高度上，回落到顶部（最旧内容），之后无人再把画面拉回最新卡片；PC 正常、仅手机复现，清缓存无效（问题在逻辑，不在缓存）。
+> 2. **修复（`apps/web/src/App.tsx`）**：改为「贴住最新卡片」——直接 `stage.scrollTop = stage.scrollHeight` 落到最新卡片，配合 `ResizeObserver`（同时观察 `.chat-stage` 与 `.workbench-stream`）+ rAF / 120ms / 400ms 兜底；只要用户仍停在底部，内容高度一变就继续贴住；通过 `scroll` 事件按「距底 ≤48px」判定并维护 `stickToLatestRef`，用户一旦上翻看历史立即松手，绝不再把用户拽回底部。
+> 3. **发布与上线**：版本 4.1.10 -> 4.1.11（根、`@jansee/web`、`@jansee/api` 三处 package.json）；分支 `fix/mobile-pin-to-latest-card` 提交 `b443e92`，打标签 `v4.1.11`，已推送 gitee-v4 / gitee-show / github-v4 / github-show 四个镜像仓库；生产仅重建 `deploy-web` 镜像并 `up -d --no-deps web`，线上 bundle `assets/index-BU1EI7xE.js`（md5 `deab20111b49d58acff09cd7ddaf51e4`）与本地一致，`jansee.cn` 200 OK，web/api/postgres 三容器健康，构建缓存已 `prune`（磁盘 13G/40G）。
+> 4. **前序版本**：2026-11-23 21:20 v4.1.10（打开强制落最新对话 + 一次性吸底，其移动端落空已被 v4.1.11 修正）；2026-11-23 20:30（短视频宣发套件发布标题与设计卡标题彻底独立隔离）；2026-11-23 17:00（同一地址同源 206 分片秒开直读与本地热缓存留存）；2026-11-23 16:45（暗房显影物理透明度 0 到 100 恢复）。
 
 ---
 
