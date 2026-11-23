@@ -223,10 +223,19 @@ export interface ServerHealthData {
   cloudStorage?: {
     todayCdnBytes: number;
     todayDirectCosBytes: number;
+    recent1hDirectCosBytes: number;
     todayCdnOriginBytes: number;
     accountBalanceYuan: number | null;
     estimatedCostTodayYuan: number;
     isDirectCosLeak: boolean;
+    isCurrentlyLeaking: boolean;
+    cdnPackage?: {
+      totalBytes: number;
+      usedBytes: number;
+      remainingBytes: number;
+      usedPercent: number;
+      expireTime: string;
+    } | null;
     sampledAt: string;
   };
   mediaStorage?: {

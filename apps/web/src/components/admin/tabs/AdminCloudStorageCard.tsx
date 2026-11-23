@@ -32,7 +32,8 @@ export function AdminCloudStorageCard({ cloudStorage }: AdminCloudStorageCardPro
     todayDirectCosBytes,
     accountBalanceYuan,
     estimatedCostTodayYuan,
-    isDirectCosLeak,
+    isCurrentlyLeaking,
+    cdnPackage,
   } = cloudStorage;
 
   const isLowBalance = accountBalanceYuan !== null && accountBalanceYuan < 50;
@@ -49,41 +50,70 @@ export function AdminCloudStorageCard({ cloudStorage }: AdminCloudStorageCardPro
             fontSize: "12px",
             padding: "4px 10px",
             borderRadius: "6px",
-            background: isDirectCosLeak ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)",
-            color: isDirectCosLeak ? "#f87171" : "#4ade80",
-            border: isDirectCosLeak ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(34, 197, 94, 0.3)",
+            background: isCurrentlyLeaking ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)",
+            color: isCurrentlyLeaking ? "#f87171" : "#4ade80",
+            border: isCurrentlyLeaking ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(34, 197, 94, 0.3)",
           }}
         >
-          {isDirectCosLeak ? "检测到源站外网下行" : "分流链路健康"}
+          {isCurrentlyLeaking ? "⚠️ 当前存在源站外网下行" : "当前链路健康 · 0 泄漏"}
         </span>
       </div>
 
-      <div className="admin-server-metrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-        {/* 卡片 1: CDN 加速流量 */}
+      <div className="admin-server-metrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+        {/* 卡片 1: CDN 加速流量与 100G 流量包进度条 */}
         <article className="admin-server-metric">
           <span style={{ display: "flex", justifyContent: "space-between" }}>
             CDN 加速流量
-            <small style={{ color: "#4ade80" }}>正常分发</small>
+            <small style={{ color: "#4ade80" }}>
+              {cdnPackage ? `剩余 ${(cdnPackage.remainingBytes / 1024 ** 3).toFixed(1)} GB` : "正常分发"}
+            </small>
           </span>
           <strong>{formatBytes(todayCdnBytes)}</strong>
-          <small>今日用户播放与原片下载</small>
+          
+          {cdnPackage && (
+            <div style={{ marginTop: "8px", marginBottom: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--admin-muted, #8e8e93)", marginBottom: "4px" }}>
+                <span>100GB 流量包</span>
+                <span>已用 {cdnPackage.usedPercent}%</span>
+              </div>
+              <div className="admin-server-meter" style={{ height: "6px", borderRadius: "3px", background: "rgba(255,255,255,0.08)" }}>
+                <i
+                  style={{
+                    width: `${Math.max(1, cdnPackage.usedPercent)}%`,
+                    background: cdnPackage.usedPercent > 80 ? "#f87171" : "#39a68b",
+                    borderRadius: "3px",
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: "10px", color: "var(--admin-muted, #8e8e93)", marginTop: "4px" }}>
+                已用 {(cdnPackage.usedBytes / 1024 ** 3).toFixed(2)} GB · 剩 {(cdnPackage.remainingBytes / 1024 ** 3).toFixed(2)} GB
+              </div>
+            </div>
+          )}
+          {!cdnPackage && <small>今日用户播放与原片下载</small>}
         </article>
 
-        {/* 卡片 2: COS 源站外网下行 */}
+        {/* 卡片 2: COS 源站外网下行 (精准区分实时与历史) */}
         <article
           className="admin-server-metric"
-          style={isDirectCosLeak ? { borderColor: "rgba(239, 68, 68, 0.4)", background: "rgba(239, 68, 68, 0.05)" } : {}}
+          style={isCurrentlyLeaking ? { borderColor: "rgba(239, 68, 68, 0.4)", background: "rgba(239, 68, 68, 0.05)" } : {}}
         >
           <span style={{ display: "flex", justifyContent: "space-between" }}>
             COS 源站外网下行
-            <small style={{ color: isDirectCosLeak ? "#f87171" : "#4ade80" }}>
-              {isDirectCosLeak ? "存在泄漏" : "0 泄漏 (安全)"}
+            <small style={{ color: isCurrentlyLeaking ? "#f87171" : "#4ade80" }}>
+              {isCurrentlyLeaking ? "⚠️ 实时泄漏" : "当前已阻断 (0 泄漏)"}
             </small>
           </span>
-          <strong style={{ color: isDirectCosLeak ? "#f87171" : "inherit" }}>
+          <strong style={{ color: isCurrentlyLeaking ? "#f87171" : "inherit" }}>
             {formatBytes(todayDirectCosBytes)}
           </strong>
-          <small>{isDirectCosLeak ? "⚠️ 发现非 CDN 直连流量" : "目标值 0 · 杜绝高价下行"}</small>
+          <small>
+            {isCurrentlyLeaking
+              ? "检测到非 CDN 直连流量，需排查"
+              : todayDirectCosBytes > 0
+                ? "均为凌晨遗留，近 12 小时 0 字节"
+                : "全天贴 0 · 杜绝高价下行"}
+          </small>
         </article>
 
         {/* 卡片 3: 腾讯云可用余额 */}
@@ -103,7 +133,7 @@ export function AdminCloudStorageCard({ cloudStorage }: AdminCloudStorageCardPro
             <small style={{ color: "var(--admin-muted, #8e8e93)" }}>折合人民币</small>
           </span>
           <strong>¥ {estimatedCostTodayYuan.toFixed(2)}</strong>
-          <small>CDN流量 + 回源综合估算</small>
+          <small>CDN 流量包抵扣 + 回源计费</small>
         </article>
       </div>
     </section>

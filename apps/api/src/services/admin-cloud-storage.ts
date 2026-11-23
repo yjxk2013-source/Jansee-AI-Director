@@ -1,12 +1,23 @@
 import tencentcloud from "tencentcloud-sdk-nodejs";
 
+export interface CdnTrafficPackageInfo {
+  totalBytes: number;
+  usedBytes: number;
+  remainingBytes: number;
+  usedPercent: number;
+  expireTime: string;
+}
+
 export interface CloudStorageMetrics {
   todayCdnBytes: number;
   todayDirectCosBytes: number;
+  recent1hDirectCosBytes: number;
   todayCdnOriginBytes: number;
   accountBalanceYuan: number | null;
   estimatedCostTodayYuan: number;
   isDirectCosLeak: boolean;
+  isCurrentlyLeaking: boolean;
+  cdnPackage?: CdnTrafficPackageInfo | null;
   sampledAt: string;
 }
 
@@ -37,8 +48,10 @@ export async function fetchCloudStorageMetrics(config: CloudStorageServiceConfig
 
   let todayCdnBytes = 0;
   let todayDirectCosBytes = 0;
+  let recent1hDirectCosBytes = 0;
   let todayCdnOriginBytes = 0;
   let accountBalanceYuan: number | null = null;
+  let cdnPackage: CdnTrafficPackageInfo | null = null;
 
   // 1. 获取腾讯云账户现金可用余额 (Billing API)
   try {
@@ -55,27 +68,50 @@ export async function fetchCloudStorageMetrics(config: CloudStorageServiceConfig
     console.warn("[admin-metrics] 查询腾讯云账户余额失败:", err instanceof Error ? err.message : String(err));
   }
 
-  // 2. 获取 CDN 今日总流量 (CDN API)
-  if (cdnDomain) {
-    try {
-      const CdnClient = tencentcloud.cdn.v20180606.Client;
-      const cdnClient = new CdnClient({
-        credential: { secretId, secretKey },
-        region,
-      });
-      const cdnRes = await cdnClient.DescribeCdnData({
+  // 2. 获取 CDN 今日总流量与 100G 流量包使用情况 (CDN API)
+  try {
+    const CdnClient = tencentcloud.cdn.v20180606.Client;
+    const cdnClient = new CdnClient({
+      credential: { secretId, secretKey },
+      region,
+    });
+
+    const [cdnDataRes, pkgRes] = await Promise.allSettled([
+      cdnDomain ? cdnClient.DescribeCdnData({
         StartTime: startOfDayStr,
         EndTime: nowStr,
         Metric: "flux",
         Domains: [cdnDomain],
-      });
-      const sumValue = cdnRes.Data?.[0]?.CdnData?.[0]?.SummarizedData?.Value;
+      }) : Promise.reject(new Error("No CDN Domain")),
+      cdnClient.DescribeTrafficPackages({}),
+    ]);
+
+    if (cdnDataRes.status === "fulfilled") {
+      const sumValue = cdnDataRes.value.Data?.[0]?.CdnData?.[0]?.SummarizedData?.Value;
       if (typeof sumValue === "number") {
         todayCdnBytes = sumValue;
       }
-    } catch (err) {
-      console.warn("[admin-metrics] 查询 CDN 流量失败:", err instanceof Error ? err.message : String(err));
     }
+
+    if (pkgRes.status === "fulfilled") {
+      const packages = pkgRes.value.TrafficPackages ?? [];
+      const activePkg = packages.find((p: any) => p.Status === "enabled") || packages[0];
+      if (activePkg && typeof activePkg.Bytes === "number") {
+        const total = activePkg.Bytes;
+        const used = activePkg.BytesUsed ?? 0;
+        const remaining = Math.max(0, total - used);
+        const usedPercent = total > 0 ? Number(((used / total) * 100).toFixed(2)) : 0;
+        cdnPackage = {
+          totalBytes: total,
+          usedBytes: used,
+          remainingBytes: remaining,
+          usedPercent,
+          expireTime: activePkg.ExpireTime || "",
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("[admin-metrics] 查询 CDN 流量与资源包失败:", err instanceof Error ? err.message : String(err));
   }
 
   // 3. 获取 COS 源站外网下行与回源流量 (Monitor API)
@@ -106,13 +142,17 @@ export async function fetchCloudStorageMetrics(config: CloudStorageServiceConfig
     ]);
 
     if (internetRes.status === "fulfilled") {
-      const values = internetRes.value.DataPoints?.[0]?.Values ?? [];
-      todayDirectCosBytes = values.reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const values = (internetRes.value.DataPoints?.[0]?.Values ?? []).map((v: any) => Number(v) || 0);
+      todayDirectCosBytes = values.reduce((sum: number, v: number) => sum + v, 0);
+      // 最近 1 小时的采样值（最后一个数据点）
+      if (values.length > 0) {
+        recent1hDirectCosBytes = values[values.length - 1] ?? 0;
+      }
     }
 
     if (originRes.status === "fulfilled") {
-      const values = originRes.value.DataPoints?.[0]?.Values ?? [];
-      todayCdnOriginBytes = values.reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const values = (originRes.value.DataPoints?.[0]?.Values ?? []).map((v: any) => Number(v) || 0);
+      todayCdnOriginBytes = values.reduce((sum: number, v: number) => sum + v, 0);
     }
   } catch (err) {
     console.warn("[admin-metrics] 查询 COS 监控流量失败:", err instanceof Error ? err.message : String(err));
@@ -126,20 +166,26 @@ export async function fetchCloudStorageMetrics(config: CloudStorageServiceConfig
   const estimatedCost = cdnGb * 0.20 + originGb * 0.15 + directCosGb * 0.50;
   const estimatedCostTodayYuan = Number(estimatedCost.toFixed(2));
 
-  // 红线告警判断：当日外网下行直连大于 100MB 即触发警报
+  // 告警判断：
+  // isDirectCosLeak: 全天累计是否有历史直连记录
+  // isCurrentlyLeaking: 最近 1 小时是否有新增直连（若最近1小时为0，说明当前已切断阻断，不报警）
   const isDirectCosLeak = directCosGb > 0.1;
+  const isCurrentlyLeaking = recent1hDirectCosBytes > 1024 * 1024; // 最近1小时大于1MB才算当前正在泄漏
 
   const result: CloudStorageMetrics = {
     todayCdnBytes,
     todayDirectCosBytes,
+    recent1hDirectCosBytes,
     todayCdnOriginBytes,
     accountBalanceYuan,
     estimatedCostTodayYuan,
     isDirectCosLeak,
+    isCurrentlyLeaking,
+    cdnPackage,
     sampledAt: new Date().toISOString(),
   };
 
-  // 缓存 3 分钟 (180,000 ms)
+  // 缓存 3 分钟
   cachedMetrics = {
     data: result,
     expiresAt: now + 3 * 60 * 1000,
