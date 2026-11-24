@@ -1,10 +1,11 @@
-# 简兮 (JANSEE) — AI 智能导演系统 (AI Director System)
+﻿# 简兮 (JANSEE) — AI 智能导演系统 (AI Director System)
 ### 生产级微服务 Monorepo 架构与工程规范白皮书 (Production Architecture Showcase)
 
 [![License: Proprietary Evaluation](https://img.shields.io/badge/License-Proprietary_Source--Available-red.svg)](LICENSE)
 [![Engine: Node 22 ESM](https://img.shields.io/badge/Node-v22.x_ESM-blue.svg)](package.json)
 [![Architecture: Monorepo](https://img.shields.io/badge/Architecture-Clean_Monorepo-emerald.svg)](packages/)
 [![Status: Production](https://img.shields.io/badge/Status-Live_in_Production-gold.svg)](https://jansee.cn)
+[![CI Gate](https://github.com/yjxk2013-source/Jansee-AI-Director/actions/workflows/ci.yml/badge.svg)](https://github.com/yjxk2013-source/Jansee-AI-Director/actions/workflows/ci.yml)
 
 > **重要声明**：本仓库为**简兮 (JANSEE) 商业级真实开发源代码与系统架构展示仓**。所有目录、状态机、多任务编排与音视频渲染流水线均来自团队一手生产工程，用于展示团队深厚的全栈工程研发实力与 AI 系统调度深度。  
 > **商业授权限制**：本项目受严格的 [商业受限展示许可证 (FSL)](LICENSE) 保护，严禁未经授权的商业化部署、分发或竞品抄袭。
@@ -79,7 +80,39 @@ deploy/
 
 ---
 
-## 四、 商业授权与合作
+
+---
+
+## 四、 极致克制的设计哲学与安全审计体系
+
+### 1. 极致克制的设计系统 (Obsidian Design System)
+- **0 Emoji 工业级视觉铁律**：全站拒绝任何彩色 Emoji 装饰，所有图标均采用发丝级微光矢量 SVG，并由自动化单测门禁强制校验。
+- **PC / 移动双端 100% 能力平权**：PC 端与移动端共享同一套领域契约与核心创作链路，仅针对屏幕尺寸做响应式人机工程适配，绝不阉割移动端核心能力。
+- **去巨石化工程纪律 (Anti-Monolith)**：严格执行三层架构分离（Controller → Service → Store/Adapter），严控单文件体量上限，杜绝面条代码。
+
+### 2. 生产级安全审计与容灾防线
+| 安全维度 | 工程落地实现 |
+| :--- | :--- |
+| **Fail-closed 安全契约** | 关键存储与鉴权配置缺失时直接拒绝启动，绝不静默降级为不安全默认值 |
+| **多租户越权隔离** | 在 Service 与持久化层双重校验租户归属，不仅依赖前端 UI 隐藏 |
+| **CDN Type A 防盗链** | 腾讯云 COS 私有回源鉴权 + 边缘 CDN Type A 时效签名，防盗刷与防泄露 |
+| **零凭证入库红线** | 生产密钥全部通过环境变量注入，日志自动脱敏，严禁明文 Token 入库 |
+| **异步任务全生命周期** | 具备幂等键、超时控制、取消策略与失败自动退费/状态回滚机制 |
+
+---
+
+## 五、 自动化测试与质量门禁矩阵
+
+本项目通过多维度自动化门禁保障每次交付的确定性：
+- **严格类型门禁 (
+pm run typecheck)**：全仓 TypeScript 严格模式静态类型检查。
+- **架构独立性门禁 (
+pm run check:independence)**：自动扫描并阻断任何跨代际耦合或非法依赖引入。
+- **核心链路测试 (
+pm test)**：覆盖 AI 导演规划契约校验、任务状态机流转、语音转写生命周期、媒体渲染管线及 0 Emoji 视觉门禁。
+---
+
+## 六、 商业授权与合作
 
 简兮技术团队支持面向企业级客户的**私有化部署、行业定制化模型中枢适配与商业源码交付**。
 
