@@ -122,3 +122,16 @@ pm test)**：覆盖 AI 导演规划契约校验、任务状态机流转、语音
 - **官方体验站点**：[https://jansee.cn](https://jansee.cn)
 - **企业合作与商务授权**：`contact@jansee.cn` / `admin@jansee.cn`
 - **商业许可正文**：详见本仓库 [LICENSE](LICENSE) 文件
+
+---
+
+## 五、 团队协作与工程治理 (Team Governance & Contributors)
+
+简兮（JANSEE）采用分布式专业团队协同研发模式，由多领域工程师共同维护核心系统的高可用与持续演进。  
+关于团队成员名册、核心模块责任人与协作准则，详见 [AUTHORS.md](AUTHORS.md)。
+
+- **系统产品架构与商业化**：YJXK Team (yjxk2013-source)
+- **云原生部署与工程协同**：yjxk2026-bit
+- **核心架构与后端系统**：JANSEE Architecture Lab (dmin@jansee.cn)
+- **视觉系统与交互工程**：JANSEE Visual Design Group (design@jansee.cn)
+- **音视频渲染引擎实验室**：JANSEE Video Engine Lab (engine@jansee.cn)
